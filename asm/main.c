@@ -2,102 +2,12 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+#include "inst.h"
 
-// Returns true iff the instruction byte matches the pattern.
-// Spaces separate bytes. Special characters:
-//   - 'r' matches any 3 bit pattern except 110 indicating a register id
-//   - 'd', 'q', and 's' match any 2 bit pattern indicating a register pair
-//   - 'n' matches any byte
-int match_n(char *pattern, unsigned char *buf)
-{
-    int shift = 0;
-    int c = 0;
-    char ch = buf[c++];
-    while (1)
-    {
-        // handle boundary conditions
-        if (*pattern == ' ' || *pattern == '\0')
-        {
-            while (*pattern == ' ')
-            {
-                pattern++;
-            }
-            if (*pattern == '\0')
-            {
-                return shift == 8;
-            }
-            if (shift != 8)
-            {
-                return 0;
-            }
-            shift = 0;
-            ch = buf[c++];
-            continue;
-        }
+// TODO: remove this once decode.o library is complete
+int match_n(char *, unsigned char *);
 
-        // match
-        char si = ch << shift;
-        switch (*pattern)
-        {
-        case '0':
-            if (128 & si)
-                return 0;
-            shift++;
-            break;
-        case '1':
-            if (!(128 & si))
-                return 0;
-            shift++;
-            break;
-        case 'c':
-            shift += 2;
-            break;
-        case 'r':
-            if ((unsigned char)((0xE0 & si) >> 5) == 6)
-            {
-                return 0;
-            }
-            shift += 3;
-            break;
-        case 'b':
-        case 't':
-            shift += 3;
-            break;
-        case 'd':
-        case 'q':
-        case 's':
-            shift += 2;
-            break;
-        case 'n':
-            shift += 8;
-            break;
-        default:
-            return 0;
-        }
-        pattern++;
-    }
-
-    // should never occur
-    return 0;
-}
-
-void test_match_n()
-{
-    unsigned char buf[3] = {0b01000000, 1, 1};
-    printf("should be true -> %d\n", match_n("01rr", buf));
-    printf("should be false -> %d\n", match_n("01r", buf));
-    printf("should be false -> %d\n", match_n("01r 00000000", buf));
-    printf("should be false -> %d\n", match_n("01rrr", buf));
-    printf("should be true -> %d\n", match_n("01rr 00000001", buf));
-    printf("should be true -> %d\n", match_n("01rr 00000001    ", buf));
-    printf("should be false -> %d\n", match_n("01rr 00000000", buf));
-    printf("should be false -> %d\n", match_n("01rr 00000000 ", buf));
-
-    buf[0] = 0b11001101;
-    printf("should be true -> %d\n", match_n("11001101 n n", buf));
-}
-
-char *get_register(unsigned char b, int start_bit)
+char *get_register_old(unsigned char b, int start_bit)
 {
     b >>= (start_bit - 2);
     b = b & 0b111;
@@ -122,7 +32,7 @@ char *get_register(unsigned char b, int start_bit)
     return NULL;
 }
 
-char *get_register_pair_dd(unsigned char b, int start_bit)
+char *get_register_pair_dd_old(unsigned char b, int start_bit)
 {
     b >>= (start_bit - 1);
     int i = b & 0b11;
@@ -130,12 +40,12 @@ char *get_register_pair_dd(unsigned char b, int start_bit)
     return dd[i];
 }
 
-char *get_register_pair_ss(unsigned char b, int start_bit)
+char *get_register_pair_ss_old(unsigned char b, int start_bit)
 {
-    return get_register_pair_dd(b, start_bit);
+    return get_register_pair_dd_old(b, start_bit);
 }
 
-char *get_register_pair_qq(unsigned char b, int start_bit)
+char *get_register_pair_qq_old(unsigned char b, int start_bit)
 {
     b >>= (start_bit - 1);
     int i = b & 0b11;
@@ -157,7 +67,7 @@ int get_bit(unsigned char b, int start_bit)
     return b & 0b111;
 }
 
-// returns the number of bytes of the instruction if properly decoded, 
+// returns the number of bytes of the instruction if properly decoded,
 // EOF on end of input read.
 int decode_inst(FILE *in, FILE *out)
 {
@@ -173,15 +83,15 @@ int decode_inst(FILE *in, FILE *out)
 
     if (match_n("01rr", ib))
     { // load register to register
-        fprintf(out, "LD %s,%s\n", get_register(ib[0], 5), get_register(ib[0], 2));
+        fprintf(out, "LD %s,%s\n", get_register_old(ib[0], 5), get_register_old(ib[0], 2));
     }
     else if (match_n("01r110", ib))
     { // LD r, (HL)
-        fprintf(out, "LD %s,(HL)\n", get_register(ib[0], 5));
+        fprintf(out, "LD %s,(HL)\n", get_register_old(ib[0], 5));
     }
     else if (match_n("01110r", ib))
     { // LD (HL), r
-        fprintf(out, "LD (HL),%s\n", get_register(ib[0], 2));
+        fprintf(out, "LD (HL),%s\n", get_register_old(ib[0], 2));
     }
     else if (match_n("00001010", ib))
     {
@@ -225,19 +135,19 @@ int decode_inst(FILE *in, FILE *out)
     }
     else if (match_n("11111001", ib))
     { // load HL into SP
-        fprintf(out, "LD HL,SP\n");
+        fprintf(out, "LD SP,HL\n");
     }
     else if (match_n("11q0101", ib))
     { // pushes the register pair to the stack, decrement SP by 2
-        fprintf(out, "PUSH %s\n", get_register_pair_qq(ib[0], 5));
+        fprintf(out, "PUSH %s\n", get_register_pair_qq_old(ib[0], 5));
     }
     else if (match_n("11q0001", ib))
     { // pop the register pair from the stack, increment SP by 2
-        fprintf(out, "POP %s\n", get_register_pair_qq(ib[0], 5));
+        fprintf(out, "POP %s\n", get_register_pair_qq_old(ib[0], 5));
     }
     else if (match_n("10000r", ib))
     { // add value of register r to A
-        fprintf(out, "ADD A,%s\n", get_register(ib[0], 2));
+        fprintf(out, "ADD A,%s\n", get_register_old(ib[0], 2));
     }
     else if (match_n("10000110", ib))
     { // add value at address HL to A
@@ -245,7 +155,7 @@ int decode_inst(FILE *in, FILE *out)
     }
     else if (match_n("10001r", ib))
     {
-        fprintf(out, "ADC A,%s\n", get_register(ib[0], 2));
+        fprintf(out, "ADC A,%s\n", get_register_old(ib[0], 2));
     }
     else if (match_n("10001110", ib))
     {
@@ -253,7 +163,7 @@ int decode_inst(FILE *in, FILE *out)
     }
     else if (match_n("10010r", ib))
     { // subtract r from A
-        fprintf(out, "SUB %s\n", get_register(ib[0], 2));
+        fprintf(out, "SUB %s\n", get_register_old(ib[0], 2));
     }
     else if (match_n("10010110", ib))
     { // subtract value at (HL) from A
@@ -261,7 +171,7 @@ int decode_inst(FILE *in, FILE *out)
     }
     else if (match_n("10011r", ib))
     { // subtract (r+CY) from A
-        fprintf(out, "SBC %s\n", get_register(ib[0], 2));
+        fprintf(out, "SBC %s\n", get_register_old(ib[0], 2));
     }
     else if (match_n("10011110", ib))
     { // subtract ((HL) + CY) from A
@@ -269,7 +179,7 @@ int decode_inst(FILE *in, FILE *out)
     }
     else if (match_n("10100r", ib))
     { // do bitwise AND with register, store in A
-        fprintf(out, "AND %s\n", get_register(ib[0], 2));
+        fprintf(out, "AND %s\n", get_register_old(ib[0], 2));
     }
     else if (match_n("10100110", ib))
     { // do bitwise AND with value at (HL), store in A
@@ -277,7 +187,7 @@ int decode_inst(FILE *in, FILE *out)
     }
     else if (match_n("10110r", ib))
     { // do bitwise OR with register, store in A
-        fprintf(out, "OR %s\n", get_register(ib[0], 2));
+        fprintf(out, "OR %s\n", get_register_old(ib[0], 2));
     }
     else if (match_n("10110110", ib))
     { // do bitwise OR with value at (HL), store in A
@@ -285,7 +195,7 @@ int decode_inst(FILE *in, FILE *out)
     }
     else if (match_n("10101r", ib))
     { // do bitwise XOR with register, store in A
-        fprintf(out, "XOR %s\n", get_register(ib[0], 2));
+        fprintf(out, "XOR %s\n", get_register_old(ib[0], 2));
     }
     else if (match_n("10101110", ib))
     { // do bitwise XOR with value at (HL), store in A
@@ -293,7 +203,7 @@ int decode_inst(FILE *in, FILE *out)
     }
     else if (match_n("10111r", ib))
     { // compare A with register, set flag if they're equal
-        fprintf(out, "CP %s\n", get_register(ib[0], 2));
+        fprintf(out, "CP %s\n", get_register_old(ib[0], 2));
     }
     else if (match_n("10111110", ib))
     { // compare with value at (HL), set flag if they're equal
@@ -301,7 +211,7 @@ int decode_inst(FILE *in, FILE *out)
     }
     else if (match_n("00r100", ib))
     { // increment register
-        fprintf(out, "INC %s\n", get_register(ib[0], 5));
+        fprintf(out, "INC %s\n", get_register_old(ib[0], 5));
     }
     else if (match_n("00110100", ib))
     { // increment (HL)
@@ -309,7 +219,7 @@ int decode_inst(FILE *in, FILE *out)
     }
     else if (match_n("00r101", ib))
     { // decrement register
-        fprintf(out, "DEC %s\n", get_register(ib[0], 5));
+        fprintf(out, "DEC %s\n", get_register_old(ib[0], 5));
     }
     else if (match_n("00110101", ib))
     { // decrement (HL)
@@ -317,15 +227,15 @@ int decode_inst(FILE *in, FILE *out)
     }
     else if (match_n("00s1001", ib))
     { // add the contents of register ss to HL, store in HL
-        fprintf(out, "ADD HL,%s\n", get_register_pair_ss(ib[0], 5));
+        fprintf(out, "ADD HL,%s\n", get_register_pair_ss_old(ib[0], 5));
     }
     else if (match_n("00s0011", ib))
     { // increment register ss
-        fprintf(out, "INC %s\n", get_register_pair_ss(ib[0], 5));
+        fprintf(out, "INC %s\n", get_register_pair_ss_old(ib[0], 5));
     }
     else if (match_n("00s1011", ib))
     { // decrement register ss
-        fprintf(out, "DEC %s\n", get_register_pair_ss(ib[0], 5));
+        fprintf(out, "DEC %s\n", get_register_pair_ss_old(ib[0], 5));
     }
     else if (match_n("00000111", ib))
     { // rotate A to the left
@@ -392,14 +302,14 @@ int decode_inst(FILE *in, FILE *out)
         // two byte instructions
 
         if (fread(ib + ilen, 1, 1, in) == 0)
-        {            
+        {
             return 0;
         }
         ilen++;
 
         if (match_n("00r110 n", ib))
         { // load 8-bit immediate
-            fprintf(out, "LD %s,0x%02hhX\n", get_register(ib[0], 5), ib[1]);
+            fprintf(out, "LD %s,0x%02hhX\n", get_register_old(ib[0], 5), ib[1]);
         }
         else if (match_n("00110110 n", ib))
         { // load 8-bit immediate to memory
@@ -457,7 +367,7 @@ int decode_inst(FILE *in, FILE *out)
         }
         else if (match_n("11001011 000000r", ib))
         { // rotate register to the left
-            fprintf(out, "RLC %s\n", get_register(ib[1], 2));
+            fprintf(out, "RLC %s\n", get_register_old(ib[1], 2));
         }
         else if (match_n("11001011 000000110", ib))
         { // rotate (HL) to the left
@@ -465,7 +375,7 @@ int decode_inst(FILE *in, FILE *out)
         }
         else if (match_n("11001011 000010r", ib))
         { // rotate register to the left
-            fprintf(out, "RL %s\n", get_register(ib[1], 2));
+            fprintf(out, "RL %s\n", get_register_old(ib[1], 2));
         }
         else if (match_n("11001011 000010110", ib))
         { // rotate (HL) to the left
@@ -473,7 +383,7 @@ int decode_inst(FILE *in, FILE *out)
         }
         else if (match_n("11001011 000001r", ib))
         { // rotate register to the right
-            fprintf(out, "RRC %s\n", get_register(ib[1], 2));
+            fprintf(out, "RRC %s\n", get_register_old(ib[1], 2));
         }
         else if (match_n("11001011 000001110", ib))
         { // rotate (HL) to the right
@@ -481,7 +391,7 @@ int decode_inst(FILE *in, FILE *out)
         }
         else if (match_n("11001011 000011r", ib))
         { // rotate register to the right
-            fprintf(out, "RR %s\n", get_register(ib[1], 2));
+            fprintf(out, "RR %s\n", get_register_old(ib[1], 2));
         }
         else if (match_n("11011011 00011110", ib))
         { // rotate (HL) to the right
@@ -489,7 +399,7 @@ int decode_inst(FILE *in, FILE *out)
         }
         else if (match_n("11001011 00100r", ib))
         { // shift the contents of the register to the left
-            fprintf(out, "SLA %s\n", get_register(ib[1], 2));
+            fprintf(out, "SLA %s\n", get_register_old(ib[1], 2));
         }
         else if (match_n("11011011 00100110", ib))
         { // shift (HL) to the left
@@ -497,7 +407,7 @@ int decode_inst(FILE *in, FILE *out)
         }
         else if (match_n("11001011 00101r", ib))
         { // shift the contents of the register to the right
-            fprintf(out, "SRA %s\n", get_register(ib[1], 2));
+            fprintf(out, "SRA %s\n", get_register_old(ib[1], 2));
         }
         else if (match_n("11001011 00101110", ib))
         { // shift (HL) to the right
@@ -506,7 +416,7 @@ int decode_inst(FILE *in, FILE *out)
         else if (match_n("11001011 00111r", ib))
         {
             // shift register to the right, reset bit 7
-            fprintf(out, "SRL %s\n", get_register(ib[1], 2));
+            fprintf(out, "SRL %s\n", get_register_old(ib[1], 2));
         }
         else if (match_n("11001011 00111110", ib))
         { // shift (HL) to the right, reset bit 7
@@ -514,7 +424,7 @@ int decode_inst(FILE *in, FILE *out)
         }
         else if (match_n("11001011 00110r", ib))
         { // swap the high order 4 bits with the low order 4 bits of a register
-            fprintf(out, "SWAP %s\n", get_register(ib[1], 2));
+            fprintf(out, "SWAP %s\n", get_register_old(ib[1], 2));
         }
         else if (match_n("11001011 00110110", ib))
         { // swap the high order 4 bits with the low order 4 bits of (HL)
@@ -522,7 +432,7 @@ int decode_inst(FILE *in, FILE *out)
         }
         else if (match_n("11001011 01br", ib))
         { // copy the complement of the bit in r to the Z flag of the program status word
-            fprintf(out, "BIT %d,%s\n", get_bit(ib[1], 5), get_register(ib[1], 2));
+            fprintf(out, "BIT %d,%s\n", get_bit(ib[1], 5), get_register_old(ib[1], 2));
         }
         else if (match_n("11001011 01b110", ib))
         { // copy the complement of the bit in (HL) to the Z flag of the program status word
@@ -530,7 +440,7 @@ int decode_inst(FILE *in, FILE *out)
         }
         else if (match_n("11001011 11br", ib))
         { // set to 1 the bit in specified register
-            fprintf(out, "SET %d,%s\n", get_bit(ib[1], 5), get_register(ib[1], 2));
+            fprintf(out, "SET %d,%s\n", get_bit(ib[1], 5), get_register_old(ib[1], 2));
         }
         else if (match_n("11001011 11b110", ib))
         { // set to 1 the bit in the specified memory
@@ -538,7 +448,7 @@ int decode_inst(FILE *in, FILE *out)
         }
         else if (match_n("11001011 10br", ib))
         { // reset to 0 the specified bit in the register
-            fprintf(out, "RES %d,%s\n", get_bit(ib[1], 5), get_register(ib[1], 2));
+            fprintf(out, "RES %d,%s\n", get_bit(ib[1], 5), get_register_old(ib[1], 2));
         }
         else if (match_n("11001011 10b110", ib))
         { // reset to 0 the bit in the specified memory
@@ -581,7 +491,7 @@ int decode_inst(FILE *in, FILE *out)
             }
             else if (match_n("00d0001 n n", ib))
             { // load immediate into register pair
-                fprintf(out, "LD %s,0x%02hhX%02hhX\n", get_register_pair_dd(ib[0], 5), ib[2], ib[1]);
+                fprintf(out, "LD %s,0x%02hhX%02hhX\n", get_register_pair_dd_old(ib[0], 5), ib[2], ib[1]);
             }
             else if (match_n("00001000 n n", ib))
             { // write SP to address in RAM
@@ -618,10 +528,15 @@ int decode_inst(FILE *in, FILE *out)
 
 int main(int argc, char *argv[])
 {
+    int use_inst = 0;
     if (argc == 1)
     {
         fprintf(stderr, "Error: missing ROM file\n");
         return 1;
+    }
+    if (argc == 3)
+    {
+        use_inst = 1;
     }
 
     int err;
@@ -659,14 +574,49 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    //test_match_n();
     int res;
-    fprintf(fout, "0x%04x\t", addr);
 
-    while ((res = decode_inst(fin, fout)) != EOF)
+    if (!use_inst)
     {
-        addr += res;
-        fprintf(fout, "0x%04x\t", addr);
+        fprintf(fout, "0x%04X\t", addr);
+        while ((res = decode_inst(fin, fout)) != EOF)
+        {
+            addr += res;
+            fprintf(fout, "0x%04X\t", addr);
+        }
+    }
+    else
+    {
+        struct inst decoded;
+        unsigned char ibuf[3];
+        char obuf[32];
+        int count_read;
+        while ((count_read = fread(ibuf, 1, 3, fin)) != EOF)
+        {
+            int len = inst_decode(ibuf, &decoded);
+            if (len == -1)
+            {
+                fprintf(stderr, "Error decoding instruction with bytes: 0x%02X 0x%02X 0x%02X\n", ibuf[0], ibuf[1], ibuf[2]);
+            }
+            fprintf(fout, "0x%04X\t", addr);
+            addr += len;
+            inst_write(&decoded, obuf);
+            fprintf(fout, "%s\n", obuf);
+
+            if (count_read < 3)
+            {  
+                // we read fewer chars than asked, so assume end is reached
+                // TODO: doesn't always work because we may read fewer without reaching end
+                break;
+            }
+            else
+            {
+                for (int l = 2; l >= len; l--)
+                {
+                    ungetc(ibuf[l], fin);
+                }
+            }
+        }
     }
 
     return 0;
