@@ -50,7 +50,6 @@ enum inst_type
     XOR
 };
 
-// TODO: deal with copied type
 struct inst
 {
     enum inst_type type;
@@ -75,7 +74,6 @@ struct inst
     int8_t has_addr_16bit : 1;
 };
 
-// TODO: deal with copying this
 enum reg
 {
     // 8-bit

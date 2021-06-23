@@ -165,6 +165,7 @@ int16_t get_16bit(unsigned char upper, unsigned char lower)
     return res | lower;
 }
 
+// TODO: make this signed, no reason why it's unsigned.
 int inst_decode(unsigned char *ib, struct inst *decoded)
 {
     memset(decoded, 0, sizeof(struct inst));

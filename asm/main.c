@@ -4,8 +4,6 @@
 #include <unistd.h>
 #include "../inst.h"
 
-// TODO: remove this once decode.o library is complete
-int match_n(char *, unsigned char *);
 
 char *get_register_old(unsigned char b, int start_bit)
 {
@@ -67,6 +65,7 @@ int get_bit(unsigned char b, int start_bit)
     return b & 0b111;
 }
 
+// TODO: use getopt
 int main(int argc, char *argv[])
 {
     if (argc == 1)
@@ -75,6 +74,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    // TODO: this error handling looks wrong
     int err;
 
     FILE *fin = fopen(argv[1], "rb");
