@@ -67,15 +67,12 @@ struct inst
     int8_t lit_8bit;      // signed 8 bit literal
     int16_t lit_16bit;    // signed 16-bit literal
     u_int16_t addr_16bit; // 16-bit address
-    u_int8_t addr_8bit;   // 8-bit address that's added to 0xFF00
 
     int8_t incr : 1;
     int8_t decr : 1;
     int8_t has_lit_8bit : 1;
     int8_t has_lit_16bit : 1;
     int8_t has_addr_16bit : 1;
-    int8_t has_addr_8bit: 1;
-
 };
 
 // TODO: deal with copying this

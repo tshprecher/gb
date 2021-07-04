@@ -80,10 +80,6 @@ void dest_str(struct inst *ins, char *out)
     {
         sprintf(out, "(0x%04X)", ins->addr_16bit & 0xFFFF);
     }
-    else if (ins->has_addr_8bit)
-    {
-        sprintf(out, "(0x%02X)", ins->addr_8bit & 0xFF);
-    }
     else if (ins->has_lit_8bit)
     {
         sprintf(out, "0x%02X", ins->lit_8bit & 0xFF);
@@ -111,10 +107,6 @@ void src_str(struct inst *ins, char *out)
     else if (ins->has_addr_16bit)
     {
         sprintf(out, "(0x%04X)", ins->addr_16bit & 0xFFFF);
-    }
-    else if (ins->has_addr_8bit)
-    {
-        sprintf(out, "(0x%02X)", ins->addr_8bit & 0xFF);
     }
     else if (ins->has_lit_8bit)
     {

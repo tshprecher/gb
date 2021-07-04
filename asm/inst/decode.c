@@ -174,7 +174,7 @@ int inst_decode(unsigned char *ib, struct inst *decoded)
 
     // single byte instructions
 
-    if (match_n("00111111",ib))
+    if (match_n("00111111", ib))
     { // invert carry flag
         decoded->type = CCF;
     }
@@ -276,7 +276,8 @@ int inst_decode(unsigned char *ib, struct inst *decoded)
     { // pop the register pair from the stack, increment SP by 2
         decoded->type = POP;
         decoded->r_d = get_register_pair_qq(ib[0], 5);
-    } else if (match_n("00110111", ib))
+    }
+    else if (match_n("00110111", ib))
     { // set the carry flag
         decoded->type = SCF;
     }
@@ -500,15 +501,15 @@ int inst_decode(unsigned char *ib, struct inst *decoded)
         { // read from internal RAM address to A
             decoded->type = LD;
             decoded->r_d = A;
-            decoded->addr_8bit = ib[1];
-            decoded->has_addr_8bit = 1;
+            decoded->addr_16bit = 0xFF00 | ib[1];
+            decoded->has_addr_16bit = 1;
         }
         else if (match_n("11100000 n", ib))
         { // write to internal RAM address from A
             decoded->type = LD;
             decoded->r_s = A;
-            decoded->addr_8bit = ib[1];
-            decoded->has_addr_8bit = 1;
+            decoded->addr_16bit = 0xFF00 | ib[1];
+            decoded->has_addr_16bit = 1;
         }
         else if (match_n("11111000 n", ib))
         {
