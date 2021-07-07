@@ -2,4 +2,4 @@ a.out
 **vscode*
 *~
 *.o
-asm/gb_asm
+gb_asm

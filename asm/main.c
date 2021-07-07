@@ -2,7 +2,7 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
-#include "inst.h"
+#include "../inst.h"
 
 // TODO: remove this once decode.o library is complete
 int match_n(char *, unsigned char *);
