@@ -5,66 +5,6 @@
 #include "../inst.h"
 
 
-char *get_register_old(unsigned char b, int start_bit)
-{
-    b >>= (start_bit - 2);
-    b = b & 0b111;
-    switch (b)
-    {
-    case 0b111:
-        return "A";
-    case 0b000:
-        return "B";
-    case 0b001:
-        return "C";
-    case 0b010:
-        return "D";
-    case 0b011:
-        return "E";
-    case 0b100:
-        return "H";
-    case 0b101:
-        return "L";
-    }
-    // should never hit
-    return NULL;
-}
-
-char *get_register_pair_dd_old(unsigned char b, int start_bit)
-{
-    b >>= (start_bit - 1);
-    int i = b & 0b11;
-    char *dd[] = {"BC", "DE", "HL", "SP"};
-    return dd[i];
-}
-
-char *get_register_pair_ss_old(unsigned char b, int start_bit)
-{
-    return get_register_pair_dd_old(b, start_bit);
-}
-
-char *get_register_pair_qq_old(unsigned char b, int start_bit)
-{
-    b >>= (start_bit - 1);
-    int i = b & 0b11;
-    char *qq[] = {"BC", "DE", "HL", "AF"};
-    return qq[i];
-}
-
-char *get_condition(unsigned char b, int start_bit)
-{
-    b >>= (start_bit - 1);
-    int i = b & 0b11;
-    char *cc[] = {"NZ", "Z", "NC", "C"};
-    return cc[i];
-}
-
-int get_bit(unsigned char b, int start_bit)
-{
-    b >>= (start_bit - 2);
-    return b & 0b111;
-}
-
 // TODO: use getopt
 int main(int argc, char *argv[])
 {
