@@ -102,7 +102,7 @@ enum cond
     YC
 };
 
-int inst_write(struct inst *, char *);
+int inst_write(struct inst *, char *, int);
 int inst_decode(unsigned char *, struct inst *);
 
 #endif

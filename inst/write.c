@@ -44,6 +44,107 @@ char *reg_str(enum reg r, int inc, int dec)
     }
 }
 
+void addr_str(char *buf, u_int16_t addr, int show_special_registers)
+{
+    if (!show_special_registers)
+    {
+        sprintf(buf, "0x%04X", addr & 0xFFFF);
+    }
+    else
+    {
+        char *reg = NULL;
+        switch (addr)
+        {
+        // port / mode registers
+        case 0xFF00:
+            reg = "$P1";
+            break;
+        case 0xFF01:
+            reg = "$SB";
+            break;
+        case 0xFF02:
+            reg = "$SC";
+            break;
+        case 0xFF04:
+            reg = "$DIV";
+            break;
+        case 0xFF05:
+            reg = "$TIMA";
+            break;
+        case 0xFF06:
+            reg = "$TMA";
+            break;
+        case 0xFF07:
+            reg = "$TAC";
+            break;
+
+        // interrupt flags
+        case 0xFF0F:
+            reg = "$IF";
+            break;
+        case 0xFFFF:
+            reg = "$IE";
+            break;
+
+        // lcd controller registers
+        case 0xFF40:
+            reg = "$LCDC";
+            break;
+        case 0xFF41:
+            reg = "$STAT";
+            break;
+        case 0xFF42:
+            reg = "$SCY";
+            break;
+        case 0xFF43:
+            reg = "$SCX";
+            break;
+        case 0xFF44:
+            reg = "$LY";
+            break;
+        case 0xFF45:
+            reg = "$LYC";
+            break;
+        case 0xFF46:
+            reg = "$DMA";
+            break;
+        case 0xFF47:
+            reg = "$BGP";
+            break;
+        case 0xFF48:
+            reg = "$OBP0";
+            break;
+        case 0xFF49:
+            reg = "$OBP1";
+            break;
+        case 0xFF4A:
+            reg = "$WY";
+            break;
+        case 0xFF4B:
+            reg = "$WX";
+            break;
+
+        // OAM entry address
+        case 0xFE00:
+            reg = "$OAM";
+            break;
+        }
+
+        if (reg != NULL)
+        {
+            sprintf(buf, "%s", reg);
+        }
+        else if (addr >= 0xFF10 && addr <= 0xFF26)
+        { // sound registers
+            sprintf(buf, "$NR%d", addr - 0xFF10);
+        }
+        else
+        {
+            sprintf(buf, "0x%04X", addr & 0xFFFF);
+        }
+    }
+}
+
 char *cond_str(enum cond c)
 {
     switch (c)
@@ -62,8 +163,9 @@ char *cond_str(enum cond c)
 }
 
 // TODO: combine logic of dest_str with src_str
-void dest_str(struct inst *ins, char *out)
+void dest_str(struct inst *ins, char *out, int show_special_registers)
 {
+    char buf[8];
     if (ins->r_d)
     {
         sprintf(out, "%s", reg_str(ins->r_d, ins->incr, ins->decr));
@@ -78,7 +180,8 @@ void dest_str(struct inst *ins, char *out)
     }
     else if (ins->has_addr_16bit)
     {
-        sprintf(out, "(0x%04X)", ins->addr_16bit & 0xFFFF);
+        addr_str(buf, ins->addr_16bit, show_special_registers);
+        sprintf(out, "(%s)", buf);
     }
     else if (ins->has_lit_8bit)
     {
@@ -90,8 +193,9 @@ void dest_str(struct inst *ins, char *out)
     }
 }
 
-void src_str(struct inst *ins, char *out)
+void src_str(struct inst *ins, char *out, int show_special_registers)
 {
+    char buf[8];
     if (ins->r_s)
     {
         sprintf(out, "%s", reg_str(ins->r_s, ins->incr, ins->decr));
@@ -106,7 +210,8 @@ void src_str(struct inst *ins, char *out)
     }
     else if (ins->has_addr_16bit)
     {
-        sprintf(out, "(0x%04X)", ins->addr_16bit & 0xFFFF);
+        addr_str(buf, ins->addr_16bit, show_special_registers);
+        sprintf(out, "(%s)", buf);
     }
     else if (ins->has_lit_8bit)
     {
@@ -138,7 +243,7 @@ void accum_arg_str(struct inst *ins, char *out)
     }
 }
 
-int inst_write(struct inst *ins, char *out)
+int inst_write(struct inst *ins, char *out, int raw_addresses)
 {
     char buf1[16];
     char buf2[16];
@@ -158,7 +263,7 @@ int inst_write(struct inst *ins, char *out)
         sprintf(out, "AND %s", buf1);
         break;
     case BIT:
-        dest_str(ins, buf1);
+        dest_str(ins, buf1, !raw_addresses);
         sprintf(out, "BIT %d,%s", ins->lit_8bit, buf1);
         break;
     case CALL:
@@ -188,7 +293,7 @@ int inst_write(struct inst *ins, char *out)
         sprintf(out, "DB 0x%02X", ins->lit_8bit & 0xFF);
         break;
     case DEC:
-        dest_str(ins, buf1);
+        dest_str(ins, buf1, !raw_addresses);
         sprintf(out, "DEC %s", buf1);
         break;
     case DI:
@@ -201,7 +306,7 @@ int inst_write(struct inst *ins, char *out)
         sprintf(out, "HALT");
         break;
     case INC:
-        dest_str(ins, buf1);
+        dest_str(ins, buf1, !raw_addresses);
         sprintf(out, "INC %s", buf1);
         break;
     case JP:
@@ -231,8 +336,8 @@ int inst_write(struct inst *ins, char *out)
         }
         break;
     case LD:
-        dest_str(ins, buf1);
-        src_str(ins, buf2);
+        dest_str(ins, buf1, !raw_addresses);
+        src_str(ins, buf2, !raw_addresses);
         sprintf(out, "LD %s,%s", buf1, buf2);
         break;
     case LDHL:
@@ -252,7 +357,7 @@ int inst_write(struct inst *ins, char *out)
         sprintf(out, "PUSH %s", reg_str(ins->r_s, ins->incr, ins->decr));
         break;
     case RES:
-        dest_str(ins, buf1);
+        dest_str(ins, buf1, !raw_addresses);
         sprintf(out, "RES %d,%s", ins->lit_8bit, buf1);
         break;
     case RET:
@@ -269,28 +374,28 @@ int inst_write(struct inst *ins, char *out)
         sprintf(out, "RETI");
         break;
     case RL:
-        dest_str(ins, buf1);
+        dest_str(ins, buf1, !raw_addresses);
         sprintf(out, "RL %s", buf1);
         break;
     case RLA:
         sprintf(out, "RLA");
         break;
     case RLC:
-        dest_str(ins, buf1);
+        dest_str(ins, buf1, !raw_addresses);
         sprintf(out, "RLC %s", buf1);
         break;
     case RLCA:
         sprintf(out, "RLCA");
         break;
     case RR:
-        dest_str(ins, buf1);
+        dest_str(ins, buf1, !raw_addresses);
         sprintf(out, "RR %s", buf1);
         break;
     case RRA:
         sprintf(out, "RRA");
         break;
     case RRC:
-        dest_str(ins, buf1);
+        dest_str(ins, buf1, !raw_addresses);
         sprintf(out, "RRC %s", buf1);
         break;
     case RRCA:
@@ -317,15 +422,15 @@ int inst_write(struct inst *ins, char *out)
         }
         break;
     case SLA:
-        dest_str(ins, buf1);
+        dest_str(ins, buf1, !raw_addresses);
         sprintf(out, "SLA %s", buf1);
         break;
     case SRA:
-        dest_str(ins, buf1);
+        dest_str(ins, buf1, !raw_addresses);
         sprintf(out, "SRA %s", buf1);
         break;
     case SRL:
-        dest_str(ins, buf1);
+        dest_str(ins, buf1, !raw_addresses);
         sprintf(out, "SRL %s", buf1);
         break;
     case STOP:
@@ -336,7 +441,7 @@ int inst_write(struct inst *ins, char *out)
         sprintf(out, "SUB %s", buf1);
         break;
     case SWAP:
-        dest_str(ins, buf1);
+        dest_str(ins, buf1, !raw_addresses);
         sprintf(out, "SWAP %s", buf1);
         break;
     case XOR:

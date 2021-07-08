@@ -4,31 +4,20 @@
 #include <unistd.h>
 #include "../inst.h"
 
-
-// TODO: use getopt
-int main(int argc, char *argv[])
+int disasm(char *filename, int raw_addresses)
 {
-    if (argc == 1)
-    {
-        fprintf(stderr, "Error: missing ROM file\n");
-        return 1;
-    }
-
-    // TODO: this error handling looks wrong
-    int err;
-
-    FILE *fin = fopen(argv[1], "rb");
+    FILE *fin = fopen(filename, "rb");
     if (NULL == fin)
     {
-        fprintf(stderr, "Error opening file: %s\n", strerror(err));
-        return err;
+        perror("error");
+        return 1;
     }
 
     FILE *fout = fdopen(STDOUT_FILENO, "w");
     if (NULL == fout)
     {
-        fprintf(stderr, "Error writing output: %s\n", strerror(err));
-        return err;
+        perror("error");
+        return 1;
     }
 
     // code starts at 0x150
@@ -46,7 +35,7 @@ int main(int argc, char *argv[])
 
     if (addr != 0x150)
     {
-        fprintf(stderr, "Error reading ROM: cannot find code starting at addresss 0x150: %x\n", addr);
+        fprintf(stderr, "error: cannot find code starting at addresss 0x150\n");
         return 1;
     }
 
@@ -54,7 +43,7 @@ int main(int argc, char *argv[])
 
     struct inst decoded;
     unsigned char ibuf[3];
-    char obuf[32];
+    char obuf[16];
     int count_read;
     while ((count_read = fread(ibuf, 1, 3, fin)) != EOF)
     {
@@ -65,7 +54,7 @@ int main(int argc, char *argv[])
         }
         fprintf(fout, "0x%04X\t", addr);
         addr += len;
-        inst_write(&decoded, obuf);
+        inst_write(&decoded, obuf, raw_addresses);
         fprintf(fout, "%s\n", obuf);
 
         if (count_read < 3)
@@ -82,6 +71,37 @@ int main(int argc, char *argv[])
             }
         }
     }
-
     return 0;
+}
+
+int main(int argc, char *argv[])
+{
+    int raw_addresses = 0;
+    char *filename = NULL;
+    int c;
+
+    while ((c = getopt(argc, argv, "rf:")) != -1)
+        switch (c)
+        {
+        case 'r':
+            raw_addresses = 1;
+            break;
+        default:
+            fprintf(stderr, "error: unknown option\n");
+            return 1;
+        }
+
+    int index = optind;
+    if (index < argc)
+    {
+        filename = argv[index++];
+    }
+
+    if (filename == NULL)
+    {
+        fprintf(stderr, "error: missing input file\n");
+        return 1;
+    }
+
+    return disasm(filename, raw_addresses);
 }

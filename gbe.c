@@ -83,7 +83,7 @@ void gb_debug_print_last_inst(struct gb *gb, int item)
     if (item < total)
     {
         char buf[32];
-        inst_write(&gb->debug_last_inst[item], buf);
+        inst_write(&gb->debug_last_inst[item], buf, 0);
         printf("    %04X : %s", gb->debug_last_inst_addr[item], buf);
     }
 }
@@ -104,7 +104,7 @@ void gb_debug_print_next_inst(struct gb *gb, int item)
     }
 
     char buf[32];
-    inst_write(&inst, buf);
+    inst_write(&inst, buf, 0);
     if (item == 1)
     {
         printf(" %s->%s %04X : %s", TERM_COLOR_GREEN, TERM_COLOR_RESET, pc + pc_offset, buf);
@@ -122,7 +122,7 @@ void gb_debug_print(struct gb *gb)
     unsigned char *pc = ((unsigned char *)gb->last_cpu.ram) + gb->last_cpu.PC;
 
     int ilen = inst_decode(pc, &ins);
-    inst_write(&ins, buf);
+    inst_write(&ins, buf, 0);
 
     printf("inst:\t\t%s\n", buf);
 
