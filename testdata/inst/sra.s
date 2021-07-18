@@ -1,0 +1,4 @@
+SRA (HL)
+SRA A
+SRA D
+SRA H

@@ -1,0 +1,6 @@
+RET
+RET C
+RET NC
+RET NZ
+RET Z
+

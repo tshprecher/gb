@@ -1,0 +1,4 @@
+POP AF
+POP BC
+POP DE
+POP HL

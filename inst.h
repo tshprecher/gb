@@ -1,6 +1,12 @@
 #ifndef INST_H
 #define INST_H
 
+#include <stdint.h>
+
+
+// enum value for each cpu instruction in lexicographic order
+// NOTE: DO NOT REORDER! Tests rely on ADC being the first and XOR
+//   being the last.
 enum inst_type
 {
     ADC = 1,
@@ -10,6 +16,7 @@ enum inst_type
     CALL,
     CCF,
     CP,
+    CPA,
     CPL,
     DAA,
     DB,
@@ -50,59 +57,42 @@ enum inst_type
     XOR
 };
 
-struct inst
-{
-    enum inst_type type;
-    int8_t cond;
-
-    // source and destination registers
-    int8_t r_d;
-    int8_t r_s;
-
-    // RAM addressing from source and destination registers
-    int8_t raddr_d;
-    int8_t raddr_s;
-
-    int8_t lit_8bit;      // signed 8 bit literal
-    int16_t lit_16bit;    // signed 16-bit literal
-    u_int16_t addr_16bit; // 16-bit address
-
-    int8_t incr : 1;
-    int8_t decr : 1;
-    int8_t has_lit_8bit : 1;
-    int8_t has_lit_16bit : 1;
-    int8_t has_addr_16bit : 1;
+enum arg_type {
+  R = 1,
+  B,
+  T,
+  CC,
+  DD,
+  QQ,
+  SS,
+  E,
+  N,
+  NN
 };
 
-enum reg
-{
-    // 8-bit
-    A = 1,
-    B,
-    C,
-    D,
-    E,
-    H,
-    L,
-
-    // 16-bit
-    AF,
-    BC,
-    DE,
-    HL,
-    PC,
-    SP,
+struct inst_arg {
+  enum arg_type type;
+  union {
+    uint8_t byte;
+    uint8_t word[2]; // little endian: first byte is lower part
+  } value;
 };
 
-enum cond
-{
-    NZ = 1,
-    Z,
-    NC,
-    YC
+struct inst {
+  enum inst_type type;
+  uint8_t bytelen;
+  uint8_t cycles;
+  char *bit_pattern;
+  char *txt_pattern;
+
+  struct inst_arg args[3];
+  uint8_t args_count;
 };
 
-int inst_write(struct inst *, char *, int);
-int inst_decode(unsigned char *, struct inst *);
+enum cond { NZ = 1, Z, NC, YC };
+
+
+int init_inst_from_bytes(struct inst*, char *);
+int inst_to_str(struct inst *, char *);
 
 #endif

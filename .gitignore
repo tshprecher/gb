@@ -2,6 +2,9 @@ a.out
 **vscode*
 *~
 *.o
+*#
 gb_asm
 gbe
-
+test
+*DS_Store
+tmp/*

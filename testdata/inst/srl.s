@@ -1,0 +1,7 @@
+SRL (HL)
+SRL A
+SRL C
+SRL D
+SRL E
+SRL H
+SRL L
