@@ -258,10 +258,97 @@ int init_inst_from_bytes(struct inst* inst, char *bytes) {
 }
 
 
-int arg_to_str(struct inst_arg *arg, char *buf) {
+int print_special_register(char *buf, uint16_t addr) {
+  char *reg = NULL;
+  switch (addr)
+    {
+    case 0xFF00:
+      reg = "$P1";
+      break;
+    case 0xFF01:
+      reg = "$SB";
+      break;
+    case 0xFF02:
+      reg = "$SC";
+      break;
+    case 0xFF04:
+      reg = "$DIV";
+      break;
+    case 0xFF05:
+      reg = "$TIMA";
+      break;
+    case 0xFF06:
+      reg = "$TMA";
+      break;
+    case 0xFF07:
+      reg = "$TAC";
+      break;
+
+      // interrupt flags
+    case 0xFF0F:
+      reg = "$IF";
+      break;
+    case 0xFFFF:
+      reg = "$IE";
+      break;
+
+      // lcd controller registers
+    case 0xFF40:
+      reg = "$LCDC";
+      break;
+    case 0xFF41:
+      reg = "$STAT";
+      break;
+    case 0xFF42:
+      reg = "$SCY";
+      break;
+    case 0xFF43:
+      reg = "$SCX";
+      break;
+    case 0xFF44:
+      reg = "$LY";
+      break;
+    case 0xFF45:
+      reg = "$LYC";
+      break;
+    case 0xFF46:
+      reg = "$DMA";
+      break;
+    case 0xFF47:
+      reg = "$BGP";
+      break;
+    case 0xFF48:
+      reg = "$OBP0";
+      break;
+    case 0xFF49:
+      reg = "$OBP1";
+      break;
+    case 0xFF4A:
+      reg = "$WY";
+      break;
+    case 0xFF4B:
+      reg = "$WX";
+      break;
+
+      // OAM entry address
+    case 0xFE00:
+      reg = "$OAM";
+      break;
+    }
+
+  if (reg != NULL)
+    return sprintf(buf, "%s", reg);
+
+  return sprintf(buf, "0x%02X", addr);
+}
+
+
+
+int arg_to_str(struct inst_arg *arg, char *buf, int has_special_register) {
   char *arg_str;
   char ebuf[8];
-  int16_t evalue;
+  int16_t word;
+  uint16_t uword;
   switch (arg->type) {
   case R:
     arg_str = map_reg_to_str[arg->value.byte];
@@ -288,15 +375,17 @@ int arg_to_str(struct inst_arg *arg, char *buf) {
     strcpy(buf, arg_str);
     return 2;
   case E:
-    evalue = (int8_t)arg->value.byte;
-    evalue+=2;
-    sprintf(ebuf, "%d", evalue);
+    word = (int8_t)arg->value.byte;
+    word+=2;
+    sprintf(ebuf, "%d", word);
     strcpy(buf, ebuf);
     return strlen(ebuf);
   case N:
-    sprintf(buf, "0x%02X", arg->value.byte);
-    return 4;
-    break;
+    if (has_special_register) {
+      uword = 0xFF00 + arg->value.byte;
+      return print_special_register(buf, uword);
+    }
+    return sprintf(buf, "0x%02X", arg->value.byte);
   case NN:
     sprintf(buf, "0x%02X%02X", arg->value.word[1], arg->value.word[0]);
     return 6;
@@ -307,15 +396,21 @@ int arg_to_str(struct inst_arg *arg, char *buf) {
   }
 }
 
-
 int inst_to_str(struct inst * inst, char *buf) {
   int len = 0;
   char *pattern = inst->txt_pattern;
   struct inst_arg *current_arg = inst->args;
+
+  // NOTE: somewhat of a hack to indicate this by checking strings,
+  // but it'll do for now.
+  int has_special_register =
+    (strstr(inst->txt_pattern, "({nn})") != NULL) ||
+    (strstr(inst->txt_pattern, "({n})") != NULL);
+
   while (*pattern != '\0') {
     if (*pattern == '{') {
       pattern++;
-      len += arg_to_str(current_arg++, buf+len);
+      len += arg_to_str(current_arg++, buf+len, has_special_register);
       while (*pattern++ != '}')
 	;
     } else {

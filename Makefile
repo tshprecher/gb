@@ -1,7 +1,7 @@
 .PHONY: all
 all: gbe
 
-gbe: gbe.c inst cpu
+gbe: inst cpu gbe.c
 	gcc -Wall -o gbe gbe.c inst.o cpu.o
 
 cpu:    cpu.c
