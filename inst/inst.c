@@ -247,7 +247,7 @@ int _match_bit_pattern(struct inst* inst, char *bytes)
     return 0;
 }
 
-int init_inst_from_bytes(struct inst* inst, char *bytes) {
+int init_inst_from_bytes(struct inst* inst, void *bytes) {
   for (int i = 0; i < sizeof(instructions) / sizeof(struct inst); i++) {
     struct inst root_inst = instructions[i];
     *inst = root_inst;

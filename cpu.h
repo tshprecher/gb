@@ -6,24 +6,26 @@
 // TODO: probably should have debugger support injected here
 struct cpu
 {
-    // registers
-    int8_t A, F,
-        B, C,
-        D, E,
-        H, L;
-    uint16_t PC, SP;
+  // registers
+  int8_t A, F,
+    B, C,
+    D, E,
+    H, L;
 
-    // flags
-    int8_t Z : 1;
-    int8_t N : 1;
-    int8_t FH : 1;
-    int8_t CY : 1;
+  uint16_t PC, SP;
 
-    // pointer to memory of length 0x10000
-    char *ram;
+  // flags
+  int8_t Z : 1;
+  int8_t N : 1;
+  int8_t FH : 1;
+  int8_t CY : 1;
+
+  // pointer to memory of length 0x10000
+  uint8_t *ram;
 };
 
-struct cpu cpu_copy(struct cpu *);
+
+// execute a given number of cycles
 int cpu_exec(struct cpu *, int);
 
 #endif
