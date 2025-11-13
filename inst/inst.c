@@ -1,13 +1,14 @@
+#include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include "../inst.h"
 
 char *map_cond_to_str[4] = {"NZ", "Z", "NC", "C"};
 char *map_reg_to_str[8] = {"B", "C", "D", "E", "H", "L", "_err_", "A"};
-char *map_dd_to_str[4] = {"BC", "DD", "HL", "SP"}; // TODO: should 'DD' be 'DE'?
+char *map_dd_or_ss_to_str[4] = {"BC", "DE", "HL", "SP"};
 char *map_qq_to_str[4] = {"BC", "DE", "HL", "AF"};
-char *map_ss_to_str[4] = {"BC", "DE", "HL", "SP"};
 
 
 // TODO: indicate it's private
@@ -27,6 +28,7 @@ struct inst instructions[] = {
   {BIT, 2, 3, "11001011 01{b}110", "BIT {b}, (HL)"},
   {CALL, 3, 3, "110{cc}100 {nn}", "CALL {cc}, {nn}"}, // TODO: handle the 6-cycle variat
   {CALL, 3, 6, "11001101 {nn}", "CALL {nn}"},
+  {CCF, 1, 1, "00111111", "CCF"},
   {CP, 1, 1, "10111{r}", "CP {r}"},
   {CP, 1, 2, "10111110", "CP (HL)"},
   {CP, 2, 2, "11111110 {n}", "CP {n}"},
@@ -255,6 +257,157 @@ int init_inst_from_bytes(struct inst* inst, void *bytes) {
   return 0;
 }
 
+// Returns true if and only if the assembly line matches an instruction
+// text pattern. If true, the instruction is filled with parsed args.
+int _match_txt_pattern(struct inst* inst, char *asmline) {
+  int a = 0, p = 0;
+  char *pattern = inst->txt_pattern;
+  while (asmline[a] != '\0' && pattern[p] != '\0') {
+    // remove leading whitespace before comparing tokens
+    while(asmline[a] == ' ')
+      a++;
+    while(pattern[p] == ' ')
+      p++;
+
+    if (pattern[p] == '{') {
+      int found_flag = 0;
+      // attempt match for each type.
+      // TODO: there's some copy-paste cleanup that we can do here
+      if (strstr(&pattern[p], "{r}") == &pattern[p]) {
+	for (int m = 0; m < 8; m++) {
+	  if (isalpha(asmline[a]) && !isalpha(asmline[a+1])
+	      && toupper(asmline[a]) == map_reg_to_str[m][0]) {
+	    struct inst_arg arg = { .type = R, .value.byte = m };
+	    inst_add_arg(inst, arg);
+	    found_flag = 1;
+	    a++;
+	    p+=3;
+	    break;
+	  }
+	}
+	if (!found_flag)
+	  break;
+      } else if (strstr(&pattern[p], "{b}") == &pattern[p]) {
+	if (asmline[a] >= '0' && asmline[a] <= '7') {
+	  struct inst_arg arg = { .type = B, .value.byte = asmline[a]-'0'};
+	  inst_add_arg(inst, arg);
+	  a++;
+	  p+=3;
+	}
+      } else if (strstr(&pattern[p], "{t}") == &pattern[p]) {
+	if (asmline[a] >= '0' && asmline[a] <= '7') {
+	  struct inst_arg arg = { .type = T, .value.byte = asmline[a]-'0'};
+	  inst_add_arg(inst, arg);
+	  a++;
+	  p+=3;
+	}
+      } else if (strstr(&pattern[p], "{cc}") == &pattern[p]) {
+	for (int m = 0; m < 4; m++) {
+	  if (strstr(&asmline[a], map_cond_to_str[m]) == &asmline[a]) {
+	    struct inst_arg arg = { .type = CC, .value.byte = m };
+	    inst_add_arg(inst, arg);
+	    found_flag=1;
+	    a+=strlen(map_cond_to_str[m]);
+	    p+=4;
+	    break;
+	  }
+	}
+	if (!found_flag)
+	  break;
+      } else if (strstr(&pattern[p], "{dd}") == &pattern[p]) {
+	for (int m = 0; m < 4; m++) {
+	  if (strstr(&asmline[a], map_dd_or_ss_to_str[m]) == &asmline[a]) {
+	    struct inst_arg arg = { .type = DD, .value.byte = m};
+	    inst_add_arg(inst, arg);
+	    found_flag=1;
+	    a+=2;
+	    p+=4;
+	  }
+	}
+	if (!found_flag)
+	  break;
+      } else if (strstr(&pattern[p], "{qq}") == &pattern[p]) {
+	for (int m = 0; m < 4; m++) {
+	  if (strstr(&asmline[a], map_qq_to_str[m]) == &asmline[a]) {
+	    struct inst_arg arg = { .type = QQ, .value.byte = m};
+	    inst_add_arg(inst, arg);
+	    found_flag=1;
+	    a+=2;
+	    p+=4;
+	  }
+	}
+	if (!found_flag)
+	  break;
+      } else if (strstr(&pattern[p], "{ss}") == &pattern[p]) {
+	for (int m = 0; m < 4; m++) {
+	  if (strstr(&asmline[a], map_dd_or_ss_to_str[m]) == &asmline[a]) {
+	    struct inst_arg arg = { .type = SS, .value.byte = m};
+	    inst_add_arg(inst, arg);
+	    found_flag=1;
+	    a+=2;
+	    p+=4;
+	  }
+	}
+	if (!found_flag)
+	  break;
+      } else if (strstr(&pattern[p], "{e}") == &pattern[p]) {
+	int eidx = 0;
+	if (asmline[a] == '-')
+	  eidx++;
+	while (isdigit(asmline[a+eidx]))
+	  eidx++;
+	char *end = &asmline[a+eidx];
+	long parsed_dec = strtol(&asmline[a], &end, 10);
+	struct inst_arg arg = { .type = B, .value.byte = parsed_dec & 0xFF};
+	inst_add_arg(inst, arg);
+	a+=eidx;
+	p+=3;
+      } else if (strstr(&pattern[p], "{n}") == &pattern[p]) {
+	char *end = &asmline[a+4];
+	long parsed_hex = strtol(&asmline[a], &end, 16);
+	if (parsed_hex == 0 && strstr(&asmline[a], "0x00") != &asmline[a])
+	  break;
+	struct inst_arg arg = { .type = N, .value.byte = parsed_hex & 0xFF};
+	inst_add_arg(inst, arg);
+	a+=4;
+	p+=3;
+      } else if (strstr(&pattern[p], "{nn}") == &pattern[p]) {
+	char *end = &asmline[a+6];
+	long parsed_hex = strtol(&asmline[a], &end, 16);
+	if (parsed_hex == 0 && strstr(&asmline[a], "0x0000") != &asmline[a])
+	  break;
+	struct inst_arg arg = {
+	  .type = N,
+	  .value.word = {parsed_hex & 0xFF, (parsed_hex & 0xFF00) >> 16}
+	};
+	inst_add_arg(inst, arg);
+	a+=6;
+	p+=4;
+      }
+    } else if (toupper(asmline[a]) != toupper(pattern[p])) {
+      break;
+    } else {
+      a++;
+      p++;
+    }
+  }
+  if (asmline[a] == '\0' && inst->txt_pattern[p] == '\0')
+    return 1;
+
+  inst_clear_args(inst);
+  return 0;
+}
+
+int init_inst_from_asm(struct inst* inst, char *asmline) {
+  for (int i = 0; i < sizeof(instructions) / sizeof(struct inst); i++) {
+    struct inst root_inst = instructions[i];
+    *inst = root_inst;
+    if (_match_txt_pattern(inst, asmline))
+      return 1;
+  }
+  return 0;
+}
+
 
 int print_special_register(char *buf, uint16_t addr) {
   char *reg = NULL;
@@ -341,7 +494,6 @@ int print_special_register(char *buf, uint16_t addr) {
 }
 
 
-
 int arg_to_str(struct inst_arg *arg, char *buf, int has_special_register) {
   char *arg_str;
   char ebuf[8];
@@ -361,7 +513,7 @@ int arg_to_str(struct inst_arg *arg, char *buf, int has_special_register) {
     strcpy(buf, arg_str);
     return strlen(arg_str);
   case DD:
-    arg_str = map_dd_to_str[arg->value.byte];
+    arg_str = map_dd_or_ss_to_str[arg->value.byte];
     strcpy(buf, arg_str);
     return 2;
   case QQ:
@@ -369,7 +521,7 @@ int arg_to_str(struct inst_arg *arg, char *buf, int has_special_register) {
     strcpy(buf, arg_str);
     return 2;
   case SS:
-    arg_str = map_ss_to_str[arg->value.byte];
+    arg_str = map_dd_or_ss_to_str[arg->value.byte];
     strcpy(buf, arg_str);
     return 2;
   case E:

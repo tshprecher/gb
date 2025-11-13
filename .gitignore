@@ -4,6 +4,7 @@ a.out
 *.o
 *#
 gb_asm
+inst_test
 gbe
 test
 *DS_Store

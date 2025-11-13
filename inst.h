@@ -93,6 +93,7 @@ enum cond { NZ = 1, Z, NC, YC };
 
 
 int init_inst_from_bytes(struct inst*, void *);
+int init_inst_from_asm(struct inst*, char *);
 int inst_to_str(struct inst *, char *);
 
 #endif
