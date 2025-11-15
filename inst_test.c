@@ -21,10 +21,11 @@ void print_green(char *str) {
   printf(TERM_COLOR_RESET);
 }
 
-
 char err_msgs[MAX_ERRORS][64];
 int err_cnt = 0;
 
+
+// returns 1 on failure
 int test_inst_parsing() {
   DIR *dir;
   struct dirent *entry;
@@ -74,8 +75,8 @@ int test_inst_parsing() {
     }
     if (file_failed_cnt) {
       print_red("[error]\n");
-      for (int c = 0; c < err_cnt; c++)
-	printf("    %s\n", err_msgs[c]);
+      for (int e = 0; e < err_cnt; e++)
+	printf("    %s\n", err_msgs[e]);
       err_cnt = 0;
     } else
       print_green("[ok]\n");
@@ -85,13 +86,114 @@ int test_inst_parsing() {
   return global_failed_cnt != 0;
 }
 
+// returns 1 on failure.
+int test_inst_init() {
+  printf("Test instruction initialization...\n");
+
+  struct test {
+    // input
+    char *asm_command;
+
+    // expected output
+    enum inst_type type;
+    struct inst_arg args[3];
+    uint8_t args_count;
+  } tests[] = {
+    { .asm_command = "ADC A, (HL)", .type = ADC, {}, 0},
+    { .asm_command = "ADD A, B", .type = ADD, {{.type = R, .value.byte = 0}} , 1},
+    { .asm_command = "ADD A, (HL)", .type = ADD, {} , 0},
+    { .asm_command = "ADD A, 0x00", .type = ADD, {{.type = N, .value.byte = 0}} , 1},
+    { .asm_command = "ADD A, 0x20", .type = ADD, {{.type = N, .value.byte = 32}} , 1},
+    { .asm_command = "BIT 7, A", .type = BIT, {{.type = B, .value.byte = 7}, {.type = R, .value.byte = 7} } , 2},
+    { .asm_command = "CALL NZ, 0x1011", .type = CALL, {{.type = CC, .value.byte = 0}, {.type = NN, .value.word = {0x11, 0x10}}} , 2},
+    { .asm_command = "CALL 0xface", .type = CALL, {{.type = NN, .value.word = {0xce, 0xfa}}} , 1},
+    { .asm_command = "DEC SP", .type = DEC, {{.type = SS, .value.byte = 3}} , 1},
+    { .asm_command = "JR 10", .type = JR, {{.type = E, .value.byte = 10}} , 1},
+    { .asm_command = "JR -10", .type = JR, {{.type = E, .value.byte = 0xF6}} , 1},
+    { .asm_command = "LD DE, 0xdEaD", .type = LD, {{.type = DD, .value.byte = 1}, {.type = NN, .value.word = {0xAD, 0xDE}}} , 2},
+    { .asm_command = "POP HL", .type = POP, {{.type = QQ, .value.byte = 2}} , 1},
+    { .asm_command = "RST 4", .type = RST, {{.type = T, .value.byte = 4}} , 1},
+  };
+
+
+  for (int t = 0; (err_cnt < MAX_ERRORS) && (t < sizeof(tests) / sizeof(tests[0])); t++) {
+    struct inst inst = {0};
+    struct test tst = tests[t];
+    int test_failed = 0;
+
+    printf("\ttesting '%s'\t\t... ", tst.asm_command);
+
+    if (!init_inst_from_asm(&inst, tst.asm_command)) {
+      // somewhat ugly, perhaps could use a helper but it works for now
+      if (err_cnt < MAX_ERRORS) {
+	test_failed++;
+	sprintf(err_msgs[err_cnt++],
+		"\tcould not initialize instruction");
+      }
+    } else {
+      if (err_cnt < MAX_ERRORS && tst.type != inst.type) {
+	test_failed++;
+	sprintf(err_msgs[err_cnt++],
+		"\tfound type:\t%d\n\t\texpected type:\t%d",
+		inst.type, tst.type);
+      }
+      if (err_cnt < MAX_ERRORS && tst.args_count != inst.args_count) {
+	test_failed++;
+	sprintf(err_msgs[err_cnt++],
+		"\tfound args count:\t%d\n\t\texpected args count:\t%d",
+		inst.args_count, tst.args_count);
+      } else {
+	for (int a = 0; a < tst.args_count; a++) {
+	  if (err_cnt < MAX_ERRORS &&
+	      (
+	       tst.args[a].type != inst.args[a].type ||
+	       tst.args[a].value.byte != inst.args[a].value.byte ||
+	       tst.args[a].value.word[0] != inst.args[a].value.word[0] ||
+	       tst.args[a].value.word[1] != inst.args[a].value.word[1]
+	       )
+	      )
+	    {
+	      test_failed++;
+	      sprintf(err_msgs[err_cnt++],
+		      "\tfound:\t\t{type: %u, value: { byte: %u, word: [%u, %u]}}\n\t\texpected:\t{type: %u, value: { byte: %u, word: [%u, %u]}}",
+		      inst.args[a].type,
+		      inst.args[a].value.byte,
+		      inst.args[a].value.word[0],
+		      inst.args[a].value.word[1],
+		      tst.args[a].type,
+		      tst.args[a].value.byte,
+		      tst.args[a].value.word[0],
+		      tst.args[a].value.word[1]
+		      );
+	    }
+	}
+      }
+    }
+    if (test_failed) {
+      print_red("[error]\n");
+      for (int e = 0; e < err_cnt; e++)
+	printf("\t%s\n", err_msgs[e]);
+    } else
+      print_green("[ok]\n");
+  }
+
+  return err_cnt > 0;
+}
+
 
 int main () {
   int result = test_inst_parsing();
+  printf("\n");
+  err_cnt = 0;
+
+  result += test_inst_init();
+  printf("\n");
   err_cnt = 0;
 
   if (result)
     print_red("FAILED\n");
   else
     print_green("SUCCESS!\n");
+
+  return result;
 }

@@ -270,6 +270,7 @@ int _match_txt_pattern(struct inst* inst, char *asmline) {
       p++;
 
     if (pattern[p] == '{') {
+      struct inst_arg arg = {0};
       int found_flag = 0;
       // attempt match for each type.
       // TODO: there's some copy-paste cleanup that we can do here
@@ -277,8 +278,10 @@ int _match_txt_pattern(struct inst* inst, char *asmline) {
 	for (int m = 0; m < 8; m++) {
 	  if (isalpha(asmline[a]) && !isalpha(asmline[a+1])
 	      && toupper(asmline[a]) == map_reg_to_str[m][0]) {
-	    struct inst_arg arg = { .type = R, .value.byte = m };
+	    arg.type = R;
+	    arg.value.byte = m;
 	    inst_add_arg(inst, arg);
+
 	    found_flag = 1;
 	    a++;
 	    p+=3;
@@ -289,23 +292,29 @@ int _match_txt_pattern(struct inst* inst, char *asmline) {
 	  break;
       } else if (strstr(&pattern[p], "{b}") == &pattern[p]) {
 	if (asmline[a] >= '0' && asmline[a] <= '7') {
-	  struct inst_arg arg = { .type = B, .value.byte = asmline[a]-'0'};
+	  arg.type = B;
+	  arg.value.byte = asmline[a]-'0';
+
 	  inst_add_arg(inst, arg);
 	  a++;
 	  p+=3;
 	}
       } else if (strstr(&pattern[p], "{t}") == &pattern[p]) {
 	if (asmline[a] >= '0' && asmline[a] <= '7') {
-	  struct inst_arg arg = { .type = T, .value.byte = asmline[a]-'0'};
+	  arg.type = T;
+	  arg.value.byte = asmline[a]-'0';
 	  inst_add_arg(inst, arg);
+
 	  a++;
 	  p+=3;
 	}
       } else if (strstr(&pattern[p], "{cc}") == &pattern[p]) {
 	for (int m = 0; m < 4; m++) {
 	  if (strstr(&asmline[a], map_cond_to_str[m]) == &asmline[a]) {
-	    struct inst_arg arg = { .type = CC, .value.byte = m };
+	    arg.type = CC;
+	    arg.value.byte = m;
 	    inst_add_arg(inst, arg);
+
 	    found_flag=1;
 	    a+=strlen(map_cond_to_str[m]);
 	    p+=4;
@@ -317,8 +326,10 @@ int _match_txt_pattern(struct inst* inst, char *asmline) {
       } else if (strstr(&pattern[p], "{dd}") == &pattern[p]) {
 	for (int m = 0; m < 4; m++) {
 	  if (strstr(&asmline[a], map_dd_or_ss_to_str[m]) == &asmline[a]) {
-	    struct inst_arg arg = { .type = DD, .value.byte = m};
+	    arg.type = DD;
+	    arg.value.byte = m;
 	    inst_add_arg(inst, arg);
+
 	    found_flag=1;
 	    a+=2;
 	    p+=4;
@@ -329,8 +340,10 @@ int _match_txt_pattern(struct inst* inst, char *asmline) {
       } else if (strstr(&pattern[p], "{qq}") == &pattern[p]) {
 	for (int m = 0; m < 4; m++) {
 	  if (strstr(&asmline[a], map_qq_to_str[m]) == &asmline[a]) {
-	    struct inst_arg arg = { .type = QQ, .value.byte = m};
+	    arg.type = QQ;
+	    arg.value.byte = m;
 	    inst_add_arg(inst, arg);
+
 	    found_flag=1;
 	    a+=2;
 	    p+=4;
@@ -341,8 +354,10 @@ int _match_txt_pattern(struct inst* inst, char *asmline) {
       } else if (strstr(&pattern[p], "{ss}") == &pattern[p]) {
 	for (int m = 0; m < 4; m++) {
 	  if (strstr(&asmline[a], map_dd_or_ss_to_str[m]) == &asmline[a]) {
-	    struct inst_arg arg = { .type = SS, .value.byte = m};
+	    arg.type = SS;
+	    arg.value.byte = m;
 	    inst_add_arg(inst, arg);
+
 	    found_flag=1;
 	    a+=2;
 	    p+=4;
@@ -358,17 +373,24 @@ int _match_txt_pattern(struct inst* inst, char *asmline) {
 	  eidx++;
 	char *end = &asmline[a+eidx];
 	long parsed_dec = strtol(&asmline[a], &end, 10);
-	struct inst_arg arg = { .type = B, .value.byte = parsed_dec & 0xFF};
+
+	arg.type = E;
+	arg.value.byte = parsed_dec & 0xFF;
 	inst_add_arg(inst, arg);
+
 	a+=eidx;
 	p+=3;
       } else if (strstr(&pattern[p], "{n}") == &pattern[p]) {
 	char *end = &asmline[a+4];
 	long parsed_hex = strtol(&asmline[a], &end, 16);
+
 	if (parsed_hex == 0 && strstr(&asmline[a], "0x00") != &asmline[a])
 	  break;
-	struct inst_arg arg = { .type = N, .value.byte = parsed_hex & 0xFF};
+
+	arg.type = N;
+	arg.value.byte = parsed_hex & 0xFF;
 	inst_add_arg(inst, arg);
+
 	a+=4;
 	p+=3;
       } else if (strstr(&pattern[p], "{nn}") == &pattern[p]) {
@@ -376,10 +398,11 @@ int _match_txt_pattern(struct inst* inst, char *asmline) {
 	long parsed_hex = strtol(&asmline[a], &end, 16);
 	if (parsed_hex == 0 && strstr(&asmline[a], "0x0000") != &asmline[a])
 	  break;
-	struct inst_arg arg = {
-	  .type = N,
-	  .value.word = {parsed_hex & 0xFF, (parsed_hex & 0xFF00) >> 16}
-	};
+
+	arg.type = NN;
+	arg.value.word[0] = parsed_hex & 0xFF;
+	arg.value.word[1] = (parsed_hex & 0xFF00) >> 8;
+
 	inst_add_arg(inst, arg);
 	a+=6;
 	p+=4;
@@ -398,6 +421,7 @@ int _match_txt_pattern(struct inst* inst, char *asmline) {
   return 0;
 }
 
+// returns 0 on error.
 int init_inst_from_asm(struct inst* inst, char *asmline) {
   for (int i = 0; i < sizeof(instructions) / sizeof(struct inst); i++) {
     struct inst root_inst = instructions[i];

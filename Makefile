@@ -1,5 +1,5 @@
 .PHONY: all
-all: gbe
+all: gbe tests
 
 gbe:	inst cpu gbe.c
 	gcc -Wall -o gbe gbe.c inst.o cpu.o
