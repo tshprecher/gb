@@ -8,8 +8,6 @@
 #define cpu_flag_H(c) ((c->F>>5) & 1)
 #define cpu_flag_CY(c) ((c->F>>4) & 1)
 
-#define upper_8 (value) ((value >> 8) & 0xFF)
-#define lower_8 (value) (value & 0xFF)
 
 // TODO: probably should have debugger support injected here
 struct cpu
@@ -28,7 +26,6 @@ struct cpu
   // store the remainder cycles when asked to run fewer cycles
   // required for the next instruction.
   uint8_t exec_rem_cycles;
-
 };
 
 

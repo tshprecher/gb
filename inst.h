@@ -85,7 +85,7 @@ struct inst {
   // assigned during creation to distinguish
   // between the multiple forms of an instruction type.
   // I prefer to avoid doing string comparisons of the
-  // txt_pattern or fancier bitmask scemes as one would do
+  // txt_pattern or fancier bitmask schemes like a PLA
   // in hardware.
   uint8_t subtype;
 

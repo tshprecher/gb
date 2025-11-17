@@ -138,10 +138,9 @@ void gb_run(struct gb *gb)
 	    fprintf(stderr, "error: unknown debugger commmand");
 	    exit(1);
 	  }
+	  gb_debug_print(gb);
+	  printf("debug > ");
 	}
-	gb_debug_print(gb);
-	gb_debug_print(gb);
-	printf("debug > ");
     }
     else
     {
