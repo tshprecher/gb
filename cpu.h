@@ -8,6 +8,9 @@
 #define cpu_flag_H(c) ((c->F>>5) & 1)
 #define cpu_flag_CY(c) ((c->F>>4) & 1)
 
+#define upper_8 (value) ((value >> 8) & 0xFF)
+#define lower_8 (value) (value & 0xFF)
+
 // TODO: probably should have debugger support injected here
 struct cpu
 {
@@ -30,6 +33,9 @@ struct cpu
 
 
 // execute a given number of cycles
-int cpu_exec(struct cpu *, unsigned int);
+int cpu_exec_cycles(struct cpu *, unsigned int);
+
+// execute a given number of instructions
+int cpu_exec_instructions(struct cpu *, unsigned int);
 
 #endif

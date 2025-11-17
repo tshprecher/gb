@@ -37,6 +37,8 @@ void gb_debug_print_bin(char byte)
 // print the state of the machine for debugging
 void gb_debug_print(struct gb *gb)
 {
+  // clear terminal
+  printf("\033[2J");
   char buf[32];
   struct inst ins;
   char *pc = (char *) &gb->ram[gb->cpu->PC];
@@ -101,12 +103,12 @@ void gb_debug_print(struct gb *gb)
   printf("\n\n");
 
   for (int a = 0, pc = gb->cpu->PC; a < 10; a++) {
-    struct inst ins;
-    if (!init_inst_from_bytes(&ins, &gb->ram[pc])) {
+    struct inst inst;
+    if (!init_inst_from_bytes(&inst, &gb->ram[pc])) {
       fprintf(stderr, "error: could not decode instructions");
       exit(1);
     }
-    inst_to_str(&ins, buf);
+    inst_to_str(&inst, buf);
     if (a == 0)
       printf("0x%02X      --> %s", pc, buf);
     else
@@ -121,9 +123,25 @@ void gb_debug_print(struct gb *gb)
 
 void gb_run(struct gb *gb)
 {
+  char buf[16];
     if (gb->dbg != NULL)
-    {
-      gb_debug_print(gb);
+      {
+	gb_debug_print(gb);
+	printf("debug > ");
+	while (fgets(buf, sizeof(buf), stdin) != NULL) {
+	  if (buf[0] == 'n') {
+	    if (cpu_exec_instructions(gb->cpu, 1) < 0) {
+	      printf("\n");
+	      exit(1);
+	    }
+	  } else {
+	    fprintf(stderr, "error: unknown debugger commmand");
+	    exit(1);
+	  }
+	}
+	gb_debug_print(gb);
+	gb_debug_print(gb);
+	printf("debug > ");
     }
     else
     {

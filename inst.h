@@ -79,12 +79,31 @@ struct inst_arg {
 };
 
 struct inst {
+  // indicates the type of instructions (e.g. "ADD", "LD",...)
   enum inst_type type;
+
+  // assigned during creation to distinguish
+  // between the multiple forms of an instruction type.
+  // I prefer to avoid doing string comparisons of the
+  // txt_pattern or fancier bitmask scemes as one would do
+  // in hardware.
+  uint8_t subtype;
+
+  // the length of the opcode in bytes
   uint8_t bytelen;
+
+  // the number of cycles needed to execute. note, few
+  // instructions take variable number of cycles. that's
+  // delegated to the cpu at execution time.
   uint8_t cycles;
+
+  // human readable bit pattern used to decode an instruction from bytes
   char *bit_pattern;
+
+  // human readable text used to initiate an instruction from asm
   char *txt_pattern;
 
+  // store up to 3 args associated with the instruction
   struct inst_arg args[3];
   uint8_t args_count;
 };
