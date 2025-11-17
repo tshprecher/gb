@@ -11,111 +11,149 @@ char *map_dd_or_ss_to_str[4] = {"BC", "DE", "HL", "SP"};
 char *map_qq_to_str[4] = {"BC", "DE", "HL", "AF"};
 
 
-// TODO: indicate it's private
-struct inst instructions[] = {
-  {ADC, 1, 1, "10001{r}", "ADC A, {r}"},
-  {ADC, 1, 2, "10001110", "ADC A, (HL)"},
-  {ADC, 2, 2, "11001110 {n}", "ADC A, {n}"},
-  {ADD, 1, 1, "10000{r}", "ADD A, {r}"},
-  {ADD, 1, 2, "10000110", "ADD A, (HL)"},
-  {ADD, 2, 2, "11000110 {n}", "ADD A, {n}"},
-  {ADD, 2, 4, "11101000 {e}", "ADD SP, {e}"},
-  {AND, 1, 1, "10100{r}", "AND {r}"},
-  {AND, 1, 2, "00{ss}1001", "ADD HL, {ss}"},
-  {AND, 1, 2, "10100110", "AND (HL)"},
-  {AND, 2, 2, "11100110 {n}", "AND {n}"},
-  {BIT, 2, 2, "11001011 01{b}{r}", "BIT {b}, {r}"},
-  {BIT, 2, 3, "11001011 01{b}110", "BIT {b}, (HL)"},
-  {CALL, 3, 3, "110{cc}100 {nn}", "CALL {cc}, {nn}"}, // TODO: handle the 6-cycle variat
-  {CALL, 3, 6, "11001101 {nn}", "CALL {nn}"},
-  {CCF, 1, 1, "00111111", "CCF"},
-  {CP, 1, 1, "10111{r}", "CP {r}"},
-  {CP, 1, 2, "10111110", "CP (HL)"},
-  {CP, 2, 2, "11111110 {n}", "CP {n}"},
-  {CPL, 1, 1, "00101111", "CPL"},
-  {DAA, 1, 1, "00100111", "DAA"},
-  {DEC, 1, 1, "00{r}101", "DEC {r}"},
-  {DEC, 1, 2, "00{ss}1011", "DEC {ss}"},
-  {DEC, 1, 3, "00110101", "DEC (HL)"},
-  {DI, 1, 1, "11110011", "DI"},
-  {EI, 1, 1, "11111011", "EI"},
-  {HALT, 1, 1, "01110110", "HALT"},
-  {INC, 1, 1, "00{r}100", "INC {r}"},
-  {INC, 1, 2, "00{ss}0011", "INC {ss}"},
-  {INC, 1, 3, "00110100", "INC (HL)"},
-  {JP, 1, 1, "11101001", "JP (HL)"},
-  {JP, 3, 3, "110{cc}010 {nn}", "JP {cc}, {nn}"}, // TODO: handle the 4-cycle variant
-  {JP, 3, 4, "11000011 {nn}", "JP {nn}"},
-  {JR, 2, 2, "001{cc}000 {e}", "JR {cc}, {e}"},  // TODO: handle the 3-cycle variant
-  {JR, 2, 3, "00011000 {e}", "JR {e}"},
-  {LD, 1, 1, "01{r}{r}", "LD {r}, {r}"},
-  {LD, 1, 2, "00000010", "LD (BC), A"},
-  {LD, 1, 2, "00001010", "LD A, (BC)"},
-  {LD, 1, 2, "00010010", "LD (DE), A"},
-  {LD, 1, 2, "00011010", "LD A, (DE)"},
-  {LD, 1, 2, "00100010", "LD (HLI), A"},
-  {LD, 1, 2, "00101010", "LD A, (HLI)"},
-  {LD, 1, 2, "00110010", "LD (HLD), A"},
-  {LD, 1, 2, "00111010", "LD A, (HLD)"},
-  {LD, 1, 2, "01{r}110", "LD {r}, (HL)"},
-  {LD, 1, 2, "01110{r}", "LD (HL), {r}"},
-  {LD, 1, 2, "11100010", "LD (C), A"},
-  {LD, 1, 2, "11110010", "LD A, (C)"},
-  {LD, 1, 2, "11111001", "LD SP, HL"},
-  {LD, 2, 2, "00{r}110 {n}", "LD {r}, {n}"},
-  {LD, 2, 3, "00110110 {n}", "LD (HL), {n}"},
-  {LD, 2, 3, "11100000 {n}", "LD ({n}), A"},
-  {LD, 2, 3, "11110000 {n}", "LD A, ({n})"},
-  {LD, 3, 3, "00{dd}0001 {nn}", "LD {dd}, {nn}"},
-  {LD, 3, 4, "11101010 {nn}", "LD ({nn}), A"},
-  {LD, 3, 4, "11111010 {nn}", "LD A, ({nn})"},
-  {LD, 3, 5, "00001000 {nn}", "LD ({nn}), SP"},
-  {LDHL, 2, 3, "11111000 {e}", "LDHL SP, {e}"},
-  {NOP, 1, 1, "00000000", "NOP"},
-  {OR, 1, 1, "10110{r}", "OR {r}"},
-  {OR, 1, 2, "10110110", "OR (HL)"},
-  {OR, 2, 2, "11110110 {n}", "OR {n}"},
-  {POP, 1, 3, "11{qq}0001", "POP {qq}"},
-  {PUSH, 1, 4, "11{qq}0101", "PUSH {qq}"},
-  {RES, 2, 2, "11001011 10{b}{r}", "RES {b}, {r}"},
-  {RES, 2, 4, "11001011 10{b}110", "RES {b}, (HL)"},
-  {RET, 1, 2, "110{cc}000", "RET {cc}"}, // TODO: handle the 5-cycle variant
-  {RET, 1, 4, "11001001", "RET"},
-  {RETI, 1, 4, "11011001", "RETI"},
-  {RL, 2, 2, "11001011 00010{r}", "RL {r}"},
-  {RL, 2, 4, "11011011 00010110", "RL (HL)"},
-  {RLA, 1, 1, "00010111", "RLA"},
-  {RLC, 2, 2, "11001011 00000{r}", "RLC {r}"},
-  {RLC, 2, 4, "11001011 00000110", "RLC (HL)"},
-  {RLCA, 1, 1, "00000111", "RLCA"},
-  {RR, 2, 2, "11001011 00011{r}", "RR {r}"},
-  {RR, 2, 4, "11011011 00011110", "RR (HL)"},
-  {RRA, 1, 1, "00011111", "RRA"},
-  {RRC, 2, 2, "11001011 00001{r}", "RRC {r}"},
-  {RRC, 2, 4, "11001011 00001110", "RRC (HL)"},
-  {RRCA, 1, 1, "00001111", "RRCA"},
-  {RST, 1, 4, "11{t}111", "RST {t}"},
-  {SBC, 1, 1, "10011{r}", "SBC A, {r}"},
-  {SBC, 1, 2, "10011110", "SBC A, (HL)"},
-  {SBC, 2, 2, "11011110 {n}", "SBC A, {n}"},
-  {SCF, 1, 1, "00110111", "SCF"},
-  {SET, 2, 2, "11001011 11{b}{r}", "SET {b}, {r}"},
-  {SET, 2, 4, "11001011 11{b}110", "SET {b}, (HL)"},
-  {SLA, 2, 2, "11001011 00100{r}", "SLA {r}"},
-  {SLA, 2, 4, "11011011 00100110", "SLA (HL)"},
-  {SRA, 2, 2, "11001011 00101{r}", "SRA {r}"},
-  {SRA, 2, 4, "11001011 00101110", "SRA (HL)"},
-  {SRL, 2, 2, "11001011 00111{r}", "SRL {r}"},
-  {SRL, 2, 4, "11001011 00111110", "SRL (HL)"},
-  {STOP, 2, 1, "00010000 00000000", "STOP"},
-  {SUB, 1, 1, "10010{r}", "SUB {r}"},
-  {SUB, 1, 2, "10010110", "SUB (HL)"},
-  {SUB, 2, 2, "11010110 {n}", "SUB {n}"},
-  {SWAP, 2, 2, "11001011 00110{r}", "SWAP {r}"},
-  {SWAP, 2, 4, "11001011 00110110", "SWAP (HL)"},
-  {XOR, 1, 1, "10101{r}", "XOR {r}"},
-  {XOR, 1, 2, "10101110", "XOR (HL)"},
-  {XOR, 2, 2, "11101110 {n}", "XOR {n}" },
+static struct inst instructions[] = {
+  {ADC, 0, 1, 1, "10001{r}", "ADC A, {r}"},
+  {ADC, 1, 2, 2, "11001110 {n}", "ADC A, {n}"},
+  {ADC, 2, 1, 2, "10001110", "ADC A, (HL)"},
+
+  {ADD, 0, 1, 1, "10000{r}", "ADD A, {r}"},
+  {ADD, 1, 1, 2, "10000110", "ADD A, (HL)"},
+  {ADD, 2, 2, 2, "11000110 {n}", "ADD A, {n}"},
+  {ADD, 3, 2, 4, "11101000 {e}", "ADD SP, {e}"},
+  {ADD, 4, 1, 2, "00{ss}1001", "ADD HL, {ss}"},
+
+  {AND, 0, 1, 1, "10100{r}", "AND {r}"},
+  {AND, 1, 1, 2, "10100110", "AND (HL)"},
+  {AND, 2, 2, 2, "11100110 {n}", "AND {n}"},
+
+  {BIT, 0, 2, 2, "11001011 01{b}{r}", "BIT {b}, {r}"},
+  {BIT, 1, 2, 3, "11001011 01{b}110", "BIT {b}, (HL)"},
+
+  {CALL, 0, 3, 6, "11001101 {nn}", "CALL {nn}"},
+  {CALL, 1 ,3, 3, "110{cc}100 {nn}", "CALL {cc}, {nn}"}, // TODO: handle the 6-cycle variant
+
+  {CCF, 0, 1, 1, "00111111", "CCF"},
+
+  {CP, 0, 1, 1, "10111{r}", "CP {r}"},
+  {CP, 1, 2, 2, "11111110 {n}", "CP {n}"},
+  {CP, 2, 1, 2, "10111110", "CP (HL)"},
+
+  {CPL, 0,1, 1, "00101111", "CPL"},
+  {DAA, 0,1, 1, "00100111", "DAA"},
+
+  {DEC, 0 ,1, 1, "00{r}101", "DEC {r}"},
+  {DEC, 1 ,1, 2, "00{ss}1011", "DEC {ss}"},
+  {DEC, 2 ,1, 3, "00110101", "DEC (HL)"},
+
+  {DI, 0,1, 1, "11110011", "DI"},
+  {EI, 0,1, 1, "11111011", "EI"},
+  {HALT,0 ,1, 1, "01110110", "HALT"},
+
+  {INC,0 ,1, 1, "00{r}100", "INC {r}"},
+  {INC,1 ,1, 2, "00{ss}0011", "INC {ss}"},
+  {INC,2 ,1, 3, "00110100", "INC (HL)"},
+
+  {JP,0 ,3, 4, "11000011 {nn}", "JP {nn}"},
+  {JP,1 ,3, 3, "110{cc}010 {nn}", "JP {cc}, {nn}"}, // TODO: handle the 4-cycle variant
+  {JP,2 ,1, 1, "11101001", "JP (HL)"},
+
+  {JR,0 ,2, 3, "00011000 {e}", "JR {e}"},
+  {JR,1 ,2, 2, "001{cc}000 {e}", "JR {cc}, {e}"},  // TODO: handle the 3-cycle variant
+
+
+  {LD, 0,1, 1, "01{r}{r}", "LD {r}, {r}"},
+  {LD, 1,1, 2, "00000010", "LD (BC), A"},
+  {LD, 2,1, 2, "00001010", "LD A, (BC)"},
+  {LD, 3,1, 2, "00010010", "LD (DE), A"},
+  {LD, 4,1, 2, "00011010", "LD A, (DE)"},
+  {LD, 5,1, 2, "00100010", "LD (HLI), A"},
+  {LD, 6,1, 2, "00101010", "LD A, (HLI)"},
+  {LD, 7,1, 2, "00110010", "LD (HLD), A"},
+  {LD, 8,1, 2, "00111010", "LD A, (HLD)"},
+  {LD, 9,1, 2, "01{r}110", "LD {r}, (HL)"},
+  {LD, 10,1, 2, "01110{r}", "LD (HL), {r}"},
+  {LD, 11,1, 2, "11100010", "LD (C), A"},
+  {LD, 12,1, 2, "11110010", "LD A, (C)"},
+  {LD, 13,1, 2, "11111001", "LD SP, HL"},
+  {LD, 14,2, 2, "00{r}110 {n}", "LD {r}, {n}"},
+  {LD, 15,2, 3, "00110110 {n}", "LD (HL), {n}"},
+  {LD, 16,2, 3, "11100000 {n}", "LD ({n}), A"},
+  {LD, 17,2, 3, "11110000 {n}", "LD A, ({n})"},
+  {LD, 18,3, 3, "00{dd}0001 {nn}", "LD {dd}, {nn}"},
+  {LD, 19,3, 4, "11101010 {nn}", "LD ({nn}), A"},
+  {LD, 20,3, 4, "11111010 {nn}", "LD A, ({nn})"},
+  {LD, 21,3, 5, "00001000 {nn}", "LD ({nn}), SP"},
+
+  {LDHL, 0,2, 3, "11111000 {e}", "LDHL SP, {e}"},
+  {NOP, 0,1, 1, "00000000", "NOP"},
+
+  {OR,0 ,1, 1, "10110{r}", "OR {r}"},
+  {OR,1 ,1, 2, "10110110", "OR (HL)"},
+  {OR,2 ,2, 2, "11110110 {n}", "OR {n}"},
+
+  {POP,0,1, 3, "11{qq}0001", "POP {qq}"},
+  {PUSH,0,1, 4, "11{qq}0101", "PUSH {qq}"},
+
+  {RES, 0,2, 2, "11001011 10{b}{r}", "RES {b}, {r}"},
+  {RES, 1,2, 4, "11001011 10{b}110", "RES {b}, (HL)"},
+
+  {RET,0,1, 4, "11001001", "RET"},
+  {RET,1,1, 2, "110{cc}000", "RET {cc}"}, // TODO: handle the 5-cycle variant
+
+
+  {RETI,0 ,1, 4, "11011001", "RETI"},
+
+  {RL,0 ,2, 2, "11001011 00010{r}", "RL {r}"},
+  {RL,1 ,2, 4, "11011011 00010110", "RL (HL)"},
+
+  {RLA,0 ,1, 1, "00010111", "RLA"},
+
+  {RLC,0 ,2, 2, "11001011 00000{r}", "RLC {r}"},
+  {RLC,1 ,2, 4, "11001011 00000110", "RLC (HL)"},
+
+  {RLCA, 0 ,1, 1, "00000111", "RLCA"},
+
+  {RR, 0,2, 2, "11001011 00011{r}", "RR {r}"},
+  {RR, 1,2, 4, "11011011 00011110", "RR (HL)"},
+
+  {RRA,0 ,1, 1, "00011111", "RRA"},
+
+  {RRC, 0, 2, 2, "11001011 00001{r}", "RRC {r}"},
+  {RRC, 1, 2, 4, "11001011 00001110", "RRC (HL)"},
+
+  {RRCA,0 ,1, 1, "00001111", "RRCA"},
+  {RST, 0,1, 4, "11{t}111", "RST {t}"},
+
+  {SBC, 0,1, 1, "10011{r}", "SBC A, {r}"},
+  {SBC, 1,1, 2, "10011110", "SBC A, (HL)"},
+  {SBC, 2,2, 2, "11011110 {n}", "SBC A, {n}"},
+
+  {SCF,0 ,1, 1, "00110111", "SCF"},
+
+  {SET,0 ,2, 2, "11001011 11{b}{r}", "SET {b}, {r}"},
+  {SET,1 ,2, 4, "11001011 11{b}110", "SET {b}, (HL)"},
+
+  {SLA,0 ,2, 2, "11001011 00100{r}", "SLA {r}"},
+  {SLA,1 ,2, 4, "11011011 00100110", "SLA (HL)"},
+
+  {SRA, 0,2, 2, "11001011 00101{r}", "SRA {r}"},
+  {SRA, 1,2, 4, "11001011 00101110", "SRA (HL)"},
+
+  {SRL, 0, 2, 2, "11001011 00111{r}", "SRL {r}"},
+  {SRL, 1, 2, 4, "11001011 00111110", "SRL (HL)"},
+
+  {STOP, 0 ,2, 1, "00010000 00000000", "STOP"},
+
+  {SUB,0 ,1, 1, "10010{r}", "SUB {r}"},
+  {SUB,1 ,2, 2, "11010110 {n}", "SUB {n}"},
+  {SUB,2 ,1, 2, "10010110", "SUB (HL)"},
+
+  {SWAP, 0,2, 2, "11001011 00110{r}", "SWAP {r}"},
+  {SWAP, 1,2, 4, "11001011 00110110", "SWAP (HL)"},
+
+  {XOR,0 ,1, 1, "10101{r}", "XOR {r}"},
+  {XOR,1 ,1, 2, "10101110", "XOR (HL)"},
+  {XOR,2 ,2, 2, "11101110 {n}", "XOR {n}" },
 };
 
 void inst_add_arg(struct inst * inst, struct inst_arg arg) {
@@ -128,7 +166,7 @@ void inst_clear_args(struct inst *inst) {
 
 // Returns true iff the instruction byte matches the bit pattern.
 // If true, the instruction is filled with parsed args.
-int _match_bit_pattern(struct inst* inst, char *bytes)
+static int _match_bit_pattern(struct inst* inst, char *bytes)
 {
     int shift = 0;
     int c = 0;
@@ -232,7 +270,7 @@ int _match_bit_pattern(struct inst* inst, char *bytes)
 	    inst_add_arg(inst, arg);
 	    shift += 8;
 	  } else {
-	    fprintf(stderr, "Error decoding instruction: argument unknown: %s\n", arg);
+	    fprintf(stderr, "error decoding instruction: argument unknown: %s\n", arg);
 	    return 0;
 	  }
 	  break;
@@ -259,18 +297,25 @@ int init_inst_from_bytes(struct inst* inst, void *bytes) {
 
 // Returns true if and only if the assembly line matches an instruction
 // text pattern. If true, the instruction is filled with parsed args.
-int _match_txt_pattern(struct inst* inst, char *asmline) {
+static int _match_txt_pattern(struct inst* inst, char *asmline) {
   int a = 0, p = 0;
   char *pattern = inst->txt_pattern;
+
+  // remove leading whitespace before comparing
+  while(asmline[a] == ' ')
+    a++;
+  while(pattern[p] == ' ')
+    p++;
+
   while (asmline[a] != '\0' && pattern[p] != '\0') {
-    // remove leading whitespace before comparing tokens
-    while(asmline[a] == ' ')
+    // remove duplicate spaces before comparing tokens
+    while(asmline[a] == ' ' && asmline[a+1] == ' ')
       a++;
-    while(pattern[p] == ' ')
+    while(pattern[p] == ' ' && pattern[p+1] == ' ')
       p++;
 
     if (pattern[p] == '{') {
-      struct inst_arg arg = {0};
+      struct inst_arg arg = {0}; // TODO: go back to single line assignments below?
       int found_flag = 0;
       // attempt match for each type.
       // TODO: there's some copy-paste cleanup that we can do here
@@ -375,6 +420,10 @@ int _match_txt_pattern(struct inst* inst, char *asmline) {
 	long parsed_dec = strtol(&asmline[a], &end, 10);
 
 	arg.type = E;
+
+	if (inst->type != ADD)
+	  parsed_dec -= 2;
+
 	arg.value.byte = parsed_dec & 0xFF;
 	inst_add_arg(inst, arg);
 

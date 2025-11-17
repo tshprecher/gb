@@ -108,15 +108,15 @@ int test_inst_init() {
     { .asm_command = "CALL NZ, 0x1011", .type = CALL, {{.type = CC, .value.byte = 0}, {.type = NN, .value.word = {0x11, 0x10}}} , 2},
     { .asm_command = "CALL 0xface", .type = CALL, {{.type = NN, .value.word = {0xce, 0xfa}}} , 1},
     { .asm_command = "DEC SP", .type = DEC, {{.type = SS, .value.byte = 3}} , 1},
-    { .asm_command = "JR 10", .type = JR, {{.type = E, .value.byte = 10}} , 1},
-    { .asm_command = "JR -10", .type = JR, {{.type = E, .value.byte = 0xF6}} , 1},
+    { .asm_command = "JR 10", .type = JR, {{.type = E, .value.byte = 8}} , 1},
+    { .asm_command = "JR -10", .type = JR, {{.type = E, .value.byte = 0xF4}} , 1},
     { .asm_command = "LD DE, 0xdEaD", .type = LD, {{.type = DD, .value.byte = 1}, {.type = NN, .value.word = {0xAD, 0xDE}}} , 2},
     { .asm_command = "POP HL", .type = POP, {{.type = QQ, .value.byte = 2}} , 1},
     { .asm_command = "RST 4", .type = RST, {{.type = T, .value.byte = 4}} , 1},
   };
 
 
-  for (int t = 0; (err_cnt < MAX_ERRORS) && (t < sizeof(tests) / sizeof(tests[0])); t++) {
+  for (int t = 0; (err_cnt < MAX_ERRORS) && (t < sizeof(tests) / sizeof(struct test)); t++) {
     struct inst inst = {0};
     struct test tst = tests[t];
     int test_failed = 0;

@@ -1,18 +1,18 @@
-RES 0,(HL)
-RES 0,A
-RES 0,B
-RES 1,(HL)
-RES 1,A
-RES 1,B
-RES 2,(HL)
-RES 3,(HL)
-RES 3,A
-RES 4,(HL)
-RES 5,(HL)
-RES 6,(HL)
-RES 6,A
-RES 6,H
-RES 6,L
-RES 7,(HL)
-RES 7,A
-RES 7,E
+RES 0, (HL)
+RES 0, A
+RES 0, B
+RES 1, (HL)
+RES 1, A
+RES 1, B
+RES 2, (HL)
+RES 3, (HL)
+RES 3, A
+RES 4, (HL)
+RES 5, (HL)
+RES 6, (HL)
+RES 6, A
+RES 6, H
+RES 6, L
+RES 7, (HL)
+RES 7, A
+RES 7, E
