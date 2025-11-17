@@ -9,11 +9,8 @@
 #define TERM_COLOR_CYAN "\x1B[36m"
 #define TERM_COLOR_RESET "\033[0m"
 
-struct debugger {
-    struct inst debug_last_inst[5];
-    int16_t debug_last_inst_addr[5];
-    int debug_last_pointer;
-};
+// TODO: do we need this?
+struct debugger {};
 
 struct gb
 {
@@ -37,152 +34,89 @@ void gb_debug_print_bin(char byte)
            (byte & 1) != 0);
 }
 
-void gb_debug_print_diff_int(int is_diff, int num)
-{
-    if (is_diff)
-    {
-        printf(TERM_COLOR_CYAN);
-        printf("%d", num);
-        printf(TERM_COLOR_RESET);
-    }
-    else
-    {
-        printf("%d", num);
-    }
-}
-
-void gb_debug_print_diff_16_bit(int is_diff, int value)
-{
-    if (is_diff)
-    {
-        printf(TERM_COLOR_CYAN);
-        printf("0x%04X", value & 0xFFFF);
-        printf(TERM_COLOR_RESET);
-    }
-    else
-    {
-        printf("0x%04X", value & 0xFFFF);
-    }
-}
-
-void gb_debug_print_diff_8_bit(int is_diff, int value)
-{
-    if (is_diff)
-    {
-        printf(TERM_COLOR_CYAN);
-        printf("0x%02X", value & 0xFF);
-        printf(TERM_COLOR_RESET);
-    }
-    else
-    {
-        printf("0x%02X", value & 0xFF);
-    }
-}
-
+// print the state of the machine for debugging
 void gb_debug_print(struct gb *gb)
 {
-    char buf[32];
-    struct inst ins;
-    char *pc = (char *) &gb->ram[gb->cpu->PC];
+  char buf[32];
+  struct inst ins;
+  char *pc = (char *) &gb->ram[gb->cpu->PC];
 
-    init_inst_from_bytes(&ins, pc);
-    inst_to_str(&ins, buf);
+  printf("************* ROM DEBUGGER **************");
+  printf("\n");
+  printf("\n");
+  printf("-----------------------------------------");
+  printf("\n");
 
-    printf("instruction (txt) :\t%s\n", buf);
-    printf("instruction (hex) :\t");
-    for (int i = 0; i < ins.bytelen; i++)
+  init_inst_from_bytes(&ins, pc);
+  inst_to_str(&ins, buf);
+  printf("instruction (txt) :\t%s", buf);
+  printf("\n");
+  printf("instruction (hex) :\t");
+  for (int i = 0; i < ins.bytelen; i++)
     {
-      printf("0x%2X ", (uint8_t) pc[i]);
+      printf("0x%02X ", (uint8_t) pc[i]);
     }
-    printf("\n");
-    printf("instruction (bin) :\t");
-    for (int i = 0; i < ins.bytelen; i++)
+  printf("\n");
+  printf("instruction (bin) :\t");
+  for (int i = 0; i < ins.bytelen; i++)
     {
       gb_debug_print_bin(pc[i]);
       printf(" ");
     }
+  printf("\n\n");
+  printf("FLAGS REGISTER:");
+  printf("\n");
+  printf("\tF: 0x%02X {Z: %d, N: %d, H: %d, CY: %d}",
+	 gb->cpu->F,
+	 cpu_flag_Z(gb->cpu),
+	 cpu_flag_N(gb->cpu),
+	 cpu_flag_H(gb->cpu),
+	 cpu_flag_CY(gb->cpu));
+  printf("\n\n");
+  printf("16 BIT REGISTERS:");
+  printf("\n\n");
+  printf("\tPC: 0x%04X", gb->cpu->PC);
+  printf("\n");
+  printf("\tSP: 0x%04X", gb->cpu->SP);
+  printf("\n\n");
+  printf("8 BIT REGISTERS:");
+  printf("\n\n");
+  printf("\tA: 0x%02X", gb->cpu->A);
+  printf("\n");
+  printf("\tB: 0x%02X", gb->cpu->B);
+  printf("\n");
+  printf("\tC: 0x%02X", gb->cpu->C);
+  printf("\n");
+  printf("\tD: 0x%02X", gb->cpu->D);
+  printf("\n");
+  printf("\tE: 0x%02X", gb->cpu->E);
+  printf("\n");
+  printf("\tH: 0x%02X", gb->cpu->H);
+  printf("\n");
+  printf("\tL: 0x%02X", gb->cpu->L);
+  printf("\n");
+  printf("\n\n");
 
-    printf("\n\n");
+  printf("NEXT 10 LINES:");
+  printf("\n\n");
 
-    printf("\t -----------------------------------------      Z:   ");
-    gb_debug_print_diff_int(0, gb->cpu->Z);
+  for (int a = 0, pc = gb->cpu->PC; a < 10; a++) {
+    struct inst ins;
+    if (!init_inst_from_bytes(&ins, &gb->ram[pc])) {
+      fprintf(stderr, "error: could not decode instructions");
+      exit(1);
+    }
+    inst_to_str(&ins, buf);
+    if (a == 0)
+      printf("0x%02X      --> %s", pc, buf);
+    else
+      printf("0x%02X          %s", pc, buf);
     printf("\n");
-    printf("\t|                    PC                   |     N:   ");
-    gb_debug_print_diff_int(0, gb->cpu->N);
-    printf("\n");
-    printf("\t|-----------------------------------------|     H:   ");
-    gb_debug_print_diff_int(0, gb->cpu->H);
-    printf("\n");
-    printf("\t|                  ");
-    gb_debug_print_diff_16_bit(0, gb->cpu->PC);
-    printf("                 |     CY:  ");
-    gb_debug_print_diff_int(0, gb->cpu->CY);
-    printf("\n");
-
-    printf("\t|-----------------------------------------|\n");
-    printf("\t|                    SP                   |\n");
-    printf("\t|-----------------------------------------|   Code:\n");
-    printf("\t|                  ");
-    gb_debug_print_diff_16_bit(0, gb->cpu->SP);
-    printf("                 |");
-    //    gb_debug_print_last_inst(gb, 4);
-    printf("\n");
-
-    printf("\t|-----------------------------------------|");
-    //    gb_debug_print_last_inst(gb, 3);
-    printf("\n");
-    printf("\t|         A          |          F         |");
-    //    gb_debug_print_last_inst(gb, 2);
-    printf("\n");
-    printf("\t|--------------------|--------------------|");
-    printf("\n");
-    //    gb_debug_print_last_inst(gb, 1);
-    printf("\t|       ");
-
-    gb_debug_print_diff_8_bit(0, gb->cpu->A);
-    printf("         |        ");
-    gb_debug_print_diff_8_bit(0, gb->cpu->F);
-    printf("        |");
-    //    gb_debug_print_last_inst(gb, 0);
-    printf("\n");
-
-    printf("\t|-----------------------------------------|\n");
-    printf("\t|         B          |          C         |");
-    //    gb_debug_print_next_inst(gb, 1);
-    printf("\n");
-    printf("\t|--------------------|--------------------|");
-    //    gb_debug_print_next_inst(gb, 2);
-    printf("\n");
-    printf("\t|       ");
-    gb_debug_print_diff_8_bit(0, gb->cpu->B);
-    printf("         |        ");
-    gb_debug_print_diff_8_bit(0, gb->cpu->C);
-    printf("        |");
-    //    gb_debug_print_next_inst(gb, 3);
-    printf("\n");
-    printf("\t|-----------------------------------------|");
-    //    gb_debug_print_next_inst(gb, 4);
-    printf("\n");
-    printf("\t|         D          |          E         |");
-    //    gb_debug_print_next_inst(gb, 5);
-    printf("\n");
-    printf("\t|--------------------|--------------------|\n");
-    printf("\t|       ");
-    gb_debug_print_diff_8_bit(0, gb->cpu->D);
-    printf("         |        ");
-    gb_debug_print_diff_8_bit(0, gb->cpu->E);
-    printf("        |\n");
-
-    printf("\t|-----------------------------------------|\n");
-    printf("\t|         H          |          L         |\n");
-    printf("\t|--------------------|--------------------|\n");
-    printf("\t|       ");
-    gb_debug_print_diff_8_bit(0, gb->cpu->H);
-    printf("         |        ");
-    gb_debug_print_diff_8_bit(0, gb->cpu->L);
-    printf("        |\n");
-
-    printf("\t ----------------------------------------- \n");
+    pc+=ins.bytelen;
+  }
+  printf("-----------------------------------------");
+  printf("\n");
+  printf("\n\n");
 }
 
 void gb_run(struct gb *gb)
@@ -190,22 +124,11 @@ void gb_run(struct gb *gb)
     if (gb->dbg != NULL)
     {
       gb_debug_print(gb);
-      /*        // always run the first instruction
-        if (!gb_debug_exec_inst(gb))
-        {
-            printf("error executing instruction\n");
-            exit(1);
-        }
-        while (1)
-        {
-            gb_debug_break(gb);
-            exit(0);
-	    }*/
     }
     else
     {
       // TODO: remove this, obviously
-      fprintf(stderr, "Error: can only run in debug mode for now\n");
+      fprintf(stderr, "error: can only run in debug mode for now\n");
       exit(1);
     }
 }
@@ -220,7 +143,7 @@ void gb_load_rom(struct gb *gb, char *filename)
     // TODO: perhaps make reading roms common in some library?
     if (NULL == fin)
     {
-        fprintf(stderr, "Error opening file: %s\n", filename);
+        fprintf(stderr, "error opening file: %s\n", filename);
         exit(1);
     }
 
@@ -244,12 +167,12 @@ void gb_load_rom(struct gb *gb, char *filename)
 
     if (addr < 0x150)
     {
-        fprintf(stderr, "Error reading ROM: cannot find code starting at addresss 0x150: %x\n", addr);
+        fprintf(stderr, "error reading ROM: cannot find code starting at addresss 0x150: %x\n", addr);
         exit(1);
     }
     if (addr != 0x8150)
     {
-        fprintf(stderr, "Error reading ROM: cannot read full 32K of ROM: %x\n", addr);
+        fprintf(stderr, "error reading ROM: cannot read full 32K of ROM: %x\n", addr);
         exit(1);
     }
     gb->cpu->PC = 0x150;
@@ -265,16 +188,16 @@ int main(int argc, char *argv[])
   if (argc < 2) {
     fprintf(stderr, "error: missing arguments.\n");
     return 1;
-  } else if (argc == 2) {
+  } else if (argc == 2) { // run game with debugger
     struct cpu cpu = {0};
     struct gb gb = {0};
-    struct debugger dbg = {0};
+    struct debugger dbg = {};
     cpu.ram = gb.ram;
     gb.cpu = &cpu;
     gb.dbg = &dbg;
     gb_load_rom(&gb, argv[1]);
     gb_run(&gb);
-  } else if (argc == 3) {
+  } else if (argc == 3) { // disassemble
     if (strcmp(argv[1], "-d") != 0) {
       fprintf(stderr, "error: unknown argument %s, use '-d'.\n", argv[1]);
       return 1;

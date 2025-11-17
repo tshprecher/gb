@@ -3,29 +3,33 @@
 
 #include <stdint.h>
 
+#define cpu_flag_Z(c) ((c->F>>7) & 1)
+#define cpu_flag_N(c) ((c->F>>6) & 1)
+#define cpu_flag_H(c) ((c->F>>5) & 1)
+#define cpu_flag_CY(c) ((c->F>>4) & 1)
+
 // TODO: probably should have debugger support injected here
 struct cpu
 {
-  // registers
-  int8_t A, F,
-    B, C,
-    D, E,
-    H, L;
+  // 8 bit registers
+  int8_t A, B, C, D, E, F /*flags register*/, H, L;
 
+  // 16 bit registers
   uint16_t PC, SP;
-
-  // flags
-  int8_t Z : 1;
-  int8_t N : 1;
-  int8_t FH : 1;
-  int8_t CY : 1;
 
   // pointer to memory of length 0x10000
   uint8_t *ram;
+
+  // PRIVATE
+
+  // store the remainder cycles when asked to run fewer cycles
+  // required for the next instruction.
+  uint8_t exec_rem_cycles;
+
 };
 
 
 // execute a given number of cycles
-int cpu_exec(struct cpu *, int);
+int cpu_exec(struct cpu *, unsigned int);
 
 #endif

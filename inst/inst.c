@@ -232,7 +232,7 @@ int _match_bit_pattern(struct inst* inst, char *bytes)
 	    inst_add_arg(inst, arg);
 	    shift += 8;
 	  } else {
-	    fprintf(stderr, "Error decoding instruction: argument unknown: %s\n", arg);
+	    fprintf(stderr, "error decoding instruction: argument unknown: %s\n", arg);
 	    return 0;
 	  }
 	  break;
@@ -270,7 +270,7 @@ int _match_txt_pattern(struct inst* inst, char *asmline) {
       p++;
 
     if (pattern[p] == '{') {
-      struct inst_arg arg = {0};
+      struct inst_arg arg = {0}; // TODO: go back to single line assignments below?
       int found_flag = 0;
       // attempt match for each type.
       // TODO: there's some copy-paste cleanup that we can do here
