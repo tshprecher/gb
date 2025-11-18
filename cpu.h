@@ -32,7 +32,10 @@ struct cpu
 // execute a given number of cycles
 int cpu_exec_cycles(struct cpu *, unsigned int);
 
-// execute a given number of instructions
-int cpu_exec_instructions(struct cpu *, unsigned int);
+// return the instruction at current PC
+struct inst cpu_next_instruction(struct cpu *);
+
+// execute a specific instruction
+int cpu_exec_instruction(struct cpu *, struct inst *);
 
 #endif

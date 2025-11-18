@@ -28,7 +28,7 @@ static struct inst instructions[] = {
   {BIT, 0, 2, 2, "11001011 01{b}{r}", "BIT {b}, {r}"},
   {BIT, 1, 2, 3, "11001011 01{b}110", "BIT {b}, (HL)"},
 
-  {CALL, 0 ,3, 3, "110{cc}100 {nn}", "CALL {cc}, {nn}"}, // TODO: handle the 6-cycle variat
+  {CALL, 0 ,3, 3, "110{cc}100 {nn}", "CALL {cc}, {nn}"}, // TODO: handle the 6-cycle variant
   {CALL, 1, 3, 6, "11001101 {nn}", "CALL {nn}"},
 
   {CCF, 0, 1, 1, "00111111", "CCF"},

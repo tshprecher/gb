@@ -130,7 +130,8 @@ void gb_run(struct gb *gb)
 	printf("debug > ");
 	while (fgets(buf, sizeof(buf), stdin) != NULL) {
 	  if (buf[0] == 'n') {
-	    if (cpu_exec_instructions(gb->cpu, 1) < 0) {
+	    struct inst inst = cpu_next_instruction(gb->cpu);
+	    if (cpu_exec_instruction(gb->cpu, &inst) <= 0) {
 	      printf("\n");
 	      exit(1);
 	    }

@@ -12,24 +12,6 @@
 #define nn_upper(i, a) (i->args[a].value.word[1])
 #define nn_to_uint16(i, a) ((uint16_t) ((nn_upper(i, a) << 8) | nn_lower(i,a)))
 
-int exec(struct cpu *cpu , struct inst *inst) {
-  switch (inst->type) {
-  case (CALL):
-    switch (inst->subtype) {
-    case 0:
-      return 0;
-    case 1:
-      push_PC(cpu);
-      cpu->PC = nn_to_uint16(inst, 0);
-      return inst->bytelen;
-    default:
-      return 0;
-    }
-  default:
-    return 0;
-  }
-}
-
 
 // cpu_exec_cycles takes a cpu and execute 'cycles' number of cycles.
 // It returns the number of cycles run.
@@ -41,21 +23,29 @@ int cpu_exec_cycles(struct cpu *cpu, unsigned int cycles)
   return -1;
 }
 
-// cpu_exec_instructions takes a cpu and executes 'insts' number of instructions.
-// It returns the number of instructions run.
-// TODO: change to return the number of cycles?
-int cpu_exec_instructions(struct cpu *cpu, unsigned int insts) {
-  struct inst inst = {0};
-  char buf[16];
-  for (int i = 0; i < insts; i++) {
-    if (!init_inst_from_bytes(&inst, &cpu->ram[cpu->PC]))
-      return -1;
+struct inst cpu_next_instruction(struct cpu *cpu) {
+  struct inst inst;
+  init_inst_from_bytes(&inst, &cpu->ram[cpu->PC]);
+  return inst;
+}
 
-    if (!exec(cpu, &inst)) {
-      inst_to_str(&inst, buf);
-      fprintf(stderr, "error: could not execute '%s' instruction", buf);
-      return -1;
+// cpu_exec_instruction takes a cpu and instruction and executes
+// the instruction. It returns the number of cycles run.
+int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
+  switch (inst->type) {
+  case (CALL):
+    printf("DEBUG: FOUND CALL!\n");
+    switch (inst->subtype) {
+    case 0:
+      return 0;
+    case 1:
+      push_PC(cpu);
+      cpu->PC = nn_to_uint16(inst, 0);
+      return inst->cycles;
+    default:
+      return 0;
     }
+  default:
+    return 0;
   }
-  return insts;
 }

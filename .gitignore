@@ -3,8 +3,8 @@ a.out
 *~
 *.o
 *#
-gb_asm
-inst_test
+.#*
+*_test
 gbe
 test
 *DS_Store
