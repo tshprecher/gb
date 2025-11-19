@@ -116,7 +116,7 @@ int test_inst_init() {
   };
 
 
-  for (int t = 0; (err_cnt < MAX_ERRORS) && (t < sizeof(tests) / sizeof(tests[0])); t++) {
+  for (int t = 0; (err_cnt < MAX_ERRORS) && (t < sizeof(tests) / sizeof(struct test)); t++) {
     struct inst inst = {0};
     struct test tst = tests[t];
     int test_failed = 0;

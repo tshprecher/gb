@@ -5,8 +5,10 @@
 #define upper_8(v) ((v >> 8) & 0xFF)
 #define lower_8(v) (v & 0xFF)
 
-#define push_PC(c) c->ram[c->SP--] = upper_8(c->PC); \
-                   c->ram[c->SP--] = lower_8(c->PC)
+#define push_PC(c) c->SP--; \
+                   c->ram[c->SP--] = upper_8(c->PC); \
+                   c->ram[c->SP] = lower_8(c->PC)
+
 
 #define nn_lower(i, a) (i->args[a].value.word[0])
 #define nn_upper(i, a) (i->args[a].value.word[1])
@@ -34,7 +36,6 @@ struct inst cpu_next_instruction(struct cpu *cpu) {
 int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   switch (inst->type) {
   case (CALL):
-    printf("DEBUG: FOUND CALL!\n");
     switch (inst->subtype) {
     case 0:
       return 0;
