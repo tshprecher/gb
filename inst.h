@@ -70,6 +70,17 @@ enum arg_type {
   NN
 };
 
+enum reg { // Z80 index of each register in opcodes
+  rB=0,
+  rC,
+  rD,
+  rE,
+  rH,
+  rL,
+  _na_,
+  rA
+};
+
 struct inst_arg {
   enum arg_type type;
   union {

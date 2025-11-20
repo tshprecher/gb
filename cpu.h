@@ -13,7 +13,7 @@
 struct cpu
 {
   // 8 bit registers
-  int8_t A, B, C, D, E, F /*flags register*/, H, L;
+  uint8_t A, B, C, D, E, F /*flags register*/, H, L;
 
   // 16 bit registers
   uint16_t PC, SP;
@@ -29,13 +29,15 @@ struct cpu
 };
 
 
-// execute a given number of cycles
+// execute a given number of cycles, return number of cycles run
+// or -1 on error.
 int cpu_exec_cycles(struct cpu *, unsigned int);
 
 // return the instruction at current PC
 struct inst cpu_next_instruction(struct cpu *);
 
-// execute a specific instruction
+// execute a specific instruction, return the number of cycles run
+// or -1 on error.
 int cpu_exec_instruction(struct cpu *, struct inst *);
 
 #endif
