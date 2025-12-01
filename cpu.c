@@ -192,7 +192,9 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       *(reg(cpu, rA)) = cpu->ram[nn_to_word(inst,0)];
       break;
     case 21:
-      cpu->ram[nn_to_word(inst,0)] = cpu->SP;
+      word = nn_to_word(inst,0);
+      cpu->ram[word] = lower_8(cpu->SP);
+      cpu->ram[word+1] = upper_8(cpu->SP);
       break;
     default:
       return -1;
