@@ -3,10 +3,14 @@
 
 #include <stdint.h>
 
-#define cpu_flag_Z(c) ((c->F>>7) & 1)
-#define cpu_flag_N(c) ((c->F>>6) & 1)
-#define cpu_flag_H(c) ((c->F>>5) & 1)
-#define cpu_flag_CY(c) ((c->F>>4) & 1)
+#define cpu_flag(c, f) ((c->F>>f) & 1)
+#define cpu_set_flag(c, f) (c->F |= (1 << f))
+#define cpu_clear_flag(c, f) (c->F &= ~(1 << f))
+
+#define FLAG_Z 7
+#define FLAG_N 6
+#define FLAG_H 5
+#define FLAG_CY 4
 
 
 // TODO: probably should have debugger support injected here
@@ -27,7 +31,6 @@ struct cpu
   // required for the next instruction.
   uint8_t exec_rem_cycles;
 };
-
 
 // execute a given number of cycles, return number of cycles run
 // or -1 on error.

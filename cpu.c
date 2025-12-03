@@ -65,9 +65,8 @@ static void word_to_regs(struct cpu * cpu, uint16_t word, uint8_t upper, uint8_t
   *(reg(cpu, upper)) = upper_8(word);
 }
 
-/* TODO: uncomment when unused
-static uint16_t get_dd_or_ss(struct cpu *cpu, uint8_t dd) {
-  switch(dd) {
+static uint16_t get_dd_or_ss(struct cpu *cpu, uint8_t dd_or_ss) {
+  switch(dd_or_ss) {
   case 0:
     return regs_to_word(cpu, rB, rC);
   case 1:
@@ -76,10 +75,9 @@ static uint16_t get_dd_or_ss(struct cpu *cpu, uint8_t dd) {
     return regs_to_word(cpu, rH, rL);
   case 3:
     return cpu->SP;
-  default:
-    return 0;
   }
-}*/
+  return 0;
+}
 
 static void set_dd_or_ss(struct cpu *cpu, uint8_t dd_or_ss, uint16_t word) {
   switch(dd_or_ss) {
@@ -101,23 +99,83 @@ static void set_dd_or_ss(struct cpu *cpu, uint8_t dd_or_ss, uint16_t word) {
   }
 }
 
+// handles ALU operations for add, properly assigning the flags
+static uint8_t alu_add(struct cpu *cpu, uint8_t op1, uint8_t op2) {
+  uint16_t result = (op1 & 0x0F) + (op2 & 0x0F);
+  printf("DEBUG: alu add result after lower 4 bits -> 0x%02X\n", result);
+  (result & (1 << 4)) ? cpu_set_flag(cpu, FLAG_H) : cpu_clear_flag(cpu, FLAG_H);
+
+  result += (op1 & 0xF0);
+  result += (op2 & 0xF0);
+
+  (result & (1 << 8)) ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+
+  cpu_clear_flag(cpu, FLAG_N);
+  result &= 0xFF;
+  result == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
+  printf("DEBUG: alu final result -> 0x%02X\n", result & 0xFF);
+  return result;
+}
+
 // cpu_exec_instruction takes a cpu and instruction and executes
 // the instruction. It returns the number of cycles run, -1 on error
+// TODO: could use a few more macros for clarity?
 int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   printf("DEBUG: found inst: txt pattern -> %s, subtype -> %d\n", inst->txt_pattern, inst->subtype);
-  uint16_t word;
+  uint16_t hl, nn_word;
   switch (inst->type) {
+  case (ADC):
+    switch (inst->subtype) {
+    case 0:
+      cpu->A = alu_add(cpu, cpu->A, cpu_flag(cpu, FLAG_CY)); // TODO: for static registers, just use cpu struct
+      cpu->A = alu_add(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)));
+      break;
+    case 1:
+      cpu->A = alu_add(cpu, cpu->A, cpu_flag(cpu, FLAG_CY));
+      cpu->A = alu_add(cpu, cpu->A, inst->args[0].value.byte);
+      break;
+    case 2:
+      break;
+    }
+    break;
+  case (ADD):
+    switch (inst->subtype) {
+    case 0:
+      *(reg(cpu, rA)) = alu_add(cpu, *(reg(cpu, rA)), *(reg(cpu, inst->args[0].value.byte)));
+      break;
+    case 1:
+      *(reg(cpu, rA)) = alu_add(cpu, *(reg(cpu, rA)), cpu->ram[regs_to_word(cpu, rH, rL)]);
+      break;
+    case 2:
+      *(reg(cpu, rA)) = alu_add(cpu, *(reg(cpu, rA)), inst->args[0].value.byte);
+      break;
+    case 3:
+      alu_add(cpu, lower_8(cpu->SP), inst->args[0].value.byte); // to set the carry bits
+      cpu_clear_flag(cpu, FLAG_Z);
+      cpu_clear_flag(cpu, FLAG_N);
+      cpu->SP += inst->args[0].value.byte;
+      break;
+    case 4:
+      hl = regs_to_word(cpu, rH, rL);
+      uint16_t dd_or_ss = get_dd_or_ss(cpu, inst->args[0].value.byte);
+      int lower = lower_8(dd_or_ss);
+      int upper = upper_8(dd_or_ss);
+      int carry = (cpu->L + lower) >= (1<<8) ? 1 : 0;
+      alu_add(cpu, cpu->H, upper + carry); // to set carry bits
+      word_to_regs(cpu, hl+dd_or_ss, rH, rL);
+      break;
+    }
+    break;
   case (CALL):
     switch (inst->subtype) {
     case 0:
-      return 0;
+      return -1;
     case 1:
       push_PC(cpu);
       cpu->PC = nn_to_word(inst, 0);
       return inst->cycles;
-    default:
-      return -1;
     }
+    break;
   case (LD):
     switch (inst->subtype) {
     case 0:
@@ -136,24 +194,24 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       *(reg(cpu, rA)) =  cpu->ram[regs_to_word(cpu, rD, rE)];
       break;
     case 5:
-      word = regs_to_word(cpu, rH, rL);
-      cpu->ram[word++] = *(reg(cpu, rA));
-      word_to_regs(cpu, word, rH, rL);
+      hl = regs_to_word(cpu, rH, rL);
+      cpu->ram[hl++] = *(reg(cpu, rA));
+      word_to_regs(cpu, hl, rH, rL);
       break;
     case 6:
-      word = regs_to_word(cpu, rH, rL);
-      *(reg(cpu, rA)) = cpu->ram[word++];
-      word_to_regs(cpu, word, rH, rL);
+      hl = regs_to_word(cpu, rH, rL);
+      *(reg(cpu, rA)) = cpu->ram[hl++];
+      word_to_regs(cpu, hl, rH, rL);
       break;
     case 7:
-      word = regs_to_word(cpu, rH, rL);
-      cpu->ram[word--] = *(reg(cpu, rA));
-      word_to_regs(cpu, word, rH, rL);
+      hl = regs_to_word(cpu, rH, rL);
+      cpu->ram[hl--] = *(reg(cpu, rA));
+      word_to_regs(cpu, hl, rH, rL);
       break;
     case 8:
-      word = regs_to_word(cpu, rH, rL);
-      *(reg(cpu, rA)) = cpu->ram[word--];
-      word_to_regs(cpu, word, rH, rL);
+      hl = regs_to_word(cpu, rH, rL);
+      *(reg(cpu, rA)) = cpu->ram[hl--];
+      word_to_regs(cpu, hl, rH, rL);
       break;
     case 9:
       *(reg(cpu, inst->args[0].value.byte)) = cpu->ram[regs_to_word(cpu, rH, rL)];
@@ -192,12 +250,10 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       *(reg(cpu, rA)) = cpu->ram[nn_to_word(inst,0)];
       break;
     case 21:
-      word = nn_to_word(inst,0);
-      cpu->ram[word] = lower_8(cpu->SP);
-      cpu->ram[word+1] = upper_8(cpu->SP);
+      nn_word = nn_to_word(inst,0);
+      cpu->ram[nn_word] = lower_8(cpu->SP);
+      cpu->ram[nn_word+1] = upper_8(cpu->SP);
       break;
-    default:
-      return -1;
     }
     break;
   default:

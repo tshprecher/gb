@@ -70,10 +70,10 @@ void gb_debug_print(struct gb *gb)
   printf("\n");
   printf("\tF: 0x%02X {Z: %d, N: %d, H: %d, CY: %d}",
 	 gb->cpu->F,
-	 cpu_flag_Z(gb->cpu),
-	 cpu_flag_N(gb->cpu),
-	 cpu_flag_H(gb->cpu),
-	 cpu_flag_CY(gb->cpu));
+	 cpu_flag(gb->cpu, FLAG_Z),
+	 cpu_flag(gb->cpu, FLAG_N),
+	 cpu_flag(gb->cpu, FLAG_H),
+	 cpu_flag(gb->cpu, FLAG_CY));
   printf("\n\n");
   printf("16 BIT REGISTERS:");
   printf("\n\n");
