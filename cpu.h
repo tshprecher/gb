@@ -6,6 +6,7 @@
 #define cpu_flag(c, f) ((c->F>>f) & 1)
 #define cpu_set_flag(c, f) (c->F |= (1 << f))
 #define cpu_clear_flag(c, f) (c->F &= ~(1 << f))
+#define cpu_flip_flag(c, f) (cpu_flag(c, f) ? cpu_clear_flag(c, f) : cpu_set_flag(c,f))
 
 #define FLAG_Z 7
 #define FLAG_N 6

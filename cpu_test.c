@@ -98,7 +98,9 @@ int test_cpu_exec() {
     {"LD (HLD), A", {.A = 0xAA, .H = 0x01, .L = 0xDD}, 2, {.A = 0xAA, .H = 0x01, .L = 0xDC, .PC = 0x0001}, {0x01DD}, {0xAA}},
 
     {"ADC A, E", {.A = 0xE1, .E = 0x0F, .F = 0x10}, 1, {.A = 0xF1, .E = 0x0F, .F = 0x20, .PC = 0x0001}, {}, {}},
+    {"ADC A, L", {.A = 0xE1, .L = 0x1E, .F = 0x10}, 1, {.L = 0x1E, .F = 0xB0, .PC = 0x0001}, {}, {}},
     {"ADC A, 0x3B", {.A = 0xE1, .F = 0x10}, 2, {.A = 0x1D,.F = 0x10, .PC = 0x0002}, {}, {}},
+    {"ADC A, (HL)", {.A = 0xE1, .F = 0x10}, 2, {.A = 0xE2,.F = 0x00, .PC = 0x0001}, {}, {}},
 
     {"ADD A, B", {.A = 0x3A, .B = 0xC6}, 1, {.A = 0x00, .B = 0xC6, .F = 0xB0, .PC = 0x0001}, {}, {}},
     {"ADD A, C", {.A = 0xF0, .C = 0x10}, 1, {.A = 0x00, .C = 0x10, .F = 0x90, .PC = 0x0001}, {}, {}},
@@ -107,10 +109,17 @@ int test_cpu_exec() {
     {"ADD A, (HL)", {.A = 0x00}, 2, {.A = 0x00, .F = 0x80, .PC = 0x0001}, {}, {}},
     {"ADD A, 0x01", {.A = 0x00}, 2, {.A = 0x01, .PC = 0x0002}, {}, {}},
     {"ADD A, 0xA0", {.A = 0x0F}, 2, {.A = 0xAF, .PC = 0x0002}, {}, {}},
-    {"ADD SP, 10", {.SP = 0x1000, .F = 0xF0}, 4, {.SP = 0x100A, .PC = 0x0002}, {}, {}}, // TODO: handle flags properly
+    {"ADD SP, 10", {.SP = 0x1000, .F = 0xF0}, 4, {.SP = 0x100A, .PC = 0x0002}, {}, {}}, // TODO: go back and review flags
+    {"ADD SP, -10", {.SP = 0x1000, .F = 0xF0}, 4, {.SP = 0x0FF6, .PC = 0x0002}, {}, {}}, // TODO: review flags, allow negatives.
 
-    {"ADD HL, BC", {.B = 0x06, .C = 0x05, .H = 0x8A, .L = 0x23}, 2, {.B = 0x06, .C = 0x05, .H = 0x90, .L = 0x28, .F = 0x20 , .PC = 0x0001}, {}, {}},
-    {"ADD HL, HL", {.H = 0x8A, .L = 0x23}, 2, {.H = 0x14, .L = 0x46, .F = 0x30 , .PC = 0x0001}, {}, {}},
+    {"ADD HL, BC", {.B = 0x06, .C = 0x05, .H = 0x8A, .L = 0x23}, 2, {.B = 0x06, .C = 0x05, .H = 0x90, .L = 0x28, .F = 0x20, .PC = 0x0001}, {}, {}},
+    {"ADD HL, HL", {.H = 0x8A, .L = 0x23}, 2, {.H = 0x14, .L = 0x46, .F = 0x30, .PC = 0x0001}, {}, {}},
+
+    {"SUB E", {.A = 0x3E, .E = 0x3E}, 1, {.E = 0x3E, .F = 0xC0, .PC = 0x0001}, {}, {}},
+    {"SUB 0x0F", {.A = 0x3E}, 2, {.A = 0x2F, .F = 0x60, .PC = 0x0002}, {}, {}},
+    {"SUB 0x40", {.A = 0x3E}, 2, {.A = 0xFE, .F = 0x50, .PC = 0x0002}, {}, {}}, // errors out: fix N flag
+
+
   };
 
   for (int t = 0; (err_cnt < MAX_ERRORS) &&  t < sizeof(tests) / sizeof(struct test); t++) {
