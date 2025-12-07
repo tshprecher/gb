@@ -99,28 +99,42 @@ static void set_dd_or_ss(struct cpu *cpu, uint8_t dd_or_ss, uint16_t word) {
   }
 }
 
+// imitates the Z80-based 4-bit ALU for easier tracking of half carry and carry bits
+static uint8_t alu_4bit_add(uint8_t op1, uint8_t op2, uint8_t in_carry, uint8_t *out_carry) {
+  uint16_t result = (op1 & 0x0F) + (op2 & 0x0F) + (in_carry ? 1 : 0);
+  *out_carry = (result & (1 << 4)) > 0;
+  return result & 0x0F;
+}
+
 // handles ALU operations for addition, properly assigning the flags
-static uint8_t alu_add(struct cpu *cpu, uint8_t op1, uint8_t op2, uint8_t has_carry) {
-  uint16_t result = (op1 & 0x0F) + (op2 & 0x0F) + (has_carry ? 1 : 0);
-  (result & (1 << 4)) ? cpu_set_flag(cpu, FLAG_H) : cpu_clear_flag(cpu, FLAG_H);
+static uint8_t alu_add(struct cpu *cpu, uint8_t op1, uint8_t op2, uint8_t in_carry) {
+  uint8_t h_carry, cy_carry;
+  uint8_t lower4 = alu_4bit_add(op1, op2, in_carry, &h_carry);
+  uint8_t upper4 = alu_4bit_add(op1 >> 4, op2 >> 4, h_carry, &cy_carry);
+  uint8_t result = lower4+(upper4 << 4);
 
-  result += (op1 & 0xF0);
-  result += (op2 & 0xF0);
-
-  (result & (1 << 8)) ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
-
-  cpu_clear_flag(cpu, FLAG_N);
-  result &= 0xFF;
   result == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
-  printf("DEBUG: alu final result -> 0x%02X\n", result & 0xFF);
+  cpu_clear_flag(cpu, FLAG_N);
+  h_carry > 0 ? cpu_set_flag(cpu, FLAG_H) : cpu_clear_flag(cpu, FLAG_H);
+  cy_carry > 0 ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+
   return result;
 }
 
+// handles SUB operations for addition, properly assigning the flags
 static uint8_t alu_sub(struct cpu *cpu, uint8_t op1, uint8_t op2) {
-  uint8_t result = alu_add(cpu, op1,  ~op2 + 1, 0);
+  op2 = ~op2;
+
+  uint8_t h_carry, cy_carry;
+  uint8_t lower4 = alu_4bit_add(op1, op2, 1, &h_carry); // 2's complement means carry is 1 after bits flipped
+  uint8_t upper4 = alu_4bit_add(op1 >> 4, op2 >> 4, h_carry, &cy_carry);
+  uint8_t result = lower4+(upper4 << 4);
+
+  result == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
   cpu_set_flag(cpu, FLAG_N);
-  cpu_flip_flag(cpu, FLAG_H);
-  cpu_flip_flag(cpu, FLAG_CY);
+  h_carry > 0 ? cpu_clear_flag(cpu, FLAG_H) : cpu_set_flag(cpu, FLAG_H);
+  cy_carry > 0 ? cpu_clear_flag(cpu, FLAG_CY) : cpu_set_flag(cpu, FLAG_CY);
+
   return result;
 }
 
@@ -131,6 +145,8 @@ static uint8_t alu_sub(struct cpu *cpu, uint8_t op1, uint8_t op2) {
 int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   printf("DEBUG: found inst: txt pattern -> %s, subtype -> %d\n", inst->txt_pattern, inst->subtype);
   uint16_t hl, nn_word;
+  uint8_t cy, dd_or_ss;
+  uint8_t *bytePtr;
   switch (inst->type) {
   case (ADC):
     switch (inst->subtype) {
@@ -173,6 +189,140 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       break;
     }
     break;
+  case (AND):
+    switch (inst->subtype) {
+    case 0:
+      cpu->A &= *(reg(cpu, inst->args[0].value.byte));
+      break;
+    case 1:
+      cpu->A &= cpu->ram[regs_to_word(cpu, rH, rL)];
+      break;
+    case 2:
+      cpu->A &= inst->args[0].value.byte;
+      break;
+    }
+    cpu->A ? cpu_clear_flag(cpu, FLAG_Z) : cpu_set_flag(cpu, FLAG_Z);
+    cpu_clear_flag(cpu, FLAG_N);
+    cpu_set_flag(cpu, FLAG_H);
+    cpu_clear_flag(cpu, FLAG_CY);
+    break;
+  case (INC):
+    switch (inst->subtype) {
+    case 0:
+      cy = cpu_flag(cpu, FLAG_CY);
+      *(reg(cpu, inst->args[0].value.byte)) = alu_add(cpu, *(reg(cpu, inst->args[0].value.byte)), 1, 0);
+      cy == 0 ? cpu_clear_flag(cpu, FLAG_CY) : cpu_set_flag(cpu, FLAG_CY);
+      break;
+    case 1:
+      dd_or_ss = inst->args[0].value.byte;
+      set_dd_or_ss(cpu, dd_or_ss, get_dd_or_ss(cpu, dd_or_ss) + 1);
+      break;
+    case 2:
+      cy = cpu_flag(cpu, FLAG_CY);
+      cpu->ram[regs_to_word(cpu, rH, rL)] = alu_add(cpu, cpu->ram[regs_to_word(cpu, rH, rL)], 1, 0);
+      cy == 0 ? cpu_clear_flag(cpu, FLAG_CY) : cpu_set_flag(cpu, FLAG_CY);
+      break;
+    }
+    break;
+  case (DEC):
+    switch (inst->subtype) {
+    case 0:
+      cy = cpu_flag(cpu, FLAG_CY);
+      *(reg(cpu, inst->args[0].value.byte)) = alu_sub(cpu, *(reg(cpu, inst->args[0].value.byte)), 1);
+      cy == 0 ? cpu_clear_flag(cpu, FLAG_CY) : cpu_set_flag(cpu, FLAG_CY);
+      break;
+    case 1:
+      dd_or_ss = inst->args[0].value.byte;
+      set_dd_or_ss(cpu, dd_or_ss, get_dd_or_ss(cpu, dd_or_ss) - 1);
+      break;
+    case 2:
+      cy = cpu_flag(cpu, FLAG_CY);
+      cpu->ram[regs_to_word(cpu, rH, rL)] = alu_sub(cpu, cpu->ram[regs_to_word(cpu, rH, rL)], 1);
+      cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+      break;
+    }
+    break;
+  case (OR):
+    switch (inst->subtype) {
+    case 0:
+      cpu->A |= *(reg(cpu, inst->args[0].value.byte));
+      break;
+    case 1:
+      cpu->A |= cpu->ram[regs_to_word(cpu, rH, rL)];
+      break;
+    case 2:
+      cpu->A |= inst->args[0].value.byte;
+      break;
+    }
+    cpu->A ? cpu_clear_flag(cpu, FLAG_Z) : cpu_set_flag(cpu, FLAG_Z); // TODO: create another macro to set/unset based on value?
+    cpu_clear_flag(cpu, FLAG_N);
+    cpu_clear_flag(cpu, FLAG_H);
+    cpu_clear_flag(cpu, FLAG_CY);
+    break;
+  case (RLCA):
+    cy = (cpu->A & 0x80) != 0;
+    cpu->A = (cpu->A << 1) | cy;
+    cpu_clear_flag(cpu, FLAG_Z);
+    cpu_clear_flag(cpu, FLAG_N);
+    cpu_clear_flag(cpu, FLAG_H);
+    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    break;
+  case (RLC):
+    switch (inst->subtype) {
+    case 0:
+      bytePtr = reg(cpu, inst->args[0].value.byte);
+      break;
+    case 1:
+      bytePtr = &cpu->ram[regs_to_word(cpu, rH, rL)];
+      break;
+    }
+    cy = (*bytePtr & 0x80) != 0;
+    *bytePtr = (*bytePtr << 1) | cy;
+    cpu_clear_flag(cpu, FLAG_N);
+    cpu_clear_flag(cpu, FLAG_H);
+    *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
+    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    break;
+  case (RLA):
+    cy = (cpu->A & 0x80) != 0;
+    cpu->A = (cpu->A << 1) | cpu_flag(cpu, FLAG_CY);
+    cpu_clear_flag(cpu, FLAG_Z); // TODO: be able to set/clear multiple flags on a single line?
+    cpu_clear_flag(cpu, FLAG_N);
+    cpu_clear_flag(cpu, FLAG_H);
+    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    break;
+  case (RL):
+    switch (inst->subtype) {
+    case 0:
+      bytePtr = reg(cpu, inst->args[0].value.byte);
+      break;
+    case 1:
+      bytePtr = &cpu->ram[regs_to_word(cpu, rH, rL)];
+      break;
+    }
+    cy = (*bytePtr & 0x80) != 0;
+    *bytePtr = (*bytePtr << 1) | cpu_flag(cpu, FLAG_CY);
+    cpu_clear_flag(cpu, FLAG_N);
+    cpu_clear_flag(cpu, FLAG_H);
+    *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
+    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    break;
+  case (RRCA):
+    cy = (cpu->A & 1) != 0;
+    cpu->A = (cpu->A >> 1) | (cy << 7);
+    cpu_clear_flag(cpu, FLAG_Z);
+    cpu_clear_flag(cpu, FLAG_N);
+    cpu_clear_flag(cpu, FLAG_H);
+    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    break;
+  case (RRA):
+    cy = (cpu->A & 1) != 0;
+    cpu->A = (cpu->A >> 1) | (cpu_flag(cpu, FLAG_CY) << 7);
+    cpu_clear_flag(cpu, FLAG_Z);
+    cpu_clear_flag(cpu, FLAG_N);
+    cpu_clear_flag(cpu, FLAG_H);
+    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    break;
   case (SUB):
     switch (inst->subtype) {
     case 0:
@@ -196,6 +346,8 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       return inst->cycles;
     }
     break;
+  case (CP):
+    return -1;
   case (LD):
     switch (inst->subtype) {
     case 0:
@@ -276,9 +428,27 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       break;
     }
     break;
+  case (XOR):
+    switch (inst->subtype) {
+    case 0:
+      cpu->A ^= *(reg(cpu, inst->args[0].value.byte));
+      break;
+    case 1:
+      cpu->A ^= cpu->ram[regs_to_word(cpu, rH, rL)];
+      break;
+    case 2:
+      cpu->A ^= inst->args[0].value.byte;
+      break;
+    }
+    cpu->A ? cpu_clear_flag(cpu, FLAG_Z) : cpu_set_flag(cpu, FLAG_Z);
+    cpu_clear_flag(cpu, FLAG_N);
+    cpu_clear_flag(cpu, FLAG_H);
+    cpu_clear_flag(cpu, FLAG_CY);
+    break;
   default:
     return -1;
   }
+  printf("DEBUG: found inst bytelen -> %d\n", inst->bytelen);
   cpu->PC += inst->bytelen;
   return inst->cycles;
 }

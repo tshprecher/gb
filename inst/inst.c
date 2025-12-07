@@ -298,11 +298,18 @@ int init_inst_from_bytes(struct inst* inst, void *bytes) {
 int _match_txt_pattern(struct inst* inst, char *asmline) {
   int a = 0, p = 0;
   char *pattern = inst->txt_pattern;
+
+  // remove leading whitespace before comparing
+  while(asmline[a] == ' ')
+    a++;
+  while(pattern[p] == ' ')
+    p++;
+
   while (asmline[a] != '\0' && pattern[p] != '\0') {
-    // remove leading whitespace before comparing tokens
-    while(asmline[a] == ' ')
+    // remove duplicate spaces before comparing tokens
+    while(asmline[a] == ' ' && asmline[a+1] == ' ')
       a++;
-    while(pattern[p] == ' ')
+    while(pattern[p] == ' ' && pattern[p+1] == ' ')
       p++;
 
     if (pattern[p] == '{') {
