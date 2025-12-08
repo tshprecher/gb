@@ -308,7 +308,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case (RRCA):
-    cy = (cpu->A & 1) != 0;
+    cy = cpu->A & 1;
     cpu->A = (cpu->A >> 1) | (cy << 7);
     cpu_clear_flag(cpu, FLAG_Z);
     cpu_clear_flag(cpu, FLAG_N);
@@ -316,12 +316,107 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case (RRA):
-    cy = (cpu->A & 1) != 0;
+    cy = cpu->A & 1;
     cpu->A = (cpu->A >> 1) | (cpu_flag(cpu, FLAG_CY) << 7);
     cpu_clear_flag(cpu, FLAG_Z);
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
     cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    break;
+  case (RRC):
+    switch (inst->subtype) {
+    case 0:
+      bytePtr = reg(cpu, inst->args[0].value.byte);
+      break;
+    case 1:
+      bytePtr = &cpu->ram[regs_to_word(cpu, rH, rL)];
+      break;
+    }
+    cy = *bytePtr & 0x1;
+    *bytePtr = (*bytePtr >> 1) | (cy << 7);
+    cpu_clear_flag(cpu, FLAG_N);
+    cpu_clear_flag(cpu, FLAG_H);
+    *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
+    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    break;
+  case (RR):
+    switch (inst->subtype) {
+    case 0:
+      bytePtr = reg(cpu, inst->args[0].value.byte);
+      break;
+    case 1:
+      bytePtr = &cpu->ram[regs_to_word(cpu, rH, rL)];
+      break;
+    }
+    cy = *bytePtr & 0x1;
+    *bytePtr = (*bytePtr >> 1) | (cpu_flag(cpu, FLAG_CY) << 7);
+    cpu_clear_flag(cpu, FLAG_N);
+    cpu_clear_flag(cpu, FLAG_H);
+    *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
+    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    break;
+  case (SLA):
+    switch (inst->subtype) {
+    case 0:
+      bytePtr = reg(cpu, inst->args[0].value.byte);
+      break;
+    case 1:
+      bytePtr = &cpu->ram[regs_to_word(cpu, rH, rL)];
+      break;
+    }
+    cy = (*bytePtr & 0x80) != 0;
+    *bytePtr <<= 1;
+    cpu_clear_flag(cpu, FLAG_N);
+    cpu_clear_flag(cpu, FLAG_H);
+    *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
+    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    break;
+  case (SRA):
+    switch (inst->subtype) {
+    case 0:
+      bytePtr = reg(cpu, inst->args[0].value.byte);
+      break;
+    case 1:
+      bytePtr = &cpu->ram[regs_to_word(cpu, rH, rL)];
+      break;
+    }
+    cy = *bytePtr & 0x1; // TODO: replace all 0x01 and 0x1 with 1
+    *bytePtr = (*bytePtr >> 1) | (*bytePtr & 0x80);
+    cpu_clear_flag(cpu, FLAG_N);
+    cpu_clear_flag(cpu, FLAG_H);
+    *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
+    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    break;
+  case (SRL):
+    switch (inst->subtype) {
+    case 0:
+      bytePtr = reg(cpu, inst->args[0].value.byte);
+      break;
+    case 1:
+      bytePtr = &cpu->ram[regs_to_word(cpu, rH, rL)];
+      break;
+    }
+    cy = *bytePtr & 0x1;
+    *bytePtr >>= 1;
+    cpu_clear_flag(cpu, FLAG_N);
+    cpu_clear_flag(cpu, FLAG_H);
+    *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
+    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    break;
+  case (SWAP):
+    switch (inst->subtype) {
+    case 0:
+      bytePtr = reg(cpu, inst->args[0].value.byte);
+      break;
+    case 1:
+      bytePtr = &cpu->ram[regs_to_word(cpu, rH, rL)];
+      break;
+    }
+    *bytePtr = (*bytePtr << 4) | (*bytePtr >> 4);
+    cpu_clear_flag(cpu, FLAG_N);
+    cpu_clear_flag(cpu, FLAG_H);
+    cpu_clear_flag(cpu, FLAG_CY);
+    *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
     break;
   case (SUB):
     switch (inst->subtype) {
