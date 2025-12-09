@@ -5,12 +5,6 @@
 #define upper_8(v) ((v >> 8) & 0xFF)
 #define lower_8(v) (v & 0xFF)
 
-// TODO: does this need to be a macro? it is used enough?
-#define push_PC(c) c->SP--; \
-                   c->ram[c->SP--] = upper_8(c->PC); \
-                   c->ram[c->SP] = lower_8(c->PC)
-
-
 #define nn_lower(i, a) (i->args[a].value.word[0])
 #define nn_upper(i, a) (i->args[a].value.word[1])
 #define bytes_to_word(l, u) ((uint16_t) (u << 8 | l))
@@ -519,11 +513,35 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   case (CALL):
     switch (inst->subtype) {
     case 0:
-      return -1;
-    case 1:
-      push_PC(cpu);
+      cpu->SP--;
+      cpu->ram[cpu->SP--] = upper_8((cpu->PC + 3));
+      cpu->ram[cpu->SP] = lower_8((cpu->PC + 3));
       cpu->PC = nn_to_word(inst, 0);
       return inst->cycles;
+    case 1:
+      if (is_cond_true(cpu, inst->args[0].value.byte)) {
+	cpu->SP--;
+	cpu->ram[cpu->SP--] = upper_8((cpu->PC + 3));
+	cpu->ram[cpu->SP] = lower_8((cpu->PC + 3));
+	cpu->PC = nn_to_word(inst, 1);
+	return 6;
+	}
+      break;
+    }
+    break;
+  case (RET):
+    switch (inst->subtype) {
+    case 0:
+      cpu->PC = bytes_to_word(cpu->ram[cpu->SP], cpu->ram[cpu->SP+1]);
+      cpu->SP+=2;
+      return inst->cycles;
+    case 1:
+      if (is_cond_true(cpu, inst->args[0].value.byte)) {
+	cpu->PC = bytes_to_word(cpu->ram[cpu->SP], cpu->ram[cpu->SP+1]);
+	cpu->SP+=2;
+	return 5;
+      }
+      break;
     }
     break;
   case (CP):

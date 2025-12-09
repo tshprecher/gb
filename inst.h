@@ -82,7 +82,7 @@ enum reg { // Z80 index of each register in opcodes
 };
 
 struct inst_arg {
-  enum arg_type type;
+  enum arg_type type; // TODO: this isn't used outside the private fn's, so delete
   union {
     uint8_t byte;
     uint8_t word[2]; // little endian: first byte is lower part

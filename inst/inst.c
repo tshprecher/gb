@@ -29,8 +29,9 @@ static struct inst instructions[] = {
   {BIT, 0, 2, 2, "11001011 01{b}{r}", "BIT {b}, {r}"},
   {BIT, 1, 2, 3, "11001011 01{b}110", "BIT {b}, (HL)"},
 
-  {CALL, 0 ,3, 3, "110{cc}100 {nn}", "CALL {cc}, {nn}"}, // TODO: handle the 6-cycle variant
-  {CALL, 1, 3, 6, "11001101 {nn}", "CALL {nn}"},
+  {CALL, 0, 3, 6, "11001101 {nn}", "CALL {nn}"},
+  {CALL, 1 ,3, 3, "110{cc}100 {nn}", "CALL {cc}, {nn}"}, // TODO: handle the 6-cycle variant
+
 
   {CCF, 0, 1, 1, "00111111", "CCF"},
 
@@ -58,8 +59,8 @@ static struct inst instructions[] = {
   {JP,2 ,1, 1, "11101001", "JP (HL)"},
 
 
-  {JR,0 ,2, 3, "00011000 {e}", "JR {e+2}"},
-  {JR,1 ,2, 2, "001{cc}000 {e}", "JR {cc}, {e+2}"},  // TODO: handle the 3-cycle variant
+  {JR,0 ,2, 3, "00011000 {e}", "JR {e}"},
+  {JR,1 ,2, 2, "001{cc}000 {e}", "JR {cc}, {e}"},  // TODO: handle the 3-cycle variant
 
 
   {LD, 0,1, 1, "01{r}{r}", "LD {r}, {r}"},
@@ -98,8 +99,9 @@ static struct inst instructions[] = {
   {RES, 0,2, 2, "11001011 10{b}{r}", "RES {b}, {r}"},
   {RES, 1,2, 4, "11001011 10{b}110", "RES {b}, (HL)"},
 
-  {RET,0,1, 2, "110{cc}000", "RET {cc}"}, // TODO: handle the 5-cycle variant
-  {RET,1,1, 4, "11001001", "RET"},
+  {RET,0,1, 4, "11001001", "RET"},
+  {RET,1,1, 2, "110{cc}000", "RET {cc}"}, // TODO: handle the 5-cycle variant
+
 
   {RETI,0 ,1, 4, "11011001", "RETI"},
 
@@ -166,7 +168,7 @@ void inst_clear_args(struct inst *inst) {
 
 // Returns true iff the instruction byte matches the bit pattern.
 // If true, the instruction is filled with parsed args.
-int _match_bit_pattern(struct inst* inst, char *bytes)
+static int _match_bit_pattern(struct inst* inst, char *bytes)
 {
     int shift = 0;
     int c = 0;
@@ -297,7 +299,7 @@ int init_inst_from_bytes(struct inst* inst, void *bytes) {
 
 // Returns true if and only if the assembly line matches an instruction
 // text pattern. If true, the instruction is filled with parsed args.
-int _match_txt_pattern(struct inst* inst, char *asmline) {
+static int _match_txt_pattern(struct inst* inst, char *asmline) {
   int a = 0, p = 0;
   char *pattern = inst->txt_pattern;
 
@@ -420,26 +422,15 @@ int _match_txt_pattern(struct inst* inst, char *asmline) {
 	long parsed_dec = strtol(&asmline[a], &end, 10);
 
 	arg.type = E;
+
+	if (inst->type != ADD)
+	  parsed_dec -= 2;
+
 	arg.value.byte = parsed_dec & 0xFF;
 	inst_add_arg(inst, arg);
 
 	a+=eidx;
 	p+=3;
-      } else if (strstr(&pattern[p], "{e+2}") == &pattern[p]) { // TODO: consolidate logic with above?
-	int eidx = 0;
-	if (asmline[a] == '-')
-	  eidx++;
-	while (isdigit(asmline[a+eidx]))
-	  eidx++;
-	char *end = &asmline[a+eidx];
-	long parsed_dec = strtol(&asmline[a], &end, 10);
-
-	arg.type = E;
-	arg.value.byte = (parsed_dec-2) & 0xFF;
-	inst_add_arg(inst, arg);
-
-	a+=eidx;
-	p+=5;
       } else if (strstr(&pattern[p], "{n}") == &pattern[p]) {
 	char *end = &asmline[a+4];
 	long parsed_hex = strtol(&asmline[a], &end, 16);

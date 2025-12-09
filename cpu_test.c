@@ -69,11 +69,6 @@ int test_cpu_exec() {
     uint16_t modified_addrs[2];
     uint8_t modified_addr_values[2];
   } tests[] = {
-    {
-      "CALL 0x1000", {.PC = 0x1DDD, .SP = 0x1FFF}, 6, {.PC = 0x1000, .SP = 0x1FFD},
-      {0x1FFD, 0x1FFE}, {0xDD, 0x1D}
-    },
-
     {"LD A, E", {.E = 0x01}, 1, {.A = 0x01, .E = 0x01, .PC = 0x0001}, {}, {}},
     {"LD B, 0xFF", {}, 2, {.B = 0xFF, .PC = 0x0002}, {}, {}},
     {"LD C, (HL)", {.C = 0xAA, .H = 0x10, .L = 0x11}, 2, {.H = 0x10, .L = 0x11, .PC = 0x0001}, {}, {}},
@@ -208,7 +203,26 @@ int test_cpu_exec() {
     {"JR 10", {.F = 0xF0, .PC = 0x1000}, 3, {.F = 0xF0, .PC = 0x100A}, {}, {}},
     {"JR 129", {.F = 0xF0, .PC = 0x1000}, 3, {.F = 0xF0, .PC = 0x1081}, {}, {}},
 
+    {
+      "CALL 0x1234", {.PC = 0x8000, .SP = 0xFFFE}, 6, {.PC = 0x1234, .SP = 0xFFFC},
+      {0xFFFC, 0xFFFD}, {0x03, 0x80}
+    },
+
+    {
+      "CALL NZ, 0x1234", {.F = 0x80, .PC = 0x7FFD, .SP = 0xFFFE}, 3, {.F = 0x80, .PC = 0x8000, .SP = 0xFFFE},{}, {}
+    },
+
+    {
+      "CALL Z, 0x1234", {.F = 0x80, .PC = 0x8000, .SP = 0xFFFE}, 6, {.F = 0x80, .PC = 0x1234, .SP = 0xFFFC},
+      {0xFFFC, 0xFFFD}, {0x03, 0x80}
+    },
+
+    {"RET", {.PC = 0x8000, .SP = 0xFFFC}, 4, { .PC = 0x0000, .SP = 0xFFFE}, {}, {} },
+    {"RET NZ", {.F = 0x80, .PC = 0x9000, .SP = 0xFFFC}, 2, {.F = 0x80, .PC = 0x9001, .SP = 0xFFFC}, {}, {} },
+    {"RET Z", {.F = 0x80, .PC = 0x9000, .SP = 0xFFFC}, 5, {.F = 0x80, .PC = 0x0000, .SP = 0xFFFE}, {}, {} },
+
   };
+
 
   for (int t = 0; (err_cnt < MAX_ERRORS) &&  t < sizeof(tests) / sizeof(struct test); t++) {
     struct inst inst = {0};
