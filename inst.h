@@ -119,7 +119,7 @@ struct inst {
   uint8_t args_count;
 };
 
-enum cond { NZ = 1, Z, NC, YC };
+enum cond {NZ = 0, Z, NC, YC };
 
 
 int init_inst_from_bytes(struct inst*, void *);

@@ -53,12 +53,14 @@ static struct inst instructions[] = {
   {INC,1 ,1, 2, "00{ss}0011", "INC {ss}"},
   {INC,2 ,1, 3, "00110100", "INC (HL)"},
 
-  {JP,0 ,1, 1, "11101001", "JP (HL)"},
+  {JP,0 ,3, 4, "11000011 {nn}", "JP {nn}"},
   {JP,1 ,3, 3, "110{cc}010 {nn}", "JP {cc}, {nn}"}, // TODO: handle the 4-cycle variant
-  {JP,2 ,3, 4, "11000011 {nn}", "JP {nn}"},
+  {JP,2 ,1, 1, "11101001", "JP (HL)"},
 
-  {JR,0 ,2, 2, "001{cc}000 {e}", "JR {cc}, {e}"},  // TODO: handle the 3-cycle variant
-  {JR,1 ,2, 3, "00011000 {e}", "JR {e}"},
+
+  {JR,0 ,2, 3, "00011000 {e}", "JR {e+2}"},
+  {JR,1 ,2, 2, "001{cc}000 {e}", "JR {cc}, {e+2}"},  // TODO: handle the 3-cycle variant
+
 
   {LD, 0,1, 1, "01{r}{r}", "LD {r}, {r}"},
   {LD, 1,1, 2, "00000010", "LD (BC), A"},
@@ -423,6 +425,21 @@ int _match_txt_pattern(struct inst* inst, char *asmline) {
 
 	a+=eidx;
 	p+=3;
+      } else if (strstr(&pattern[p], "{e+2}") == &pattern[p]) { // TODO: consolidate logic with above?
+	int eidx = 0;
+	if (asmline[a] == '-')
+	  eidx++;
+	while (isdigit(asmline[a+eidx]))
+	  eidx++;
+	char *end = &asmline[a+eidx];
+	long parsed_dec = strtol(&asmline[a], &end, 10);
+
+	arg.type = E;
+	arg.value.byte = (parsed_dec-2) & 0xFF;
+	inst_add_arg(inst, arg);
+
+	a+=eidx;
+	p+=5;
       } else if (strstr(&pattern[p], "{n}") == &pattern[p]) {
 	char *end = &asmline[a+4];
 	long parsed_hex = strtol(&asmline[a], &end, 16);
