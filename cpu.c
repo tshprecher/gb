@@ -284,6 +284,36 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu_clear_flag(cpu, FLAG_H);
     cpu_clear_flag(cpu, FLAG_CY);
     break;
+  case (XOR):
+    switch (inst->subtype) {
+    case 0:
+      cpu->A ^= *(reg(cpu, inst->args[0].value.byte));
+      break;
+    case 1:
+      cpu->A ^= cpu->ram[regs_to_word(cpu, rH, rL)];
+      break;
+    case 2:
+      cpu->A ^= inst->args[0].value.byte;
+      break;
+    }
+    cpu->A ? cpu_clear_flag(cpu, FLAG_Z) : cpu_set_flag(cpu, FLAG_Z);
+    cpu_clear_flag(cpu, FLAG_N);
+    cpu_clear_flag(cpu, FLAG_H);
+    cpu_clear_flag(cpu, FLAG_CY);
+    break;
+  case (CP):
+    switch (inst->subtype) {
+    case 0:
+      alu_sub(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)));
+      break;
+    case 1:
+      alu_sub(cpu, cpu->A, inst->args[0].value.byte);
+      break;
+    case 2:
+      alu_sub(cpu, cpu->A, cpu->ram[regs_to_word(cpu, rH, rL)]);
+      break;
+    }
+    break;
   case (RLCA):
     cy = (cpu->A & 0x80) != 0;
     cpu->A = (cpu->A << 1) | cy;
@@ -544,8 +574,6 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       break;
     }
     break;
-  case (CP):
-    return -1;
   case (LD):
     switch (inst->subtype) {
     case 0:
@@ -625,23 +653,6 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       cpu->ram[word+1] = upper_8(cpu->SP);
       break;
     }
-    break;
-  case (XOR):
-    switch (inst->subtype) {
-    case 0:
-      cpu->A ^= *(reg(cpu, inst->args[0].value.byte));
-      break;
-    case 1:
-      cpu->A ^= cpu->ram[regs_to_word(cpu, rH, rL)];
-      break;
-    case 2:
-      cpu->A ^= inst->args[0].value.byte;
-      break;
-    }
-    cpu->A ? cpu_clear_flag(cpu, FLAG_Z) : cpu_set_flag(cpu, FLAG_Z);
-    cpu_clear_flag(cpu, FLAG_N);
-    cpu_clear_flag(cpu, FLAG_H);
-    cpu_clear_flag(cpu, FLAG_CY);
     break;
   default:
     return -1;
