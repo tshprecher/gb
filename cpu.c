@@ -149,7 +149,6 @@ static uint8_t alu_sub(struct cpu *cpu, uint8_t op1, uint8_t op2) {
 // TODO: could use a few more macros for clarity?
 // TODO: should this return 0 cycles on error instead? makes some sense
 int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
-  printf("DEBUG: found inst: txt pattern -> %s, subtype -> %d\n", inst->txt_pattern, inst->subtype);
   uint16_t hl, word;
   uint8_t cy, dd_or_ss;
   uint8_t *bytePtr;
@@ -531,7 +530,6 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     switch (inst->subtype) {
     case 0:
       e = (int8_t) inst->args[0].value.byte;
-      printf("DEBUG: e -> %d\n", e);
       cpu->PC = cpu->PC + e + 2;
       return inst->cycles;
     case 1:
@@ -660,7 +658,6 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   default:
     return -1;
   }
-  printf("DEBUG: found inst bytelen -> %d\n", inst->bytelen);
   cpu->PC += inst->bytelen;
   return inst->cycles;
 }
