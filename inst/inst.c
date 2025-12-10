@@ -32,7 +32,6 @@ static struct inst instructions[] = {
   {CALL, 0, 3, 6, "11001101 {nn}", "CALL {nn}"},
   {CALL, 1 ,3, 3, "110{cc}100 {nn}", "CALL {cc}, {nn}"}, // TODO: handle the 6-cycle variant
 
-
   {CCF, 0, 1, 1, "00111111", "CCF"},
 
   {CP, 0, 1, 1, "10111{r}", "CP {r}"},
@@ -57,7 +56,6 @@ static struct inst instructions[] = {
   {JP,0 ,3, 4, "11000011 {nn}", "JP {nn}"},
   {JP,1 ,3, 3, "110{cc}010 {nn}", "JP {cc}, {nn}"}, // TODO: handle the 4-cycle variant
   {JP,2 ,1, 1, "11101001", "JP (HL)"},
-
 
   {JR,0 ,2, 3, "00011000 {e}", "JR {e}"},
   {JR,1 ,2, 2, "001{cc}000 {e}", "JR {cc}, {e}"},  // TODO: handle the 3-cycle variant

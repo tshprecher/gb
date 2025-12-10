@@ -314,6 +314,9 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       break;
     }
     break;
+  case (CPL):
+    cpu->A = ~cpu->A;
+    break;
   case (RLCA):
     cy = (cpu->A & 0x80) != 0;
     cpu->A = (cpu->A << 1) | cy;
