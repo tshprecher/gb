@@ -1,33 +1,9 @@
 #include <dirent.h>
 #include <stdio.h>
 #include <string.h>
-#include "cpu.h"
 #include "inst.h"
-
-
-// TODO: consoloidate with inst tests, remove duplication
-#define TERM_COLOR_RED "\x1B[31m"
-#define TERM_COLOR_GREEN "\x1B[32m"
-#define TERM_COLOR_RESET "\033[0m"
-
-#define MAX_ERRORS 100
-
-void print_red(char *str) {
-  printf(TERM_COLOR_RED);
-  printf("%s", str);
-  printf(TERM_COLOR_RESET);
-}
-
-void print_green(char *str) {
-  printf(TERM_COLOR_GREEN);
-  printf("%s", str);
-  printf(TERM_COLOR_RESET);
-}
-
-
-// TODO: put this test suite logic in its own struct
-char err_msgs[MAX_ERRORS][64];
-int err_cnt = 0;
+#include "cpu.h"
+#include "testing.c"
 
 static int cpu_equals(struct cpu first, struct cpu second) {
   if (first.A == second.A &&
@@ -55,7 +31,9 @@ static void cpu_to_str(char *buf, struct cpu *cpu) {
 
 // returns 1 on failure
 int test_cpu_exec() {
-  printf("Test cpu execution...\n");
+  struct test_suite ts = {0};
+  suite_start(&ts, "cpu execution");
+
   char buf1[128], buf2[128];
   uint8_t ram[0x10000];
 
@@ -231,44 +209,177 @@ int test_cpu_exec() {
   };
 
 
-  for (int t = 0; (err_cnt < MAX_ERRORS) &&  t < sizeof(tests) / sizeof(struct test); t++) {
+  for (int t = 0; t < sizeof(tests) / sizeof(struct test); t++) {
     struct inst inst = {0};
     struct test tst = tests[t];
     memset(ram, 0, sizeof(ram));
-
     tst.initial.ram = ram;
 
+    suite_test_start(&ts, tst.asm_command);
     init_inst_from_asm(&inst, tst.asm_command);
     int cycles = cpu_exec_instruction(&tst.initial, &inst);
-    int initial_error_cnt = err_cnt;
     if (cycles != tst.cycles) {
-      sprintf(err_msgs[err_cnt++],"\tfound cycles:\t%d\n\t\texpected:\t%d", cycles, tst.cycles);
+      suite_test_error(&ts, "\tfound cycles:\t%d\n\t\texpected:\t%d\n", cycles, tst.cycles);
+
     }
     if (!cpu_equals(tst.initial, tst.expected)) {
       cpu_to_str(buf1, &tst.initial);
       cpu_to_str(buf2, &tst.expected);
-      sprintf(err_msgs[err_cnt++],
-	      "\tfound cpu:\t%s\n\t\texpected type:\t%s",
-	      buf1, buf2);
+      suite_test_error(&ts, "\t\tfound cpu:\t%s\n\t\texpected type:\t%s\n", buf1, buf2);
     }
     if ((tst.modified_addrs[0] || tst.modified_addrs[1]) &&
 	((tst.initial.ram[tst.modified_addrs[0]] != tst.modified_addr_values[0]) ||
 	 (tst.initial.ram[tst.modified_addrs[1]] != tst.modified_addr_values[1]))
 	) {
-      sprintf(err_msgs[err_cnt++],
-	      "\tfound ram values:\t{0x%04X : 0x%02X, 0x%04X : 0x%02X}\n\t\texpected ram values:\t{0x%04X : 0x%02X, 0x%04X : 0x%02X}",
-	      tst.modified_addrs[0], tst.initial.ram[tst.modified_addrs[0]], tst.modified_addrs[1], tst.initial.ram[tst.modified_addrs[1]],
-	      tst.modified_addrs[0], tst.modified_addr_values[0], tst.modified_addrs[1], tst.modified_addr_values[1]);
+      suite_test_error(&ts, "\tfound ram values:\t{0x%04X : 0x%02X, 0x%04X : 0x%02X}\n\t\texpected ram values:\t{0x%04X : 0x%02X, 0x%04X : 0x%02X}\n",
+		  tst.modified_addrs[0],
+		  tst.initial.ram[tst.modified_addrs[0]],
+		  tst.modified_addrs[1],
+		  tst.initial.ram[tst.modified_addrs[1]],
+		  tst.modified_addrs[0],
+		  tst.modified_addr_values[0],
+		  tst.modified_addrs[1],
+		  tst.modified_addr_values[1]);
+
     }
-    if (initial_error_cnt<err_cnt) {
-      printf("instruction failed: '%s'\n", tst.asm_command);
-      for (int e = initial_error_cnt; e < err_cnt; e++)
-	printf("\t%s\n", err_msgs[e]);
-    }
+    suite_test_end(&ts);
   }
-  return err_cnt > 0;
+  return suite_result(&ts);
 }
 
-int main() {
-  return test_cpu_exec();
+
+int test_inst_parsing() {
+  struct test_suite ts = {0};
+  suite_start(&ts, "instruction parsing");
+
+  DIR *dir;
+  struct dirent *entry;
+  char *dirname = "testdata/inst";
+  dir = opendir(dirname);
+
+  if (dir == NULL) {
+    perror("error opening test directory 'testdata/inst'\n");
+    return 1;
+  }
+
+  while ((entry = readdir(dir)) != NULL) {
+    if (entry->d_name[0] == '.')
+      continue;
+
+    FILE *f;
+    char filename[512];
+    char line[32];
+
+    sprintf(filename, "testdata/inst/%s", entry->d_name);
+    f = fopen(filename, "r");
+    if (f == NULL) {
+      fprintf(stderr, "error opening file '%s'\n", filename);
+      return 1;
+    }
+
+    suite_test_start(&ts, entry->d_name);
+    while (fgets(line, 32, f) != NULL) {
+      struct inst inst;
+      int len;
+      line[31] = '\0'; // ensure no buffer overruns
+      len = strlen(line);
+      if (len == 1)
+	continue;
+      line[len-1]='\0'; // remove traling newline
+      if (!init_inst_from_asm(&inst, line))
+	suite_test_error(&ts, "\t\tcould not parse '%s'\n", line);
+    }
+    suite_test_end(&ts);
+    fclose(f);
+  }
+  closedir(dir);
+  return suite_result(&ts);
+}
+
+int test_inst_init() {
+  struct test_suite ts = {0};
+  suite_start(&ts, "instruction init");
+
+  struct test {
+    // input
+    char *asm_command;
+
+    // expected output
+    enum inst_type type;
+    struct inst_arg args[3];
+    uint8_t args_count;
+  } tests[] = {
+    { .asm_command = "ADC A, (HL)", .type = ADC, {}, 0},
+    { .asm_command = "ADD A, B", .type = ADD, {{.type = R, .value.byte = 0}} , 1},
+    { .asm_command = "ADD A, (HL)", .type = ADD, {} , 0},
+    { .asm_command = "ADD A, 0x00", .type = ADD, {{.type = N, .value.byte = 0}} , 1},
+    { .asm_command = "ADD A, 0x20", .type = ADD, {{.type = N, .value.byte = 32}} , 1},
+    { .asm_command = "BIT 7, A", .type = BIT, {{.type = B, .value.byte = 7}, {.type = R, .value.byte = 7} } , 2},
+    { .asm_command = "CALL NZ, 0x1011", .type = CALL, {{.type = CC, .value.byte = 0}, {.type = NN, .value.word = {0x11, 0x10}}} , 2},
+    { .asm_command = "CALL 0xface", .type = CALL, {{.type = NN, .value.word = {0xce, 0xfa}}} , 1},
+    { .asm_command = "DEC SP", .type = DEC, {{.type = SS, .value.byte = 3}} , 1},
+    { .asm_command = "JR 10", .type = JR, {{.type = E, .value.byte = 8}} , 1},
+    { .asm_command = "JR -10", .type = JR, {{.type = E, .value.byte = 0xF4}} , 1},
+    { .asm_command = "LD DE, 0xdEaD", .type = LD, {{.type = DD, .value.byte = 1}, {.type = NN, .value.word = {0xAD, 0xDE}}} , 2},
+    { .asm_command = "POP HL", .type = POP, {{.type = QQ, .value.byte = 2}} , 1},
+    { .asm_command = "RST 4", .type = RST, {{.type = T, .value.byte = 4}} , 1},
+  };
+
+  for (int t = 0; t < sizeof(tests)/sizeof(struct test); t++) {
+    struct inst inst = {0};
+    struct test tst = tests[t];
+
+    suite_test_start(&ts, tst.asm_command);
+
+    if (!init_inst_from_asm(&inst, tst.asm_command)) {
+      suite_test_error(&ts, "\tcould not initialize instruction\n");
+    } else {
+      if (tst.type != inst.type) {
+	suite_test_error(&ts, "\t\tfound type:\t%d\n\t\texpected type:\t%d\n",
+		    inst.type, tst.type);
+      }
+      if (tst.args_count != inst.args_count) {
+	suite_test_error(&ts, "\t\tfound args count:\t%d\n\t\texpected args count:\t%d\n", inst.args_count, tst.args_count);
+      } else {
+	for (int a = 0; a < tst.args_count; a++) {
+	  if (
+	       tst.args[a].type != inst.args[a].type ||
+	       tst.args[a].value.byte != inst.args[a].value.byte ||
+	       tst.args[a].value.word[0] != inst.args[a].value.word[0] ||
+	       tst.args[a].value.word[1] != inst.args[a].value.word[1]
+	      )
+	    {
+	      suite_test_error(&ts,
+		      "\t\tfound:\t\t{type: %u, value: { byte: %u, word: [%u, %u]}}\n\t\texpected:\t{type: %u, value: { byte: %u, word: [%u, %u]}}\n",
+		      inst.args[a].type,
+		      inst.args[a].value.byte,
+		      inst.args[a].value.word[0],
+		      inst.args[a].value.word[1],
+		      tst.args[a].type,
+		      tst.args[a].value.byte,
+		      tst.args[a].value.word[0],
+		      tst.args[a].value.word[1]
+		      );
+	    }
+	}
+      }
+    }
+    suite_test_end(&ts);
+  }
+
+  return suite_result(&ts);
+}
+
+
+int main () {
+  int success = test_inst_parsing();
+  success &= test_inst_init();
+  success &= test_cpu_exec();
+
+  if (success)
+    print_green("SUCCESS!\n");
+  else
+    print_red("FAILED\n");
+
+  return !success;
 }

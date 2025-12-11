@@ -6,7 +6,7 @@ a.out
 .#*
 *_test
 gbe
-test
+tests
 *DS_Store
 tmp/*
 TAGS

@@ -1,14 +1,11 @@
 .PHONY: all
-all: gbe test_inst test_cpu
+all: gbe tests
 
 gbe:	inst cpu gbe.c
 	gcc -Wall -o gbe gbe.c inst.o cpu.o
 
-test_inst:  inst
-	gcc -Wall -o inst_test inst_test.c inst.o
-
-test_cpu:  inst cpu
-	gcc -Wall -o cpu_test cpu_test.c inst.o cpu.o
+tests:  inst cpu
+	gcc -Wall -o tests tests.c cpu.o inst.o
 
 cpu:    cpu.c
 	gcc -Wall -c cpu.c
