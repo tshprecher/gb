@@ -5,20 +5,12 @@
 #include "inst.h"
 #include "cpu.h"
 
-#define TERM_COLOR_GREEN "\x1B[32m"
-#define TERM_COLOR_CYAN "\x1B[36m"
-#define TERM_COLOR_RESET "\033[0m"
-
-// TODO: do we need this?
-struct debugger {};
-
 struct gb
 {
   struct cpu *cpu;
   uint8_t ram[0x10000];
 
-  // initialize to run with debugger
-  struct debugger *dbg;
+  int debug_mode;
 };
 
 void gb_debug_print_bin(char byte)
@@ -124,28 +116,27 @@ void gb_debug_print(struct gb *gb)
 void gb_run(struct gb *gb)
 {
   char buf[16];
-    if (gb->dbg != NULL)
-      {
-	gb_debug_print(gb);
-	printf("debug > ");
-	while (fgets(buf, sizeof(buf), stdin) != NULL) {
-	  if (buf[0] == 'n') {
-	    struct inst inst = cpu_next_instruction(gb->cpu);
-	    if (cpu_exec_instruction(gb->cpu, &inst) <= 0) {
-	      printf("\n");
-	      exit(1);
-	    }
-	  } else {
-	    fprintf(stderr, "error: unknown debugger commmand");
+  if (gb->debug_mode)
+    {
+      gb_debug_print(gb);
+      printf("debug > ");
+      while (fgets(buf, sizeof(buf), stdin) != NULL) {
+	if (buf[0] == 'n') {
+	  struct inst inst = cpu_next_instruction(gb->cpu);
+	  if (cpu_exec_instruction(gb->cpu, &inst) <= 0) {
+	    printf("\n");
 	    exit(1);
 	  }
-	  gb_debug_print(gb);
-	  printf("debug > ");
+	} else {
+	  fprintf(stderr, "error: unknown debugger commmand");
+	  exit(1);
 	}
+	gb_debug_print(gb);
+	printf("debug > ");
+      }
     }
-    else
+  else
     {
-      // TODO: remove this, obviously
       fprintf(stderr, "error: can only run in debug mode for now\n");
       exit(1);
     }
@@ -156,9 +147,6 @@ void gb_run(struct gb *gb)
 void gb_load_rom(struct gb *gb, char *filename)
 {
     FILE *fin = fopen(filename, "rb");
-
-    // TODO: this error handling looks wrong
-    // TODO: perhaps make reading roms common in some library?
     if (NULL == fin)
     {
         fprintf(stderr, "error opening file: %s\n", filename);
@@ -167,28 +155,15 @@ void gb_load_rom(struct gb *gb, char *filename)
 
     char b;
     int addr = 0;
-    while (addr < 0x8150)
+    while (addr < 0x8000)
     {
         size_t c = fread(&b, 1, 1, fin);
         if (c == 0)
-        {
             break;
-        }
-        if (addr < 0x150)
-        {
-            addr++;
-            continue;
-        }
         gb->ram[addr] = b;
         addr++;
     }
-
-    if (addr < 0x150)
-    {
-        fprintf(stderr, "error reading ROM: cannot find code starting at addresss 0x150: %x\n", addr);
-        exit(1);
-    }
-    if (addr != 0x8150)
+    if (addr != 0x8000)
     {
         fprintf(stderr, "error reading ROM: cannot read full 32K of ROM: %x\n", addr);
         exit(1);
@@ -209,10 +184,9 @@ int main(int argc, char *argv[])
   } else if (argc == 2) { // run game with debugger
     struct cpu cpu = {0};
     struct gb gb = {0};
-    struct debugger dbg = {};
     cpu.ram = gb.ram;
     gb.cpu = &cpu;
-    gb.dbg = &dbg;
+    gb.debug_mode = 1;
     gb_load_rom(&gb, argv[1]);
     gb_run(&gb);
   } else if (argc == 3) { // disassemble
@@ -227,17 +201,17 @@ int main(int argc, char *argv[])
     gb.cpu = &cpu;
     gb_load_rom(&gb, argv[2]);
 
-    int addr = 0x150;
+    int addr = 0;
     struct inst decoded = {0};
     char buf[16];
     while (addr < 0x8150) {
       int res = init_inst_from_bytes(&decoded, gb.ram + addr);
       if (res) {
 	inst_to_str(&decoded, buf);
-	printf("%s\n", buf);
+	printf("0x%02X\t%s\n", addr, buf);
 	addr+=decoded.bytelen;
       } else {
-	printf("DB 0x%02X\n", gb.ram[addr]);
+	printf("0x%02X\tDB 0x%02X\n", addr, gb.ram[addr]);
 	addr++;
       }
     }
