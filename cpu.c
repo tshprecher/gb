@@ -27,10 +27,7 @@ struct inst cpu_next_instruction(struct cpu *cpu) {
   return inst;
 }
 
-
 static uint8_t * reg(struct cpu *cpu, uint8_t reg) {
-  // NOTE: making this a switch throws a compiler warning about
-  // putting a label immediately afer a delaraction without using C23
   if (reg == rA)
       return &cpu->A;
   if (reg == rB)
@@ -41,6 +38,8 @@ static uint8_t * reg(struct cpu *cpu, uint8_t reg) {
     return &cpu->D;
   if (reg == rE)
     return &cpu->E;
+  if (reg == rF)
+    return &cpu->F;
   if (reg == rH)
     return &cpu->H;
   if (reg == rL)
@@ -58,6 +57,41 @@ static uint16_t regs_to_word(struct cpu * cpu, uint8_t upper, uint8_t lower) {
 static void word_to_regs(struct cpu * cpu, uint16_t word, uint8_t upper, uint8_t lower) {
   *(reg(cpu, lower)) = lower_8(word);
   *(reg(cpu, upper)) = upper_8(word);
+}
+
+static uint16_t get_qq(struct cpu *cpu, uint8_t qq) {
+  switch(qq) {
+  case 0:
+    return regs_to_word(cpu, rB, rC);
+  case 1:
+    return regs_to_word(cpu, rD, rE);
+  case 2:
+    return regs_to_word(cpu, rH, rL);
+  case 3:
+    return regs_to_word(cpu, rA, rF);
+  }
+  return 0;
+}
+
+static void set_qq(struct cpu *cpu, uint8_t qq, uint16_t word) {
+  switch(qq) {
+  case 0:
+    cpu->B = upper_8(word);
+    cpu->C = lower_8(word);
+    break;
+  case 1:
+    cpu->D = upper_8(word);
+    cpu->E = lower_8(word);
+    break;
+  case 2:
+    cpu->H = upper_8(word);
+    cpu->L = lower_8(word);
+    break;
+  case 3:
+    cpu->A = upper_8(word);
+    cpu->F = lower_8(word);
+    break;
+    }
 }
 
 static uint16_t get_dd_or_ss(struct cpu *cpu, uint8_t dd_or_ss) {
@@ -654,6 +688,16 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       cpu->ram[word+1] = upper_8(cpu->SP);
       break;
     }
+    break;
+  case (PUSH):
+    word = get_qq(cpu, inst->args[0].value.byte);
+    cpu->ram[cpu->SP-1] = upper_8(word);
+    cpu->ram[cpu->SP-2] = lower_8(word);
+    cpu->SP-=2;
+    break;
+  case (POP):
+    set_qq(cpu, inst->args[0].value.byte, bytes_to_word(cpu->ram[cpu->SP], cpu->ram[cpu->SP+1]));
+    cpu->SP+=2;
     break;
   default:
     return -1;

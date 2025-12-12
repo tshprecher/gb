@@ -77,8 +77,9 @@ enum reg { // Z80 index of each register in opcodes
   rE,
   rH,
   rL,
-  _na_,
-  rA
+  _na_, // flags register is special
+  rA,
+  rF
 };
 
 struct inst_arg {
