@@ -58,16 +58,14 @@ extern int main(int argc, char *argv[])
     exit(1);
   }
 
+  // ordering here seems right
   uint64_t colors[4] = {0xFFFFFF, 0xa9a9a9, 0x545454, 0x000000};
   /* 6. Event loop */
   while (1) {
     XNextEvent(display, &event);
     if (event.type == Expose) {
-      // Set the color for the filled rectangle (e.g., a light gray pixel value)
-      XSetForeground(display, gc, colors[1]);
-      // Draw a filled rectangle: XFillRectangle(display, drawable, gc, x, y, width, height)
 
-      fseek(fin, 0x41A7 + 0x50, SEEK_SET);
+      fseek(fin, 0x41A7 + 0x10, SEEK_SET);
 
       for (int chrs = 0; chrs < 6; chrs++) {
 	char chr[16];
@@ -79,15 +77,17 @@ extern int main(int argc, char *argv[])
 
 	for (int c = 0; c < 16; c+=2) {
 	  for (int b = 7; b >= 0; b--) {
-	    int lower = (chr[c] & (1 << b)) != 0;
-	    int upper = (chr[c+1] & (1 << b)) != 0;
+	    int upper = (chr[c] & (1 << b)) != 0;
+	    int lower = (chr[c+1] & (1 << b)) != 0;
 	    int color = (upper << 1) + lower;
 	    printf("DEBUG: color -> %d\n", color);
+
+	    // set the pixel color
 	    XSetForeground(display, gc, colors[color]);
 	    int row = c >> 1;
 	    int column = 7-b;
-	    XFillRectangle(display, window, gc, column * 20, (chrs*160) + row*20, 20, 20);
-	    //XFillRectangle(display, window, gc, (chrs * 160) + column * 20, row*20, 20, 20);
+	    //XFillRectangle(display, window, gc, column * 20, (chrs*160) + row*20, 20, 20);
+	    XFillRectangle(display, window, gc, (chrs * 160) + column * 20, row*20, 20, 20);
 	  }
 	}
       }
