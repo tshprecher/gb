@@ -154,7 +154,7 @@ void gb_run(struct gb *gb)
 	    sleep(1);
 	  }
 	} else {
-	  fprintf(stderr, "error: unknown debugger commmand");
+	  fprintf(stderr, "error: unknown debugger command");
 	  sleep(1);
 	}
 	gb_debug_print(gb);
@@ -167,19 +167,21 @@ void gb_run(struct gb *gb)
     char buf[32];
     // HACK: unblock the check for the LY register
     gb->ram[0xFF44] = 0x91;
-    while (inst_cnt < 1000000) {
+    int LIMIT = 0x100000;
+    while (inst_cnt < LIMIT) {
       struct inst inst = cpu_next_instruction(gb->cpu);
       inst_to_str(&inst, buf);
-      printf("%s\n", buf);
+      //      printf("ram value at 0x0000 -> 0x%02X\n", gb->ram[0]);
+      printf("0x%04X\t%s\n", gb->cpu->PC, buf);
       if (cpu_exec_instruction(gb->cpu, &inst) <= 0) {
 	inst_to_str(&inst, buf);
-	fprintf(stderr, "error: instruction # %d could not execute '%s' @ 0x%02X\n", inst_cnt, buf, gb->cpu->PC);
+	fprintf(stderr, "error: instruction # %d could not execute '%s' @ 0x%04X\n", inst_cnt, buf, gb->cpu->PC);
 	break;
       }
       inst_cnt++;
     }
     printf("ran %d instuctions\n", inst_cnt);
-    if (gb_dump(gb) < 0x10000) {
+    if (gb_dump(gb) < LIMIT) {
       fprintf(stderr, "error: could not write dump file");
     }
   }
