@@ -1,150 +1,157 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
+#include <X11/Xlib.h>
+#include <X11/keysym.h>
+#include "audio.h"
 #include "inst.h"
 #include "cpu.h"
+#include "mem_controller.h"
+
+#define CLOCK_FREQ 4194304
+
+extern Display *display; // for X window button events
+
+static void sleep_ns(int64_t ns) {
+  const struct timespec ts = {tv_nsec: ns};
+  struct timespec rem;
+  int res;
+  printf("DEBUG: ns -> %ld\n", ns);
+  if ((res = nanosleep(&ts, &rem))) { // TODO: change to clock_nanosleep
+    printf("DEBUG: res -> %d\n", res);
+    perror("nanosleep() failed");
+    exit(1);
+  }
+}
+
+static int64_t get_time_ns() {
+  struct timespec ts = {0};
+  if (clock_gettime(CLOCK_MONOTONIC, &ts)) {
+    perror("clock_gettime() failed");
+    exit(1);
+  }
+  printf("DEBUG: returning get_time_ns -> %ld\n", ts.tv_nsec);
+  return ts.tv_nsec;
+}
 
 struct gb
 {
   struct cpu *cpu;
-  uint8_t ram[0x10000];
-
-  int debug_mode;
+  struct mem_controller *mc;
+  struct interrupt_controller *ic;
+  struct lcd_controller *lcd;
+  struct timing_controller *tc;
+  struct port_controller *pc;
+  struct sound_controller *sc;
 };
 
-void gb_debug_print_bin(char byte)
-{
-    printf("%d%d%d%d%d%d%d%d",
-           (byte & (1 << 7)) != 0,
-           (byte & (1 << 6)) != 0,
-           (byte & (1 << 5)) != 0,
-           (byte & (1 << 4)) != 0,
-           (byte & (1 << 3)) != 0,
-           (byte & (1 << 2)) != 0,
-           (byte & (1 << 1)) != 0,
-           (byte & 1) != 0);
+ssize_t gb_dump(struct gb *gb) {
+  FILE *dump;
+  if ((dump = fopen("dump.bin", "wb")) == NULL) {
+    return 0;
+
+  }
+  size_t result = fwrite(gb->mc->ram, 1, 0x10000, dump);
+  printf("DEBUG: dumped total %ld bytes\n", result);
+  fclose(dump);
+  return result;
 }
 
-// print the state of the machine for debugging
-void gb_debug_print(struct gb *gb)
-{
-  // clear terminal
-  printf("\033[2J");
-  char buf[32];
-  struct inst ins;
-  char *pc = (char *) &gb->ram[gb->cpu->PC];
+void gb_poll_buttons(struct gb *gb) {
+  // Check if there are any events pending
+  XEvent event;
+  KeySym ks;
+  char buf[1];
 
-  printf("************* ROM DEBUGGER **************");
-  printf("\n");
-  printf("\n");
-  printf("-----------------------------------------");
-  printf("\n");
+  if (XPending(display)) {
+    XNextEvent(display, &event);
 
-  init_inst_from_bytes(&ins, pc);
-  inst_to_str(&ins, buf);
-  printf("instruction (txt) :\t%s", buf);
-  printf("\n");
-  printf("instruction (hex) :\t");
-  for (int i = 0; i < ins.bytelen; i++)
-    {
-      printf("0x%02X ", (uint8_t) pc[i]);
+    switch (event.type) {
+    case KeyPress:
+    case KeyRelease:
+      enum btn btn = BTN_START;
+      XLookupString(&event.xkey, buf, sizeof(buf), &ks, NULL);
+
+      switch (ks) {
+      case XK_Right:
+	btn = BTN_RIGHT;
+	break;
+      case XK_Left:
+	btn = BTN_LEFT;
+	break;
+      case XK_Up:
+	btn = BTN_UP;
+	break;
+      case XK_Down:
+	btn = BTN_DOWN;
+	break;
+      case XK_a:
+	btn = BTN_A;
+	break;
+      case XK_b:
+	btn = BTN_B;
+	break;
+      case XK_space:
+	btn = BTN_SELECT;
+	break;
+      }
+
+      if (event.type == KeyPress) {
+	port_btn_press(gb->pc, btn);
+      } else if (event.type == KeyRelease) {
+	port_btn_unpress(gb->pc, btn);
+      }
+
+      break;
+    default:
+      break;
     }
-  printf("\n");
-  printf("instruction (bin) :\t");
-  for (int i = 0; i < ins.bytelen; i++)
-    {
-      gb_debug_print_bin(pc[i]);
-      printf(" ");
-    }
-  printf("\n\n");
-  printf("FLAGS REGISTER:");
-  printf("\n");
-  printf("\tF: 0x%02X {Z: %d, N: %d, H: %d, CY: %d}",
-	 gb->cpu->F,
-	 cpu_flag(gb->cpu, FLAG_Z),
-	 cpu_flag(gb->cpu, FLAG_N),
-	 cpu_flag(gb->cpu, FLAG_H),
-	 cpu_flag(gb->cpu, FLAG_CY));
-  printf("\n\n");
-  printf("16 BIT REGISTERS:");
-  printf("\n\n");
-  printf("\tPC: 0x%04X", gb->cpu->PC);
-  printf("\n");
-  printf("\tSP: 0x%04X", gb->cpu->SP);
-  printf("\n\n");
-  printf("8 BIT REGISTERS:");
-  printf("\n\n");
-  printf("\tA: 0x%02X", gb->cpu->A);
-  printf("\n");
-  printf("\tB: 0x%02X", gb->cpu->B);
-  printf("\n");
-  printf("\tC: 0x%02X", gb->cpu->C);
-  printf("\n");
-  printf("\tD: 0x%02X", gb->cpu->D);
-  printf("\n");
-  printf("\tE: 0x%02X", gb->cpu->E);
-  printf("\n");
-  printf("\tH: 0x%02X", gb->cpu->H);
-  printf("\n");
-  printf("\tL: 0x%02X", gb->cpu->L);
-  printf("\n");
-  printf("\n\n");
-
-  printf("NEXT 10 LINES:");
-  printf("\n\n");
-
-  for (int a = 0, pc = gb->cpu->PC; a < 10; a++) {
-    struct inst inst;
-    if (!init_inst_from_bytes(&inst, &gb->ram[pc])) {
-      fprintf(stderr, "error: could not decode instructions");
-      exit(1);
-    }
-    inst_to_str(&inst, buf);
-    if (a == 0)
-      printf("0x%02X      --> %s", pc, buf);
-    else
-      printf("0x%02X          %s", pc, buf);
-    printf("\n");
-    pc+=ins.bytelen;
   }
-  printf("-----------------------------------------");
-  printf("\n");
-  printf("\n\n");
 }
 
 void gb_run(struct gb *gb)
 {
-  char buf[16];
-  if (gb->debug_mode)
-    {
-      gb_debug_print(gb);
-      printf("debug > ");
-      while (fgets(buf, sizeof(buf), stdin) != NULL) {
-	if (buf[0] == 'n') {
-	  struct inst inst = cpu_next_instruction(gb->cpu);
-	  if (cpu_exec_instruction(gb->cpu, &inst) <= 0) {
-	    printf("\n");
-	    exit(1);
-	  }
-	} else {
-	  fprintf(stderr, "error: unknown debugger commmand");
-	  exit(1);
-	}
-	gb_debug_print(gb);
-	printf("debug > ");
+  init_lcd();
+  init_audio();
+
+  int t_cycles = 0;
+  int64_t last_cycle_time_ns = get_time_ns();
+
+  while (1) {
+    t_cycles++;
+
+    cpu_tick(gb->cpu);
+    lcd_tick(gb->lcd);
+    port_tick(gb->pc);
+    timing_tick(gb->tc);
+    audio_tick(gb->sc);
+    if (t_cycles % 1024 == 0) // TODO: put this behind another tick(), and does this need to be polled so often?
+      gb_poll_buttons(gb);
+
+    if (t_cycles % ((1<<16) + 1) == 0) {
+      int64_t cur_cycle_time_ns = get_time_ns();
+      int64_t cur_period_time_ns;
+      if (cur_cycle_time_ns > last_cycle_time_ns) {
+	 cur_period_time_ns = cur_cycle_time_ns - last_cycle_time_ns;
+      } else {
+	cur_period_time_ns = 999999999 - last_cycle_time_ns + cur_cycle_time_ns;
       }
+
+      printf("DEBUG: period in ns for 65K clock cycles: %ld\n", cur_period_time_ns);
+      last_cycle_time_ns = cur_cycle_time_ns;
+      int sleep_time_ns = 15625000 > cur_period_time_ns ? (15625000 - cur_period_time_ns) : 0;
+      sleep_ns(sleep_time_ns);
     }
-  else
-    {
-      fprintf(stderr, "error: can only run in debug mode for now\n");
-      exit(1);
-    }
+  }
 }
 
 
-// load 32K ROM into starting address 0x150
-void gb_load_rom(struct gb *gb, char *filename)
+// TODO: make this a method of memory controller
+void load_rom(struct mem_controller *mc, char *filename)
 {
     FILE *fin = fopen(filename, "rb");
     if (NULL == fin)
@@ -157,20 +164,16 @@ void gb_load_rom(struct gb *gb, char *filename)
     int addr = 0;
     while (addr < 0x8000)
     {
-        size_t c = fread(&b, 1, 1, fin);
-        if (c == 0)
-            break;
-        gb->ram[addr] = b;
-        addr++;
+      size_t c = fread(&b, 1, 1, fin);
+      if (c == 0)
+	break;
+      mc->ram[addr++] = b;
     }
     if (addr != 0x8000)
-    {
+      {
         fprintf(stderr, "error reading ROM: cannot read full 32K of ROM: %x\n", addr);
         exit(1);
-    }
-    gb->cpu->PC = 0x150;
-    gb->cpu->SP = 0xFFFE;
-
+      }
     fclose(fin);
 }
 
@@ -181,13 +184,41 @@ int main(int argc, char *argv[])
   if (argc < 2) {
     fprintf(stderr, "error: missing arguments.\n");
     return 1;
-  } else if (argc == 2) { // run game with debugger
+  } else if (argc == 2) { // run game
     struct cpu cpu = {0};
+    init_cpu(&cpu);
+
     struct gb gb = {0};
-    cpu.ram = gb.ram;
+    struct mem_controller mc = {0};
+    struct port_controller pc = {0};
+    struct interrupt_controller ic = {0};
+    struct lcd_controller lcd = {0};
+    struct timing_controller tc = {0};
+    struct sound_controller sc = {0};
+
+    lcd.mc = &mc;
+    lcd.ic = &ic;
+    lcd.LCDC = 0x83; // TODO: put in an init?
+
+    mc.ic = &ic;
+    mc.lcd = &lcd;
+    mc.tc = &tc;
+    mc.pc = &pc;
+    mc.sc = &sc;
+
+    cpu.mc = &mc;
+    cpu.ic = &ic;
+
+    sc.mc = &mc;
+
     gb.cpu = &cpu;
-    gb.debug_mode = 1;
-    gb_load_rom(&gb, argv[1]);
+    gb.mc = &mc;
+    gb.lcd = &lcd;
+    gb.tc = &tc;
+    gb.pc = &pc;
+    gb.sc = &sc;
+
+    load_rom(gb.mc, argv[1]);
     gb_run(&gb);
   } else if (argc == 3) { // disassemble
     if (strcmp(argv[1], "-d") != 0) {
@@ -195,23 +226,20 @@ int main(int argc, char *argv[])
       return 1;
     }
 
-    struct cpu cpu = {0};
-    struct gb gb = {0};
-    cpu.ram = gb.ram;
-    gb.cpu = &cpu;
-    gb_load_rom(&gb, argv[2]);
+    struct mem_controller mc = {0};
+    load_rom(&mc, argv[2]);
 
-    int addr = 0;
-    struct inst decoded = {0};
+    int addr = 0x0;
+    struct inst *decoded;
     char buf[16];
-    while (addr < 0x8150) {
-      int res = init_inst_from_bytes(&decoded, gb.ram + addr);
-      if (res) {
-	inst_to_str(&decoded, buf);
+    while (addr < 0x8000) {
+      decoded = mem_read_inst(&mc, addr);
+      if (decoded) {
+	inst_to_str(buf, decoded);
 	printf("0x%02X\t%s\n", addr, buf);
-	addr+=decoded.bytelen;
+	addr+=decoded->bytelen;
       } else {
-	printf("0x%02X\tDB 0x%02X\n", addr, gb.ram[addr]);
+	printf("0x%02X\tDB 0x%02X\n", addr, mc.ram[addr]);
 	addr++;
       }
     }

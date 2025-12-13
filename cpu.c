@@ -1,5 +1,7 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "cpu.h"
+#include "mem_controller.h"
 #include "inst.h"
 
 #define upper_8(v) ((v >> 8) & 0xFF)
@@ -10,22 +12,18 @@
 #define bytes_to_word(l, u) ((uint16_t) (u << 8 | l))
 #define nn_to_word(i, a) bytes_to_word(nn_lower(i,a),nn_upper(i,a))
 
+// hard coded interrupt handler addresses by interrupt priority
+static uint16_t interrupt_handlers[] = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060};
 
-// cpu_exec_cycles takes a cpu and execute 'cycles' number of cycles.
-// It returns the number of cycles run.
-int cpu_exec_cycles(struct cpu *cpu, unsigned int cycles)
-{
-  if (cycles == 0)
-    return 0;
-  fprintf(stderr, "error cpu_exec_cycles: not implemented");
-  return -1;
+void timing_tick(struct timing_controller *tc) {
+  tc->div_t_cycles++;
 }
 
-struct inst cpu_next_instruction(struct cpu *cpu) {
-  struct inst inst;
-  init_inst_from_bytes(&inst, &cpu->ram[cpu->PC]);
-  return inst;
+void interrupt(struct interrupt_controller *ic, enum Interrupt interrupt) {
+  printf("DEBUG: interrupt %d\n", interrupt);
+  ic->IF |= (1 << interrupt);
 }
+
 
 static uint8_t * reg(struct cpu *cpu, uint8_t reg) {
   if (reg == rA)
@@ -70,6 +68,7 @@ static uint16_t get_qq(struct cpu *cpu, uint8_t qq) {
   case 3:
     return regs_to_word(cpu, rA, rF);
   }
+  // TODO: panic here
   return 0;
 }
 
@@ -177,17 +176,85 @@ static uint8_t alu_sub(struct cpu *cpu, uint8_t op1, uint8_t op2) {
   return result;
 }
 
+void init_cpu(struct cpu *cpu) {
+  cpu->PC = 0x150;
+  cpu->SP = 0xFFFE;
+}
 
-// cpu_exec_instruction takes a cpu and instruction and executes
-// the instruction. It returns the number of cycles run, -1 on error
+
+void cpu_tick(struct cpu *cpu) {
+  if (cpu->t_cycles < 0) { // catch up for variably timed instructions
+      cpu->t_cycles++;
+      return;
+  }
+
+  if (cpu->interrupt_t_cycles) {
+    cpu->interrupt_t_cycles--;
+    return;
+  }
+
+  // check interrupt between completed instructions
+  if (cpu->t_cycles == 0 && cpu->IME && cpu->ic->IF) {
+    printf("DEBUG: noticed interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->ic->IF, cpu->ic->IE);
+    for (int i = 0; i < 5; i++) {
+      uint8_t mask = 1 << i;
+      if ((cpu->ic->IF & mask) && (cpu->ic->IE & mask)) {
+	  cpu->ic->IF ^= mask;
+	  cpu->IME = 0;
+	  printf("DEBUG: handling interrupt #%d\n", i);
+
+	  // TODO: consolidate PUSH into one operation?
+	  printf("DEBUG: pushing interrupt return address: 0x%04X\n", cpu->PC);
+	  mem_write(cpu->mc,cpu->SP-1,  upper_8(cpu->PC));
+	  mem_write(cpu->mc,cpu->SP-2, lower_8(cpu->PC));
+	  cpu->SP -= 2;
+	  cpu->PC = interrupt_handlers[i];
+	  cpu->interrupt_t_cycles = 6 << 2;
+      }
+    }
+  }
+
+  if (!cpu->next_inst || cpu->t_cycles == 0) // TODO: put this in the init?
+    cpu->next_inst = mem_read_inst(cpu->mc, cpu->PC);
+
+  // 4 clock cycles per machine cycle
+  int8_t exec_cycle = (cpu->next_inst->cycles << 2);
+  cpu->t_cycles++;
+  char buf[32];
+  if (cpu->t_cycles == exec_cycle) {
+    //inst_to_str(buf, cpu->next_inst);
+    //printf("0x%04X\t%s\n", cpu->PC, buf);
+    int cycles = cpu_exec_instruction(cpu, cpu->next_inst);
+    if (cycles < 0) {
+      char buf[16];
+      inst_to_str(buf, cpu->next_inst);
+      fprintf(stderr, "error: could not execute instr '%s' @ 0x%04X\n",
+	      buf, cpu->PC);
+      exit(1);
+    }
+
+    if (exec_cycle > cpu->t_cycles) {
+      cpu->t_cycles -= exec_cycle; // go negative to catch up
+    } else {
+      cpu->t_cycles = 0;
+    }
+  }
+
+}
+
+
+// cpu_exec_instruction takes a executes the instruction.
+// It returns the number of cycles run, -1 on error
 // TODO: could use a few more macros for clarity?
 // TODO: should this return 0 cycles on error instead? makes some sense
 int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   uint16_t hl, word;
-  uint8_t cy, dd_or_ss;
+  uint8_t flag_cy, flag_h, dd_or_ss, daa_add, lower_nib, upper_nib;
   uint8_t *bytePtr;
   int8_t e;
   switch (inst->type) {
+  case NOP:
+    break;
   case (ADC):
     switch (inst->subtype) {
     case 0:
@@ -197,7 +264,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       cpu->A = alu_add(cpu, cpu->A, inst->args[0].value.byte, cpu_flag(cpu, FLAG_CY));
       break;
     case 2:
-      cpu->A = alu_add(cpu, cpu->A, cpu->ram[regs_to_word(cpu, rH, rL)], cpu_flag(cpu, FLAG_CY));
+      cpu->A = alu_add(cpu, cpu->A, mem_read(cpu->mc, regs_to_word(cpu, rH, rL)), cpu_flag(cpu, FLAG_CY));
       break;
     }
     break;
@@ -207,7 +274,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       cpu->A = alu_add(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)), 0);
       break;
     case 1:
-      cpu->A = alu_add(cpu, cpu->A, cpu->ram[regs_to_word(cpu, rH, rL)], 0);
+      cpu->A = alu_add(cpu, cpu->A, mem_read(cpu->mc, regs_to_word(cpu, rH, rL)), 0);
       break;
     case 2:
       cpu->A = alu_add(cpu, cpu->A, inst->args[0].value.byte, 0);
@@ -215,11 +282,11 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     case 3:
       e = (int8_t) inst->args[0].value.byte;
       if (e >= 0) {
-	cy = (lower_8(cpu->SP) + e) >= (1<<8) ? 1 : 0;
-	alu_add(cpu, upper_8(cpu->SP), 0, cy); // to set upper carry bits
+	flag_cy = (lower_8(cpu->SP) + e) >= (1<<8) ? 1 : 0;
+	alu_add(cpu, upper_8(cpu->SP), 0, flag_cy); // to set upper carry bits
       } else {
-	cy = (lower_8(cpu->SP) < -e) ? 1 : 0;
-	alu_sub(cpu, upper_8(cpu->SP), cy); // to set upper carry bits
+	flag_cy = (lower_8(cpu->SP) < -e) ? 1 : 0;
+	alu_sub(cpu, upper_8(cpu->SP), flag_cy); // to set upper carry bits
       }
       cpu_clear_flag(cpu, FLAG_Z);
       cpu_clear_flag(cpu, FLAG_N);
@@ -228,8 +295,8 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     case 4:
       hl = regs_to_word(cpu, rH, rL);
       word = get_dd_or_ss(cpu, inst->args[0].value.byte);
-      cy = (cpu->L + lower_8(word)) >= (1<<8) ? 1 : 0;
-      alu_add(cpu, cpu->H, upper_8(word), cy); // to set upper carry bits
+      flag_cy = (cpu->L + lower_8(word)) >= (1<<8) ? 1 : 0;
+      alu_add(cpu, cpu->H, upper_8(word), flag_cy); // to set upper carry bits
       word_to_regs(cpu, hl+word, rH, rL);
       break;
     }
@@ -243,43 +310,45 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       cpu->A = alu_sub(cpu, cpu->A, inst->args[0].value.byte);
       break;
     case 2:
-      cpu->A = alu_sub(cpu, cpu->A, cpu->ram[regs_to_word(cpu, rH, rL)]);
+      cpu->A = alu_sub(cpu, cpu->A, mem_read(cpu->mc, regs_to_word(cpu, rH, rL)));
       break;
     }
     break;
   case (INC):
     switch (inst->subtype) {
     case 0:
-      cy = cpu_flag(cpu, FLAG_CY);
+      flag_cy = cpu_flag(cpu, FLAG_CY);
       *(reg(cpu, inst->args[0].value.byte)) = alu_add(cpu, *(reg(cpu, inst->args[0].value.byte)), 1, 0);
-      cy == 0 ? cpu_clear_flag(cpu, FLAG_CY) : cpu_set_flag(cpu, FLAG_CY);
+      flag_cy == 0 ? cpu_clear_flag(cpu, FLAG_CY) : cpu_set_flag(cpu, FLAG_CY);
       break;
     case 1:
       dd_or_ss = inst->args[0].value.byte;
       set_dd_or_ss(cpu, dd_or_ss, get_dd_or_ss(cpu, dd_or_ss) + 1);
       break;
     case 2:
-      cy = cpu_flag(cpu, FLAG_CY);
-      cpu->ram[regs_to_word(cpu, rH, rL)] = alu_add(cpu, cpu->ram[regs_to_word(cpu, rH, rL)], 1, 0);
-      cy == 0 ? cpu_clear_flag(cpu, FLAG_CY) : cpu_set_flag(cpu, FLAG_CY);
+      flag_cy = cpu_flag(cpu, FLAG_CY);
+      mem_write(cpu->mc, regs_to_word(cpu, rH, rL),
+		alu_add(cpu, mem_read(cpu->mc, regs_to_word(cpu, rH, rL)), 1, 0));
+      flag_cy == 0 ? cpu_clear_flag(cpu, FLAG_CY) : cpu_set_flag(cpu, FLAG_CY);
       break;
     }
     break;
   case (DEC):
     switch (inst->subtype) {
     case 0:
-      cy = cpu_flag(cpu, FLAG_CY);
+      flag_cy = cpu_flag(cpu, FLAG_CY);
       *(reg(cpu, inst->args[0].value.byte)) = alu_sub(cpu, *(reg(cpu, inst->args[0].value.byte)), 1);
-      cy == 0 ? cpu_clear_flag(cpu, FLAG_CY) : cpu_set_flag(cpu, FLAG_CY);
+      flag_cy == 0 ? cpu_clear_flag(cpu, FLAG_CY) : cpu_set_flag(cpu, FLAG_CY);
       break;
     case 1:
       dd_or_ss = inst->args[0].value.byte;
       set_dd_or_ss(cpu, dd_or_ss, get_dd_or_ss(cpu, dd_or_ss) - 1);
       break;
     case 2:
-      cy = cpu_flag(cpu, FLAG_CY);
-      cpu->ram[regs_to_word(cpu, rH, rL)] = alu_sub(cpu, cpu->ram[regs_to_word(cpu, rH, rL)], 1);
-      cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+      flag_cy = cpu_flag(cpu, FLAG_CY);
+      mem_write(cpu->mc, regs_to_word(cpu, rH, rL),
+		alu_sub(cpu, mem_read(cpu->mc, regs_to_word(cpu, rH, rL)), 1));
+      flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
       break;
     }
     break;
@@ -289,7 +358,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       cpu->A &= *(reg(cpu, inst->args[0].value.byte));
       break;
     case 1:
-      cpu->A &= cpu->ram[regs_to_word(cpu, rH, rL)];
+      cpu->A &= mem_read(cpu->mc, regs_to_word(cpu, rH, rL));
       break;
     case 2:
       cpu->A &= inst->args[0].value.byte;
@@ -306,7 +375,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       cpu->A |= *(reg(cpu, inst->args[0].value.byte));
       break;
     case 1:
-      cpu->A |= cpu->ram[regs_to_word(cpu, rH, rL)];
+      cpu->A |= mem_read(cpu->mc, regs_to_word(cpu, rH, rL));
       break;
     case 2:
       cpu->A |= inst->args[0].value.byte;
@@ -323,7 +392,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       cpu->A ^= *(reg(cpu, inst->args[0].value.byte));
       break;
     case 1:
-      cpu->A ^= cpu->ram[regs_to_word(cpu, rH, rL)];
+      cpu->A ^= mem_read(cpu->mc, regs_to_word(cpu, rH, rL));
       break;
     case 2:
       cpu->A ^= inst->args[0].value.byte;
@@ -343,7 +412,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       alu_sub(cpu, cpu->A, inst->args[0].value.byte);
       break;
     case 2:
-      alu_sub(cpu, cpu->A, cpu->ram[regs_to_word(cpu, rH, rL)]);
+      alu_sub(cpu, cpu->A, mem_read(cpu->mc, regs_to_word(cpu, rH, rL)));
       break;
     }
     break;
@@ -351,12 +420,12 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu->A = ~cpu->A;
     break;
   case (RLCA):
-    cy = (cpu->A & 0x80) != 0;
-    cpu->A = (cpu->A << 1) | cy;
+    flag_cy = (cpu->A & 0x80) != 0;
+    cpu->A = (cpu->A << 1) | flag_cy;
     cpu_clear_flag(cpu, FLAG_Z);
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
-    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case (RLC):
     switch (inst->subtype) {
@@ -364,23 +433,23 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       bytePtr = reg(cpu, inst->args[0].value.byte);
       break;
     case 1:
-      bytePtr = &cpu->ram[regs_to_word(cpu, rH, rL)];
+      bytePtr = &cpu->mc->ram[regs_to_word(cpu, rH, rL)];
       break;
     }
-    cy = (*bytePtr & 0x80) != 0;
-    *bytePtr = (*bytePtr << 1) | cy;
+    flag_cy = (*bytePtr & 0x80) != 0;
+    *bytePtr = (*bytePtr << 1) | flag_cy;
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
     *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
-    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case (RLA):
-    cy = (cpu->A & 0x80) != 0;
+    flag_cy = (cpu->A & 0x80) != 0;
     cpu->A = (cpu->A << 1) | cpu_flag(cpu, FLAG_CY);
     cpu_clear_flag(cpu, FLAG_Z); // TODO: be able to set/clear multiple flags on a single line?
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
-    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case (RL):
     switch (inst->subtype) {
@@ -388,31 +457,31 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       bytePtr = reg(cpu, inst->args[0].value.byte);
       break;
     case 1:
-      bytePtr = &cpu->ram[regs_to_word(cpu, rH, rL)];
+      bytePtr = mem_ptr(cpu->mc, regs_to_word(cpu, rH, rL));
       break;
     }
-    cy = (*bytePtr & 0x80) != 0;
+    flag_cy = (*bytePtr & 0x80) != 0;
     *bytePtr = (*bytePtr << 1) | cpu_flag(cpu, FLAG_CY);
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
     *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
-    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case (RRCA):
-    cy = cpu->A & 1;
-    cpu->A = (cpu->A >> 1) | (cy << 7);
+    flag_cy = cpu->A & 1;
+    cpu->A = (cpu->A >> 1) | (flag_cy << 7);
     cpu_clear_flag(cpu, FLAG_Z);
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
-    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case (RRA):
-    cy = cpu->A & 1;
+    flag_cy = cpu->A & 1;
     cpu->A = (cpu->A >> 1) | (cpu_flag(cpu, FLAG_CY) << 7);
     cpu_clear_flag(cpu, FLAG_Z);
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
-    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case (RRC):
     switch (inst->subtype) {
@@ -420,15 +489,15 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       bytePtr = reg(cpu, inst->args[0].value.byte);
       break;
     case 1:
-      bytePtr = &cpu->ram[regs_to_word(cpu, rH, rL)];
+      bytePtr = &cpu->mc->ram[regs_to_word(cpu, rH, rL)];
       break;
     }
-    cy = *bytePtr & 0x1;
-    *bytePtr = (*bytePtr >> 1) | (cy << 7);
+    flag_cy = *bytePtr & 1;
+    *bytePtr = (*bytePtr >> 1) | (flag_cy << 7);
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
     *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
-    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case (RR):
     switch (inst->subtype) {
@@ -436,15 +505,15 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       bytePtr = reg(cpu, inst->args[0].value.byte);
       break;
     case 1:
-      bytePtr = &cpu->ram[regs_to_word(cpu, rH, rL)];
+      bytePtr = &cpu->mc->ram[regs_to_word(cpu, rH, rL)];
       break;
     }
-    cy = *bytePtr & 0x1;
+    flag_cy = *bytePtr & 1;
     *bytePtr = (*bytePtr >> 1) | (cpu_flag(cpu, FLAG_CY) << 7);
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
     *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
-    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case (SLA):
     switch (inst->subtype) {
@@ -452,15 +521,15 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       bytePtr = reg(cpu, inst->args[0].value.byte);
       break;
     case 1:
-      bytePtr = &cpu->ram[regs_to_word(cpu, rH, rL)];
+      bytePtr = mem_ptr(cpu->mc,regs_to_word(cpu, rH, rL));
       break;
     }
-    cy = (*bytePtr & 0x80) != 0;
+    flag_cy = (*bytePtr & 0x80) != 0;
     *bytePtr <<= 1;
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
     *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
-    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case (SRA):
     switch (inst->subtype) {
@@ -468,15 +537,15 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       bytePtr = reg(cpu, inst->args[0].value.byte);
       break;
     case 1:
-      bytePtr = &cpu->ram[regs_to_word(cpu, rH, rL)];
+      bytePtr = mem_ptr(cpu->mc,regs_to_word(cpu, rH, rL));
       break;
     }
-    cy = *bytePtr & 0x1; // TODO: replace all 0x01 and 0x1 with 1
+    flag_cy = *bytePtr & 1;
     *bytePtr = (*bytePtr >> 1) | (*bytePtr & 0x80);
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
     *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
-    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case (SRL):
     switch (inst->subtype) {
@@ -484,15 +553,15 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       bytePtr = reg(cpu, inst->args[0].value.byte);
       break;
     case 1:
-      bytePtr = &cpu->ram[regs_to_word(cpu, rH, rL)];
+      bytePtr = mem_ptr(cpu->mc,regs_to_word(cpu, rH, rL));
       break;
     }
-    cy = *bytePtr & 0x1;
+    flag_cy = *bytePtr & 1;
     *bytePtr >>= 1;
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
     *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
-    cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case (SWAP):
     switch (inst->subtype) {
@@ -500,7 +569,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       bytePtr = reg(cpu, inst->args[0].value.byte);
       break;
     case 1:
-      bytePtr = &cpu->ram[regs_to_word(cpu, rH, rL)];
+      bytePtr = mem_ptr(cpu->mc,regs_to_word(cpu, rH, rL));
       break;
     }
     *bytePtr = (*bytePtr << 4) | (*bytePtr >> 4);
@@ -515,7 +584,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       bytePtr = reg(cpu, inst->args[1].value.byte);
       break;
     case 1:
-      bytePtr = &cpu->ram[regs_to_word(cpu, rH, rL)];
+      bytePtr = mem_ptr(cpu->mc,regs_to_word(cpu, rH, rL));
       break;
     }
     (*bytePtr & (1 << inst->args[0].value.byte)) ? cpu_clear_flag(cpu, FLAG_Z): cpu_set_flag(cpu, FLAG_Z);
@@ -528,10 +597,16 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       bytePtr = reg(cpu, inst->args[1].value.byte);
       break;
     case 1:
-      bytePtr = &cpu->ram[regs_to_word(cpu, rH, rL)];
+      bytePtr = mem_ptr(cpu->mc,regs_to_word(cpu, rH, rL));
       break;
     }
     *bytePtr |= (1 << inst->args[0].value.byte);
+    break;
+  case (DI):
+    cpu->IME = 0;
+    break;
+  case (EI):
+    cpu->IME = 1;
     break;
   case (RES):
     switch (inst->subtype) {
@@ -539,7 +614,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       bytePtr = reg(cpu, inst->args[1].value.byte);
       break;
     case 1:
-      bytePtr = &cpu->ram[regs_to_word(cpu, rH, rL)];
+      bytePtr = mem_ptr(cpu->mc,regs_to_word(cpu, rH, rL));
       break;
     }
     *bytePtr &= ~(1 << inst->args[0].value.byte);
@@ -556,7 +631,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       }
       break;
     case 2:
-      cpu->PC = cpu->ram[regs_to_word(cpu, rH, rL)];
+      cpu->PC = regs_to_word(cpu, rH, rL);
       return inst->cycles;
     }
     break;
@@ -578,16 +653,16 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   case (CALL):
     switch (inst->subtype) {
     case 0:
-      cpu->ram[cpu->SP-1] = upper_8((cpu->PC + 3));
-      cpu->ram[cpu->SP-2] = lower_8((cpu->PC + 3));
+      mem_write(cpu->mc, cpu->SP-1, upper_8((cpu->PC + 3)));
+      mem_write(cpu->mc, cpu->SP-2, lower_8((cpu->PC + 3)));
       cpu->SP-=2;
       cpu->PC = nn_to_word(inst, 0);
       return inst->cycles;
     case 1:
       if (is_cond_true(cpu, inst->args[0].value.byte)) {
-	cpu->SP--;
-	cpu->ram[cpu->SP--] = upper_8((cpu->PC + 3));
-	cpu->ram[cpu->SP] = lower_8((cpu->PC + 3));
+	mem_write(cpu->mc, cpu->SP-1, upper_8((cpu->PC + 3)));
+	mem_write(cpu->mc, cpu->SP-2, lower_8((cpu->PC + 3)));
+	cpu->SP-=2;
 	cpu->PC = nn_to_word(inst, 1);
 	return 6;
 	}
@@ -597,21 +672,26 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   case (RET):
     switch (inst->subtype) {
     case 0:
-      cpu->PC = bytes_to_word(cpu->ram[cpu->SP], cpu->ram[cpu->SP+1]);
+      cpu->PC = bytes_to_word(mem_read(cpu->mc, cpu->SP), mem_read(cpu->mc, cpu->SP+1));
       cpu->SP+=2;
       return inst->cycles;
     case 1:
       if (is_cond_true(cpu, inst->args[0].value.byte)) {
-	cpu->PC = bytes_to_word(cpu->ram[cpu->SP], cpu->ram[cpu->SP+1]);
+	cpu->PC = bytes_to_word(mem_read(cpu->mc, cpu->SP), mem_read(cpu->mc, cpu->SP+1));
 	cpu->SP+=2;
 	return 5;
       }
       break;
     }
     break;
+  case (RETI):
+    cpu->IME = 1;
+    cpu->PC = bytes_to_word(mem_read(cpu->mc, cpu->SP), mem_read(cpu->mc, cpu->SP+1));
+    cpu->SP+=2;
+    return inst->cycles;
   case (RST):
-    cpu->ram[cpu->SP-1] = upper_8((cpu->PC+1));
-    cpu->ram[cpu->SP-2] = lower_8((cpu->PC+1));
+    mem_write(cpu->mc, cpu->SP-1, upper_8((cpu->PC+1)));
+    mem_write(cpu->mc, cpu->SP-2, lower_8((cpu->PC+1)));
     cpu->SP-=2;
     switch (inst->args[0].value.byte) {
     case 0:
@@ -646,48 +726,49 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       *(reg(cpu, inst->args[0].value.byte)) = *(reg(cpu, inst->args[1].value.byte));
       break;
     case 1:
-      cpu->ram[regs_to_word(cpu, rB, rC)] = cpu->A;
+      mem_write(cpu->mc, regs_to_word(cpu, rB, rC), cpu->A);
       break;
     case 2:
-      cpu->A = cpu->ram[regs_to_word(cpu, rB, rC)];
+      cpu->A = mem_read(cpu->mc, regs_to_word(cpu, rB, rC));
       break;
     case 3:
-      cpu->ram[regs_to_word(cpu, rD, rE)] = cpu->A;
+      mem_write(cpu->mc, regs_to_word(cpu, rD, rE), cpu->A);
       break;
     case 4:
-      cpu->A =  cpu->ram[regs_to_word(cpu, rD, rE)];
+      cpu->A =  mem_read(cpu->mc,regs_to_word(cpu, rD, rE));
       break;
     case 5:
       hl = regs_to_word(cpu, rH, rL);
-      cpu->ram[hl++] = cpu->A;
+      mem_write(cpu->mc, hl++, cpu->A);
       word_to_regs(cpu, hl, rH, rL);
       break;
     case 6:
       hl = regs_to_word(cpu, rH, rL);
-      cpu->A = cpu->ram[hl++];
+      cpu->A = mem_read(cpu->mc, hl++);
       word_to_regs(cpu, hl, rH, rL);
       break;
     case 7:
       hl = regs_to_word(cpu, rH, rL);
-      cpu->ram[hl--] = cpu->A;
+      mem_write(cpu->mc, hl--, cpu->A);
       word_to_regs(cpu, hl, rH, rL);
       break;
     case 8:
       hl = regs_to_word(cpu, rH, rL);
-      cpu->A = cpu->ram[hl--];
+      cpu->A = mem_read(cpu->mc, hl--);
       word_to_regs(cpu, hl, rH, rL);
       break;
     case 9:
-      *(reg(cpu, inst->args[0].value.byte)) = cpu->ram[regs_to_word(cpu, rH, rL)];
+      *(reg(cpu, inst->args[0].value.byte)) = mem_read(cpu->mc, regs_to_word(cpu, rH, rL));
       break;
     case 10:
-      cpu->ram[regs_to_word(cpu, rH, rL)] = *(reg(cpu, inst->args[0].value.byte));
+      mem_write(cpu->mc, regs_to_word(cpu, rH, rL),
+		*(reg(cpu, inst->args[0].value.byte)));
       break;
     case 11:
-      cpu->ram[0xFF00 + cpu->C] = cpu->A;
+      mem_write(cpu->mc, 0xFF00 + cpu->C, cpu->A);
       break;
     case 12:
-      cpu->A = cpu->ram[0xFF00 + cpu->C];
+      cpu->A = mem_read(cpu->mc, 0xFF00 + cpu->C);
       break;
     case 13:
       cpu->SP = regs_to_word(cpu, rH, rL);
@@ -696,38 +777,122 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       *(reg(cpu, inst->args[0].value.byte)) = inst->args[1].value.byte;
       break;
     case 15:
-      cpu->ram[regs_to_word(cpu, rH, rL)] = inst->args[0].value.byte;
+      mem_write(cpu->mc, regs_to_word(cpu, rH, rL), inst->args[0].value.byte);
       break;
     case 16:
-      cpu->ram[0xFF00 + inst->args[0].value.byte] = cpu->A;
+      mem_write(cpu->mc, 0xFF00 + inst->args[0].value.byte, cpu->A);
       break;
     case 17:
-      cpu->A = cpu->ram[0xFF00 + inst->args[0].value.byte];
+      cpu->A = mem_read(cpu->mc, 0xFF00 + inst->args[0].value.byte);
       break;
     case 18:
       set_dd_or_ss(cpu, inst->args[0].value.byte, nn_to_word(inst, 1));
       break;
     case 19:
-      cpu->ram[nn_to_word(inst,0)] = cpu->A;
+      mem_write(cpu->mc, nn_to_word(inst,0), cpu->A);
       break;
     case 20:
-      cpu->A = cpu->ram[nn_to_word(inst,0)];
+      cpu->A = mem_read(cpu->mc,nn_to_word(inst,0));
       break;
     case 21:
       word = nn_to_word(inst,0);
-      cpu->ram[word] = lower_8(cpu->SP);
-      cpu->ram[word+1] = upper_8(cpu->SP);
+      mem_write(cpu->mc, word, lower_8(cpu->SP));
+      mem_write(cpu->mc, word+1, upper_8(cpu->SP));
       break;
     }
     break;
+  case (DAA): // TODO: remove these parenthesis in case statements where not needed
+    // direct implementation from the table defined in the Nintendo/Z80 manual.
+    lower_nib = cpu->A & 0x0F;
+    upper_nib = (cpu->A>>4) & 0x0F;
+    flag_h = cpu_flag(cpu, FLAG_H);
+    if (!cpu_flag(cpu, FLAG_N)) {
+      if (!cpu_flag(cpu, FLAG_CY)) {
+	if (!cpu_flag(cpu, FLAG_H)) {
+	  if (upper_nib <= 9 && lower_nib <= 9) {
+	    daa_add = 0;
+	    flag_cy = 0;
+	  } else if (upper_nib <= 8 && lower_nib >= 0xA) {
+	    daa_add = 0x06;
+	    flag_cy = 0;
+	  } else if (upper_nib >= 0xA && lower_nib <= 9) {
+	    daa_add = 0x60;
+	    flag_cy = 1;
+	  } else if (upper_nib >= 0x9 && lower_nib >= 0xA) {
+	    daa_add = 0x66;
+	    flag_cy = 1;
+	  } else {
+	    break;
+	  }
+	} else {
+	  if (upper_nib <= 9 && lower_nib <= 3) {
+	    daa_add = 0x06;
+	    flag_cy = 0;
+	  } else if (upper_nib >= 0xA  && lower_nib <= 3) {
+	    daa_add = 0x66;
+	    flag_cy = 1;
+	  } else {
+	    break;
+	  }
+	}
+      } else {
+	if (!cpu_flag(cpu, FLAG_H)) {
+	  if (upper_nib <= 2 && lower_nib <= 9) {
+	    daa_add = 0x60;
+	    flag_cy = 1;
+	  } else if (upper_nib <= 2 && lower_nib >= 0xA) {
+	    daa_add = 0x66;
+	    flag_cy = 1;
+	  } else {
+	    break;
+	  }
+	} else {
+	  if (upper_nib <= 3 && lower_nib <= 3) {
+	    daa_add = 0x66;
+	    flag_cy = 1;
+	  } else {
+	    break;
+	  }
+	}
+      }
+    } else {
+      printf("DEBUG: inside N == 1\n");
+      if (!cpu_flag(cpu, FLAG_CY)) {
+	printf("DEBUG: inside CY == 0\n");
+	if (!cpu_flag(cpu, FLAG_H) && upper_nib <=9 && lower_nib <= 9) {
+	  daa_add = 0;
+	  flag_cy =0;
+	} else if (cpu_flag(cpu, FLAG_H) && upper_nib <= 8 && lower_nib >= 6) {
+	  daa_add = 0xFA;
+	  flag_cy = 0;
+	} else {
+	  break;
+	}
+      } else {
+	if (!cpu_flag(cpu, FLAG_H) && upper_nib >= 7 && lower_nib <= 9) {
+	  daa_add = 0xA0;
+	  flag_cy = 1;
+	} else if (cpu_flag(cpu, FLAG_H) && upper_nib >= 6 && lower_nib >= 6) {
+	  daa_add = 0x9A;
+	  flag_cy = 1;
+	} else {
+	  break;
+	}
+      }
+    }
+    cpu->A = alu_add(cpu, cpu->A, daa_add, 0);
+    cpu_clear_flag(cpu, FLAG_H);
+    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_h ? cpu_set_flag(cpu, FLAG_H) : cpu_clear_flag(cpu, FLAG_H);
+    break;
   case (PUSH):
     word = get_qq(cpu, inst->args[0].value.byte);
-    cpu->ram[cpu->SP-1] = upper_8(word);
-    cpu->ram[cpu->SP-2] = lower_8(word);
+    mem_write(cpu->mc,cpu->SP-1,  upper_8(word));
+    mem_write(cpu->mc,cpu->SP-2, lower_8(word));
     cpu->SP-=2;
     break;
   case (POP):
-    set_qq(cpu, inst->args[0].value.byte, bytes_to_word(cpu->ram[cpu->SP], cpu->ram[cpu->SP+1]));
+    set_qq(cpu, inst->args[0].value.byte, bytes_to_word(mem_read(cpu->mc,cpu->SP), mem_read(cpu->mc, cpu->SP+1)));
     cpu->SP+=2;
     break;
   default:

@@ -3,6 +3,7 @@
 #include <string.h>
 #include "inst.h"
 #include "cpu.h"
+#include "mem_controller.h"
 #include "testing.c"
 
 static int cpu_equals(struct cpu first, struct cpu second) {
@@ -35,7 +36,6 @@ int test_cpu_exec() {
   suite_start(&ts, "cpu execution");
 
   char buf1[128], buf2[128];
-  uint8_t ram[0x10000];
 
   struct test {
     char *asm_command;
@@ -50,12 +50,12 @@ int test_cpu_exec() {
     {"LD A, E", {.E = 0x01}, 1, {.A = 0x01, .E = 0x01, .PC = 0x0001}, {}, {}},
     {"LD B, 0xFF", {}, 2, {.B = 0xFF, .PC = 0x0002}, {}, {}},
     {"LD C, (HL)", {.C = 0xAA, .H = 0x10, .L = 0x11}, 2, {.H = 0x10, .L = 0x11, .PC = 0x0001}, {}, {}},
-    {"LD (HL), D", {.D = 0x1F, .H = 0x10, .L = 0x11}, 2, {.D = 0x1F, .H = 0x10, .L = 0x11, .PC = 0x0001}, {0x1011}, {0x1F}},
-    {"LD (HL), 0xAB", {.H = 0x10, .L = 0x11}, 3, {.H = 0x10, .L = 0x11, .PC = 0x0002}, {0x1011}, {0xAB}},
+    {"LD (HL), D", {.D = 0x1F, .H = 0x80, .L = 0x11}, 2, {.D = 0x1F, .H = 0x80, .L = 0x11, .PC = 0x0001}, {0x8011}, {0x1F}},
+    {"LD (HL), 0xAB", {.H = 0x80, .L = 0x11}, 3, {.H = 0x80, .L = 0x11, .PC = 0x0002}, {0x8011}, {0xAB}},
     {"LD A, (BC)", {.A = 0xAA, .B = 0x0A, .C = 0xA0}, 2, {.B = 0x0A, .C = 0xA0, .PC = 0x0001}, {}, {}},
     {"LD A, (DE)", {.A = 0xBB, .D = 0x0D, .E = 0xE0}, 2, {.D = 0x0D, .E = 0xE0, .PC = 0x0001}, {}, {}},
-    {"LD (BC), A", {.A = 0xAA, .B = 0x0B, .C=0x0C}, 2, {.A = 0xAA, .B = 0x0B, .C=0x0C, .PC = 0x0001}, {0x0B0C}, {0xAA}},
-    {"LD (DE), A", {.A = 0xAA, .D = 0x0D, .E=0x0E}, 2, {.A = 0xAA, .D = 0x0D, .E=0x0E, .PC = 0x0001}, {0x0D0E}, {0xAA}},
+    {"LD (BC), A", {.A = 0xAA, .B = 0x8B, .C=0x0C}, 2, {.A = 0xAA, .B = 0x8B, .C=0x0C, .PC = 0x0001}, {0x8B0C}, {0xAA}},
+    {"LD (DE), A", {.A = 0xAA, .D = 0x8D, .E=0x0E}, 2, {.A = 0xAA, .D = 0x8D, .E=0x0E, .PC = 0x0001}, {0x8D0E}, {0xAA}},
     {"LD A, (C)", {.A = 0xBB, .C = 0xCC}, 2, {.C = 0xCC, .PC = 0x0001}, {}, {}},
     {"LD (C), A", {.A = 0xAA, .C = 0xCC}, 2, {.A = 0xAA, .C = 0xCC, .PC = 0x0001}, {0xFFCC}, {0xAA}},
     {"LD SP, HL", {.H = 0xFA, .L = 0xCE}, 2, {.H = 0xFA, .L = 0xCE, .SP = 0xFACE, .PC = 0x0001}, {}, {}},
@@ -67,8 +67,8 @@ int test_cpu_exec() {
     {"LD (0x34), A", {.A = 0xAA}, 3, {.A = 0xAA, .PC = 0x0002}, {0xFF34}, {0xAA}},
     {"LD A, (HLI)", {.A = 0xAA, .H = 0x01, .L = 0xFF}, 2, {.H = 0x02, .L = 0x00, .PC = 0x0001}, {}, {}},
     {"LD A, (HLD)", {.A = 0xAA, .H = 0x02, .L = 0x00}, 2, {.H = 0x01, .L = 0xFF, .PC = 0x0001}, {}, {}},
-    {"LD (HLI), A", {.A = 0xAA, .H = 0x01, .L = 0xDD}, 2, {.A = 0xAA, .H = 0x01, .L = 0xDE, .PC = 0x0001}, {0x01DD}, {0xAA}},
-    {"LD (HLD), A", {.A = 0xAA, .H = 0x01, .L = 0xDD}, 2, {.A = 0xAA, .H = 0x01, .L = 0xDC, .PC = 0x0001}, {0x01DD}, {0xAA}},
+    {"LD (HLI), A", {.A = 0xAA, .H = 0x81, .L = 0xDD}, 2, {.A = 0xAA, .H = 0x81, .L = 0xDE, .PC = 0x0001}, {0x81DD}, {0xAA}},
+    {"LD (HLD), A", {.A = 0xAA, .H = 0x81, .L = 0xDD}, 2, {.A = 0xAA, .H = 0x81, .L = 0xDC, .PC = 0x0001}, {0x81DD}, {0xAA}},
 
     {"PUSH BC", {.B = 0xFA, .C = 0xCE, .SP = 0xFFFE}, 4, {.B = 0xFA, .C = 0xCE, .PC = 0x0001, .SP = 0xFFFC}, {0xFFFD, 0xFFFC}, {0xFA, 0xCE}},
     {"PUSH DE", {.D = 0xDE, .E = 0xAD, .SP = 0xFFFE}, 4, {.D = 0xDE, .E = 0xAD, .PC = 0x0001, .SP = 0xFFFC}, {0xFFFD, 0xFFFC}, {0xDE, 0xAD}},
@@ -165,6 +165,7 @@ int test_cpu_exec() {
     {"CP B", {.A = 0x3C, .B = 0x2F}, 1, {.A = 0x3C, .B = 0x2F, .F = 0x60, .PC = 0x0001}, {}, {}},
     {"CP 0x3C", {.A = 0x3C}, 2, {.A = 0x3C, .F = 0xC0, .PC = 0x0002}, {}, {}},
     {"CP 0x40", {.A = 0x3C}, 2, {.A = 0x3C, .F = 0x50, .PC = 0x0002}, {}, {}},
+    {"CP 0x94", {.A = 0x94}, 2, {.A = 0x94, .F = 0xC0, .PC = 0x0002}, {}, {}},
     {"CP (HL)", {.A = 0x3C}, 2, {.A = 0x3C, .F = 0x40, .PC = 0x0001}, {}, {}},
 
     {"CPL", {.A = 0x35}, 1, {.A = 0xCA, .PC = 0x0001}, {}, {}},
@@ -191,7 +192,7 @@ int test_cpu_exec() {
     {"JP C, 0x8000", {.F = 0x80}, 3, {.F = 0x80, .PC = 0x0003}, {}, {}},
     {"JP NC, 0x8000", {.F = 0x80}, 4, {.F = 0x80, .PC = 0x8000}, {}, {}},
 
-    {"JP (HL)", {.H = 0xFA, .L = 0xCE}, 1, {.H = 0xFA, .L = 0xCE, .PC = 0x0000}, {}, {}},
+    {"JP HL", {.H = 0xFA, .L = 0xCE}, 1, {.H = 0xFA, .L = 0xCE, .PC = 0xFACE}, {}, {}},
 
     {"JR -126", {.F = 0xF0, .PC = 0x1000}, 3, {.F = 0xF0, .PC = 0x0F82}, {}, {}},
     {"JR -10", {.F = 0xF0, .PC = 0x1000}, 3, {.F = 0xF0, .PC = 0xFF6}, {}, {}},
@@ -224,14 +225,19 @@ int test_cpu_exec() {
     {"RST 5", {.PC = 0x9000, .SP = 0xFFFE}, 4, {.PC = 0x0028, .SP = 0xFFFC}, {0xFFFD, 0xFFFC}, {0x90, 0x01}},
     {"RST 6", {.PC = 0x9000, .SP = 0xFFFE}, 4, {.PC = 0x0030, .SP = 0xFFFC}, {0xFFFD, 0xFFFC}, {0x90, 0x01}},
     {"RST 7", {.PC = 0x9000, .SP = 0xFFFE}, 4, {.PC = 0x0038, .SP = 0xFFFC}, {0xFFFD, 0xFFFC}, {0x90, 0x01}},
+
+    {"DAA", {.A = 0x7D}, 1, {.A = 0x83, .PC = 0x0001}, {}, {}},
+    {"DAA", {.A = 0x4B, .F = 0x60}, 1, {.A = 0x45, .F = 0x20, .PC = 0x0001}, {}, {}},
+
   };
 
 
   for (int t = 0; t < sizeof(tests) / sizeof(struct test); t++) {
     struct inst inst = {0};
     struct test tst = tests[t];
-    memset(ram, 0, sizeof(ram));
-    tst.initial.ram = ram;
+    struct mem_controller mc = {0};
+    memset(mc.ram, 0, sizeof(mc.ram));
+    tst.initial.mc = &mc;
 
     suite_test_start(&ts, tst.asm_command);
     init_inst_from_asm(&inst, tst.asm_command);
@@ -246,14 +252,14 @@ int test_cpu_exec() {
       suite_test_error(&ts, "\t\tfound cpu:\t%s\n\t\texpected type:\t%s\n", buf1, buf2);
     }
     if ((tst.modified_addrs[0] || tst.modified_addrs[1]) &&
-	((tst.initial.ram[tst.modified_addrs[0]] != tst.modified_addr_values[0]) ||
-	 (tst.initial.ram[tst.modified_addrs[1]] != tst.modified_addr_values[1]))
+	((tst.initial.mc->ram[tst.modified_addrs[0]] != tst.modified_addr_values[0]) ||
+	 (tst.initial.mc->ram[tst.modified_addrs[1]] != tst.modified_addr_values[1]))
 	) {
       suite_test_error(&ts, "\t\tfound ram values:\t{0x%04X : 0x%02X, 0x%04X : 0x%02X}\n\t\texpected ram values:\t{0x%04X : 0x%02X, 0x%04X : 0x%02X}\n",
 		  tst.modified_addrs[0],
-		  tst.initial.ram[tst.modified_addrs[0]],
+		  tst.initial.mc->ram[tst.modified_addrs[0]],
 		  tst.modified_addrs[1],
-		  tst.initial.ram[tst.modified_addrs[1]],
+		  tst.initial.mc->ram[tst.modified_addrs[1]],
 		  tst.modified_addrs[0],
 		  tst.modified_addr_values[0],
 		  tst.modified_addrs[1],
