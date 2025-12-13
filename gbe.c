@@ -1,7 +1,9 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include "inst.h"
 #include "cpu.h"
 
@@ -113,6 +115,16 @@ void gb_debug_print(struct gb *gb)
   printf("\n\n");
 }
 
+ssize_t gb_dump(struct gb *gb) {
+  FILE *dump;
+  if ((dump = fopen("dump.bin", "wb")) == NULL) {
+    return 0;
+  }
+  size_t result = fwrite(gb->ram, 1, 0x10000, dump);
+  fclose(dump);
+  return result;
+}
+
 void gb_run(struct gb *gb)
 {
   char buf[16];
@@ -127,19 +139,50 @@ void gb_run(struct gb *gb)
 	    printf("\n");
 	    exit(1);
 	  }
+	} else if (buf[0] == 'r') {
+	  long parsed_hex = strtol(buf+1, NULL, 16);
+
+	  printf("parsed_hex = 0x%02lX -> 0x%02X\n", parsed_hex, gb->ram[parsed_hex]);
+	  sleep(3);
+	} else if (buf[0] == 's') {
+	  gb->ram[0xFF44] = 0x91;
+	} else if (buf[0] == 'd') {
+	  // dump the ram contents
+	  ssize_t result = gb_dump(gb);
+	  if (result < 0x10000) {
+	    fprintf(stderr, "error: could not write dump file: wrote %ld bytes out of %d", result, 0x10000);
+	    sleep(1);
+	  }
 	} else {
 	  fprintf(stderr, "error: unknown debugger commmand");
-	  exit(1);
+	  sleep(1);
 	}
 	gb_debug_print(gb);
 	printf("debug > ");
       }
     }
-  else
-    {
-      fprintf(stderr, "error: can only run in debug mode for now\n");
-      exit(1);
+  else {
+    // run until error, dump core on error
+    int inst_cnt = 0;
+    char buf[32];
+    // HACK: unblock the check for the LY register
+    gb->ram[0xFF44] = 0x91;
+    while (inst_cnt < 1000000) {
+      struct inst inst = cpu_next_instruction(gb->cpu);
+      inst_to_str(&inst, buf);
+      printf("%s\n", buf);
+      if (cpu_exec_instruction(gb->cpu, &inst) <= 0) {
+	inst_to_str(&inst, buf);
+	fprintf(stderr, "error: instruction # %d could not execute '%s' @ 0x%02X\n", inst_cnt, buf, gb->cpu->PC);
+	break;
+      }
+      inst_cnt++;
     }
+    printf("ran %d instuctions\n", inst_cnt);
+    if (gb_dump(gb) < 0x10000) {
+      fprintf(stderr, "error: could not write dump file");
+    }
+  }
 }
 
 
@@ -186,7 +229,7 @@ int main(int argc, char *argv[])
     struct gb gb = {0};
     cpu.ram = gb.ram;
     gb.cpu = &cpu;
-    gb.debug_mode = 1;
+    //    gb.debug_mode = 1;
     gb_load_rom(&gb, argv[1]);
     gb_run(&gb);
   } else if (argc == 3) { // disassemble
