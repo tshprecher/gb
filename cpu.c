@@ -578,9 +578,9 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   case (CALL):
     switch (inst->subtype) {
     case 0:
-      cpu->SP--;
-      cpu->ram[cpu->SP--] = upper_8((cpu->PC + 3));
-      cpu->ram[cpu->SP] = lower_8((cpu->PC + 3));
+      cpu->ram[cpu->SP-1] = upper_8((cpu->PC + 3));
+      cpu->ram[cpu->SP-2] = lower_8((cpu->PC + 3));
+      cpu->SP-=2;
       cpu->PC = nn_to_word(inst, 0);
       return inst->cycles;
     case 1:
@@ -609,6 +609,37 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       break;
     }
     break;
+  case (RST):
+    cpu->ram[cpu->SP-1] = upper_8((cpu->PC+1));
+    cpu->ram[cpu->SP-2] = lower_8((cpu->PC+1));
+    cpu->SP-=2;
+    switch (inst->args[0].value.byte) {
+    case 0:
+      cpu->PC = 0;
+      break;
+    case 1:
+      cpu->PC = 0x08;
+      break;
+    case 2:
+      cpu->PC = 0x10;
+      break;
+    case 3:
+      cpu->PC = 0x18;
+      break;
+    case 4:
+      cpu->PC = 0x20;
+      break;
+    case 5:
+      cpu->PC = 0x28;
+      break;
+    case 6:
+      cpu->PC = 0x30;
+      break;
+    case 7:
+      cpu->PC = 0x38;
+      break;
+    }
+    return inst->cycles;
   case (LD):
     switch (inst->subtype) {
     case 0:
