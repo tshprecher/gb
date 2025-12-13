@@ -26,11 +26,8 @@ struct cpu
   // pointer to memory of length 0x10000
   uint8_t *ram;
 
-  // PRIVATE
-
-  // store the remainder cycles when asked to run fewer cycles
-  // required for the next instruction.
-  uint8_t exec_rem_cycles;
+  // interrupt master enable flag
+  uint8_t IME;
 };
 
 // execute a given number of cycles, return number of cycles run

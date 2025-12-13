@@ -145,7 +145,8 @@ void gb_run(struct gb *gb)
 	  printf("parsed_hex = 0x%02lX -> 0x%02X\n", parsed_hex, gb->ram[parsed_hex]);
 	  sleep(3);
 	} else if (buf[0] == 's') {
-	  gb->ram[0xFF44] = 0x91;
+	  //	  gb->ram[0xFF44] = 0x91; // for zelda
+	  gb->ram[0xFF44] = 0x94; // for tetris
 	} else if (buf[0] == 'd') {
 	  // dump the ram contents
 	  ssize_t result = gb_dump(gb);
@@ -166,8 +167,9 @@ void gb_run(struct gb *gb)
     int inst_cnt = 0;
     char buf[32];
     // HACK: unblock the check for the LY register
-    gb->ram[0xFF44] = 0x91;
-    int LIMIT = 0x100000;
+    // gb->ram[0xFF44] = 0x91; // for zelda
+    gb->ram[0xFF44] = 0x94; // for tetris
+    int LIMIT = 60000;
     while (inst_cnt < LIMIT) {
       struct inst inst = cpu_next_instruction(gb->cpu);
       inst_to_str(&inst, buf);

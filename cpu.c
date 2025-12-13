@@ -533,6 +533,12 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     }
     *bytePtr |= (1 << inst->args[0].value.byte);
     break;
+  case (DI):
+    cpu->IME = 0;
+    break;
+  case (EI):
+    cpu->IME = 1;
+    break;
   case (RES):
     switch (inst->subtype) {
     case 0:
