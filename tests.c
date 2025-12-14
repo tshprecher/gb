@@ -3,6 +3,7 @@
 #include <string.h>
 #include "inst.h"
 #include "cpu.h"
+#include "mem_controller.h"
 #include "testing.c"
 
 static int cpu_equals(struct cpu first, struct cpu second) {
@@ -35,7 +36,6 @@ int test_cpu_exec() {
   suite_start(&ts, "cpu execution");
 
   char buf1[128], buf2[128];
-  uint8_t ram[0x10000];
 
   struct test {
     char *asm_command;
@@ -230,8 +230,9 @@ int test_cpu_exec() {
   for (int t = 0; t < sizeof(tests) / sizeof(struct test); t++) {
     struct inst inst = {0};
     struct test tst = tests[t];
-    memset(ram, 0, sizeof(ram));
-    tst.initial.ram = ram;
+    struct mem_controller mc = {0};
+    memset(mc.ram, 0, sizeof(mc.ram));
+    tst.initial.mc = &mc;
 
     suite_test_start(&ts, tst.asm_command);
     init_inst_from_asm(&inst, tst.asm_command);
@@ -246,14 +247,14 @@ int test_cpu_exec() {
       suite_test_error(&ts, "\t\tfound cpu:\t%s\n\t\texpected type:\t%s\n", buf1, buf2);
     }
     if ((tst.modified_addrs[0] || tst.modified_addrs[1]) &&
-	((tst.initial.ram[tst.modified_addrs[0]] != tst.modified_addr_values[0]) ||
-	 (tst.initial.ram[tst.modified_addrs[1]] != tst.modified_addr_values[1]))
+	((tst.initial.mc->ram[tst.modified_addrs[0]] != tst.modified_addr_values[0]) ||
+	 (tst.initial.mc->ram[tst.modified_addrs[1]] != tst.modified_addr_values[1]))
 	) {
       suite_test_error(&ts, "\t\tfound ram values:\t{0x%04X : 0x%02X, 0x%04X : 0x%02X}\n\t\texpected ram values:\t{0x%04X : 0x%02X, 0x%04X : 0x%02X}\n",
 		  tst.modified_addrs[0],
-		  tst.initial.ram[tst.modified_addrs[0]],
+		  tst.initial.mc->ram[tst.modified_addrs[0]],
 		  tst.modified_addrs[1],
-		  tst.initial.ram[tst.modified_addrs[1]],
+		  tst.initial.mc->ram[tst.modified_addrs[1]],
 		  tst.modified_addrs[0],
 		  tst.modified_addr_values[0],
 		  tst.modified_addrs[1],

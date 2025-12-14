@@ -15,16 +15,15 @@
 
 
 // TODO: probably should have debugger support injected here
-struct cpu
-{
+struct cpu {
   // 8 bit registers
   uint8_t A, B, C, D, E, F /*flags register*/, H, L;
 
   // 16 bit registers
   uint16_t PC, SP;
 
-  // pointer to memory of length 0x10000
-  uint8_t *ram;
+  // memory controller monitors access to ram
+  struct mem_controller *mc;
 
   // interrupt master enable flag
   uint8_t IME;

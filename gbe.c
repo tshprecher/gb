@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include "inst.h"
 #include "cpu.h"
+#include "mem_controller.h"
 
 struct gb
 {
@@ -176,9 +177,9 @@ void gb_run(struct gb *gb)
     char buf[16];
     char buf2[128];
     // HACK: unblock the check for the LY register
-    // gb->ram[0xFF44] = 0x91; // for zelda
-    gb->ram[0xFF44] = 0x94; // for tetris
-    int LIMIT = 60000;
+    gb->ram[0xFF44] = 0x91; // for zelda
+     //gb->ram[0xFF44] = 0x94; // for tetris
+    int LIMIT = 0x100000;
     while (inst_cnt < LIMIT) {
       struct inst inst = cpu_next_instruction(gb->cpu);
       inst_to_str(&inst, buf);
@@ -241,7 +242,8 @@ int main(int argc, char *argv[])
   } else if (argc == 2) { // run game with debugger
     struct cpu cpu = {0};
     struct gb gb = {0};
-    cpu.ram = gb.ram;
+    struct mem_controller mc = {0};
+    cpu.mc = &mc;
     gb.cpu = &cpu;
     //    gb.debug_mode = 1;
     gb_load_rom(&gb, argv[1]);
@@ -254,7 +256,8 @@ int main(int argc, char *argv[])
 
     struct cpu cpu = {0};
     struct gb gb = {0};
-    cpu.ram = gb.ram;
+    struct mem_controller mc = {0};
+    cpu.mc = &mc;
     gb.cpu = &cpu;
     gb_load_rom(&gb, argv[2]);
 
