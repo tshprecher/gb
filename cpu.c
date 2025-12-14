@@ -562,7 +562,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       }
       break;
     case 2:
-      cpu->PC = cpu->ram[regs_to_word(cpu, rH, rL)];
+      cpu->PC = regs_to_word(cpu, rH, rL);
       return inst->cycles;
     }
     break;

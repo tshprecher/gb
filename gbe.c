@@ -125,6 +125,14 @@ ssize_t gb_dump(struct gb *gb) {
   return result;
 }
 
+static void DEBUG_cpu_to_str(char *buf, struct cpu *cpu) {
+  int pos = sprintf(buf, "{A: 0x%02X,B: 0x%02X,", cpu->A, cpu->B);
+  pos += sprintf(buf+pos, "C: 0x%02X,D: 0x%02X,", cpu->C, cpu->D);
+  pos += sprintf(buf+pos, "E: 0x%02X,F: 0x%02X,", cpu->E, cpu->F);
+  pos += sprintf(buf+pos, "H: 0x%02X,L: 0x%02X,", cpu->H, cpu->L);
+  sprintf(buf+pos, "PC: 0x%04X,SP: 0x%04X}", cpu->PC, cpu->SP);
+}
+
 void gb_run(struct gb *gb)
 {
   char buf[16];
@@ -165,7 +173,8 @@ void gb_run(struct gb *gb)
   else {
     // run until error, dump core on error
     int inst_cnt = 0;
-    char buf[32];
+    char buf[16];
+    char buf2[128];
     // HACK: unblock the check for the LY register
     // gb->ram[0xFF44] = 0x91; // for zelda
     gb->ram[0xFF44] = 0x94; // for tetris
@@ -174,7 +183,8 @@ void gb_run(struct gb *gb)
       struct inst inst = cpu_next_instruction(gb->cpu);
       inst_to_str(&inst, buf);
       //      printf("ram value at 0x0000 -> 0x%02X\n", gb->ram[0]);
-      printf("0x%04X\t%s\n", gb->cpu->PC, buf);
+      DEBUG_cpu_to_str(buf2, gb->cpu);
+      printf("0x%04X\t%s\n\t%s\n", gb->cpu->PC, buf, buf2);
       if (cpu_exec_instruction(gb->cpu, &inst) <= 0) {
 	inst_to_str(&inst, buf);
 	fprintf(stderr, "error: instruction # %d could not execute '%s' @ 0x%04X\n", inst_cnt, buf, gb->cpu->PC);

@@ -65,7 +65,7 @@ extern int main(int argc, char *argv[])
     XNextEvent(display, &event);
     if (event.type == Expose) {
 
-      fseek(fin, 0x41A7 + 0x10, SEEK_SET);
+      fseek(fin, 0x41A7 + 0x50, SEEK_SET);
 
       for (int chrs = 0; chrs < 6; chrs++) {
 	char chr[16];

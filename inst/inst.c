@@ -55,7 +55,7 @@ static struct inst instructions[] = {
 
   {JP,0 ,3, 4, "11000011 {nn}", "JP {nn}"},
   {JP,1 ,3, 3, "110{cc}010 {nn}", "JP {cc}, {nn}"}, // TODO: handle the 4-cycle variant
-  {JP,2 ,1, 1, "11101001", "JP (HL)"},
+  {JP,2 ,1, 1, "11101001", "JP HL"},
 
   {JR,0 ,2, 3, "00011000 {e}", "JR {e}"},
   {JR,1 ,2, 2, "001{cc}000 {e}", "JR {cc}, {e}"},  // TODO: handle the 3-cycle variant
