@@ -35,8 +35,8 @@ void gb_debug_print(struct gb *gb)
   // clear terminal
   printf("\033[2J");
   char buf[32];
-  struct inst ins;
-  char *pc = (char *) &gb->mc->ram[gb->cpu->PC];
+  struct inst *ins;
+  uint8_t *pc = &gb->mc->ram[gb->cpu->PC];
 
   printf("************* ROM DEBUGGER **************");
   printf("\n");
@@ -44,18 +44,18 @@ void gb_debug_print(struct gb *gb)
   printf("-----------------------------------------");
   printf("\n");
 
-  init_inst_from_bytes(&ins, pc);
-  inst_to_str(&ins, buf);
+  ins = mem_read_inst(gb->mc, gb->cpu->PC);
+  inst_to_str(ins, buf);
   printf("instruction (txt) :\t%s", buf);
   printf("\n");
   printf("instruction (hex) :\t");
-  for (int i = 0; i < ins.bytelen; i++)
+  for (int i = 0; i < ins->bytelen; i++)
     {
-      printf("0x%02X ", (uint8_t) pc[i]);
+      printf("0x%02X ", pc[i]);
     }
   printf("\n");
   printf("instruction (bin) :\t");
-  for (int i = 0; i < ins.bytelen; i++)
+  for (int i = 0; i < ins->bytelen; i++)
     {
       gb_debug_print_bin(pc[i]);
       printf(" ");
@@ -109,7 +109,7 @@ void gb_debug_print(struct gb *gb)
     else
       printf("0x%02X          %s", pc, buf);
     printf("\n");
-    pc+=ins.bytelen;
+    pc+=inst.bytelen;
   }
   printf("-----------------------------------------");
   printf("\n");
@@ -144,8 +144,8 @@ void gb_run(struct gb *gb)
       printf("debug > ");
       while (fgets(buf, sizeof(buf), stdin) != NULL) {
 	if (buf[0] == 'n') {
-	  struct inst inst = cpu_next_instruction(gb->cpu);
-	  if (cpu_exec_instruction(gb->cpu, &inst) <= 0) {
+	  struct inst *inst = mem_read_inst(gb->mc, gb->cpu->PC);
+	  if (cpu_exec_instruction(gb->cpu, inst) <= 0) {
 	    printf("\n");
 	    exit(1);
 	  }
@@ -176,22 +176,23 @@ void gb_run(struct gb *gb)
     // run until error, dump core on error
     int inst_cnt = 0;
     char buf[16];
-    //    char buf2[128];
+    char buf2[128];
     // HACK: unblock the check for the LY register
     //gb->mc->ram[0xFF44] = 0x91; // for zelda
     //    gb->mc->ram[0xFF44] = 0x94; // for tetris
-    int LIMIT = 0x10000000;
+    int LIMIT = 0x1000000;
     gb->mc->ram[0xFF44] = 0x91;
     while (inst_cnt < LIMIT) {
+      // HACK until the lcd controller is implemented
       if (++gb->mc->ram[0xFF44] >= 0x100)
 	gb->mc->ram[0xFF44] = 0x91;
 
-      struct inst inst = cpu_next_instruction(gb->cpu);
-      inst_to_str(&inst, buf);
-      //      DEBUG_cpu_to_str(buf2, gb->cpu);
-      //      printf("0x%04X\t%s\n%s\n", gb->cpu->PC, buf, buf2);
-      if (cpu_exec_instruction(gb->cpu, &inst) <= 0) {
-	inst_to_str(&inst, buf);
+      struct inst *inst =  mem_read_inst(gb->mc, gb->cpu->PC);
+      inst_to_str(inst, buf);
+      DEBUG_cpu_to_str(buf2, gb->cpu);
+      printf("0x%04X\t%s\n\t%s\n", gb->cpu->PC, buf, buf2);
+      if (cpu_exec_instruction(gb->cpu, inst) <= 0) {
+	inst_to_str(inst, buf);
 	fprintf(stderr, "error: instruction # %d could not execute '%s' @ 0x%04X\n", inst_cnt, buf, gb->cpu->PC);
 	break;
       }
@@ -267,14 +268,14 @@ int main(int argc, char *argv[])
     gb_load_rom(&gb, argv[2]);
 
     int addr = 0x150;
-    struct inst decoded = {0};
+    struct inst *decoded;
     char buf[16];
     while (addr < 0x8000) {
-      int res = init_inst_from_bytes(&decoded, gb.mc->ram + addr);
-      if (res) {
-	inst_to_str(&decoded, buf);
+      decoded = mem_read_inst(gb.mc, addr);
+      if (decoded) {
+	inst_to_str(decoded, buf);
 	printf("0x%02X\t%s\n", addr, buf);
-	addr+=decoded.bytelen;
+	addr+=decoded->bytelen;
       } else {
 	printf("0x%02X\tDB 0x%02X\n", addr, gb.mc->ram[addr]);
 	addr++;

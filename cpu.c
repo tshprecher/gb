@@ -22,12 +22,6 @@ int cpu_exec_cycles(struct cpu *cpu, unsigned int cycles)
   return -1;
 }
 
-struct inst cpu_next_instruction(struct cpu *cpu) {
-  struct inst inst;
-  init_inst_from_bytes(&inst, &cpu->mc->ram[cpu->PC]);
-  return inst;
-}
-
 static uint8_t * reg(struct cpu *cpu, uint8_t reg) {
   if (reg == rA)
       return &cpu->A;
@@ -177,7 +171,6 @@ static uint8_t alu_sub(struct cpu *cpu, uint8_t op1, uint8_t op2) {
 
   return result;
 }
-
 
 // cpu_exec_instruction takes a cpu and instruction and executes
 // the instruction. It returns the number of cycles run, -1 on error

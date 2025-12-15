@@ -2,6 +2,7 @@
 #define CPU_H
 
 #include <stdint.h>
+#include "inst.h"
 
 #define cpu_flag(c, f) ((c->F>>f) & 1)
 #define cpu_set_flag(c, f) (c->F |= (1 << f))
@@ -32,9 +33,6 @@ struct cpu {
 // execute a given number of cycles, return number of cycles run
 // or -1 on error.
 int cpu_exec_cycles(struct cpu *, unsigned int);
-
-// return the instruction at current PC
-struct inst cpu_next_instruction(struct cpu *);
 
 // execute a specific instruction, return the number of cycles run
 // or -1 on error.
