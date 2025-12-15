@@ -11,7 +11,7 @@
 struct gb
 {
   struct cpu *cpu;
-  uint8_t ram[0x10000];
+  struct mem_controller *mc;
 
   int debug_mode;
 };
@@ -36,7 +36,7 @@ void gb_debug_print(struct gb *gb)
   printf("\033[2J");
   char buf[32];
   struct inst ins;
-  char *pc = (char *) &gb->ram[gb->cpu->PC];
+  char *pc = (char *) &gb->mc->ram[gb->cpu->PC];
 
   printf("************* ROM DEBUGGER **************");
   printf("\n");
@@ -99,7 +99,7 @@ void gb_debug_print(struct gb *gb)
 
   for (int a = 0, pc = gb->cpu->PC; a < 10; a++) {
     struct inst inst;
-    if (!init_inst_from_bytes(&inst, &gb->ram[pc])) {
+    if (!init_inst_from_bytes(&inst, &gb->mc->ram[pc])) {
       fprintf(stderr, "error: could not decode instructions");
       exit(1);
     }
@@ -121,7 +121,8 @@ ssize_t gb_dump(struct gb *gb) {
   if ((dump = fopen("dump.bin", "wb")) == NULL) {
     return 0;
   }
-  size_t result = fwrite(gb->ram, 1, 0x10000, dump);
+  size_t result = fwrite(gb->mc->ram, 1, 0x10000, dump);
+  printf("DEBUG: dumped total %ld bytes\n", result);
   fclose(dump);
   return result;
 }
@@ -151,11 +152,11 @@ void gb_run(struct gb *gb)
 	} else if (buf[0] == 'r') {
 	  long parsed_hex = strtol(buf+1, NULL, 16);
 
-	  printf("parsed_hex = 0x%02lX -> 0x%02X\n", parsed_hex, gb->ram[parsed_hex]);
+	  printf("parsed_hex = 0x%02lX -> 0x%02X\n", parsed_hex, gb->mc->ram[parsed_hex]);
 	  sleep(3);
 	} else if (buf[0] == 's') {
 	  //	  gb->ram[0xFF44] = 0x91; // for zelda
-	  gb->ram[0xFF44] = 0x94; // for tetris
+	  gb->mc->ram[0xFF44] = 0x94; // for tetris
 	} else if (buf[0] == 'd') {
 	  // dump the ram contents
 	  ssize_t result = gb_dump(gb);
@@ -175,17 +176,20 @@ void gb_run(struct gb *gb)
     // run until error, dump core on error
     int inst_cnt = 0;
     char buf[16];
-    char buf2[128];
+    //    char buf2[128];
     // HACK: unblock the check for the LY register
-    gb->ram[0xFF44] = 0x91; // for zelda
-     //gb->ram[0xFF44] = 0x94; // for tetris
-    int LIMIT = 0x100000;
+    //gb->mc->ram[0xFF44] = 0x91; // for zelda
+    //    gb->mc->ram[0xFF44] = 0x94; // for tetris
+    int LIMIT = 0x10000000;
+    gb->mc->ram[0xFF44] = 0x91;
     while (inst_cnt < LIMIT) {
+      if (++gb->mc->ram[0xFF44] >= 0x100)
+	gb->mc->ram[0xFF44] = 0x91;
+
       struct inst inst = cpu_next_instruction(gb->cpu);
       inst_to_str(&inst, buf);
-      //      printf("ram value at 0x0000 -> 0x%02X\n", gb->ram[0]);
-      DEBUG_cpu_to_str(buf2, gb->cpu);
-      printf("0x%04X\t%s\n\t%s\n", gb->cpu->PC, buf, buf2);
+      //      DEBUG_cpu_to_str(buf2, gb->cpu);
+      //      printf("0x%04X\t%s\n%s\n", gb->cpu->PC, buf, buf2);
       if (cpu_exec_instruction(gb->cpu, &inst) <= 0) {
 	inst_to_str(&inst, buf);
 	fprintf(stderr, "error: instruction # %d could not execute '%s' @ 0x%04X\n", inst_cnt, buf, gb->cpu->PC);
@@ -218,8 +222,7 @@ void gb_load_rom(struct gb *gb, char *filename)
         size_t c = fread(&b, 1, 1, fin);
         if (c == 0)
             break;
-        gb->ram[addr] = b;
-        addr++;
+	gb->mc->ram[addr++] = b;
     }
     if (addr != 0x8000)
     {
@@ -244,6 +247,7 @@ int main(int argc, char *argv[])
     struct gb gb = {0};
     struct mem_controller mc = {0};
     cpu.mc = &mc;
+    gb.mc = &mc;
     gb.cpu = &cpu;
     //    gb.debug_mode = 1;
     gb_load_rom(&gb, argv[1]);
@@ -258,20 +262,21 @@ int main(int argc, char *argv[])
     struct gb gb = {0};
     struct mem_controller mc = {0};
     cpu.mc = &mc;
+    gb.mc = &mc;
     gb.cpu = &cpu;
     gb_load_rom(&gb, argv[2]);
 
-    int addr = 0;
+    int addr = 0x150;
     struct inst decoded = {0};
     char buf[16];
-    while (addr < 0x8150) {
-      int res = init_inst_from_bytes(&decoded, gb.ram + addr);
+    while (addr < 0x8000) {
+      int res = init_inst_from_bytes(&decoded, gb.mc->ram + addr);
       if (res) {
 	inst_to_str(&decoded, buf);
 	printf("0x%02X\t%s\n", addr, buf);
 	addr+=decoded.bytelen;
       } else {
-	printf("0x%02X\tDB 0x%02X\n", addr, gb.ram[addr]);
+	printf("0x%02X\tDB 0x%02X\n", addr, gb.mc->ram[addr]);
 	addr++;
       }
     }

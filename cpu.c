@@ -189,6 +189,8 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   uint8_t *bytePtr;
   int8_t e;
   switch (inst->type) {
+  case NOP:
+    break;
   case (ADC):
     switch (inst->subtype) {
     case 0:
