@@ -10,8 +10,8 @@ tests:  inst cpu
 cpu:    cpu.c mem_controller.c
 	gcc -g -O0 -Wall -c cpu.c mem_controller.c
 
-inst:   inst/inst.c
-	gcc -g -O0 -Wall -c inst/inst.c
+inst:   inst/inst.c mem_controller.c
+	gcc -g -O0 -Wall -c inst/inst.c mem_controller.c
 
 clean:
 	rm gbe *_test *.o

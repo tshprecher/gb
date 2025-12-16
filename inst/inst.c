@@ -4,11 +4,12 @@
 #include <string.h>
 #include <unistd.h>
 #include "../inst.h"
+#include "../mem_controller.h"
 
-char *map_cond_to_str[4] = {"NZ", "Z", "NC", "C"};
-char *map_reg_to_str[8] = {"B", "C", "D", "E", "H", "L", "_err_", "A"};
-char *map_dd_or_ss_to_str[4] = {"BC", "DE", "HL", "SP"};
-char *map_qq_to_str[4] = {"BC", "DE", "HL", "AF"};
+static char *map_cond_to_str[4] = {"NZ", "Z", "NC", "C"};
+static char *map_reg_to_str[8] = {"B", "C", "D", "E", "H", "L", "_err_", "A"};
+static char *map_dd_or_ss_to_str[4] = {"BC", "DE", "HL", "SP"};
+static char *map_qq_to_str[4] = {"BC", "DE", "HL", "AF"};
 
 
 static struct inst instructions[] = {
@@ -481,97 +482,10 @@ int init_inst_from_asm(struct inst* inst, char *asmline) {
   return 0;
 }
 
-
-int print_special_register(char *buf, uint16_t addr) {
-  char *reg = NULL;
-  switch (addr)
-    {
-    case 0xFF00:
-      reg = "$P1";
-      break;
-    case 0xFF01:
-      reg = "$SB";
-      break;
-    case 0xFF02:
-      reg = "$SC";
-      break;
-    case 0xFF04:
-      reg = "$DIV";
-      break;
-    case 0xFF05:
-      reg = "$TIMA";
-      break;
-    case 0xFF06:
-      reg = "$TMA";
-      break;
-    case 0xFF07:
-      reg = "$TAC";
-      break;
-
-      // interrupt flags
-    case 0xFF0F:
-      reg = "$IF";
-      break;
-    case 0xFFFF:
-      reg = "$IE";
-      break;
-
-      // lcd controller registers
-    case 0xFF40:
-      reg = "$LCDC";
-      break;
-    case 0xFF41:
-      reg = "$STAT";
-      break;
-    case 0xFF42:
-      reg = "$SCY";
-      break;
-    case 0xFF43:
-      reg = "$SCX";
-      break;
-    case 0xFF44:
-      reg = "$LY";
-      break;
-    case 0xFF45:
-      reg = "$LYC";
-      break;
-    case 0xFF46:
-      reg = "$DMA";
-      break;
-    case 0xFF47:
-      reg = "$BGP";
-      break;
-    case 0xFF48:
-      reg = "$OBP0";
-      break;
-    case 0xFF49:
-      reg = "$OBP1";
-      break;
-    case 0xFF4A:
-      reg = "$WY";
-      break;
-    case 0xFF4B:
-      reg = "$WX";
-      break;
-
-      // OAM entry address
-    case 0xFE00:
-      reg = "$OAM";
-      break;
-    }
-
-  if (reg != NULL)
-    return sprintf(buf, "%s", reg);
-
-  return sprintf(buf, "0x%02X", addr);
-}
-
-
-int arg_to_str(struct inst_arg *arg, char *buf, int has_special_register) {
+int arg_to_str(struct inst_arg *arg, char *buf, int check_special_register) {
   char *arg_str;
   char ebuf[8];
   int16_t word;
-  uint16_t uword;
   switch (arg->type) {
   case R:
     arg_str = map_reg_to_str[arg->value.byte];
@@ -604,9 +518,12 @@ int arg_to_str(struct inst_arg *arg, char *buf, int has_special_register) {
     strcpy(buf, ebuf);
     return strlen(ebuf);
   case N:
-    if (has_special_register) {
-      uword = 0xFF00 + arg->value.byte;
-      return print_special_register(buf, uword);
+    if (check_special_register) {
+      char * reg = mmapped_reg_to_str(0xFF00 + arg->value.byte);
+      if (reg)
+	return sprintf(buf, "%s", reg);
+      else
+	return sprintf(buf, "0x%02X", 0xFF00 + arg->value.byte);
     }
     return sprintf(buf, "0x%02X", arg->value.byte);
   case NN:
@@ -626,14 +543,14 @@ int inst_to_str(struct inst * inst, char *buf) {
 
   // NOTE: somewhat of a hack to indicate this by checking strings,
   // but it'll do for now.
-  int has_special_register =
+  int check_special_register =
     (strstr(inst->txt_pattern, "({nn})") != NULL) ||
     (strstr(inst->txt_pattern, "({n})") != NULL);
 
   while (*pattern != '\0') {
     if (*pattern == '{') {
       pattern++;
-      len += arg_to_str(current_arg++, buf+len, has_special_register);
+      len += arg_to_str(current_arg++, buf+len, check_special_register);
       while (*pattern++ != '}')
 	;
     } else {

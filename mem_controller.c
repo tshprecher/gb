@@ -3,9 +3,73 @@
 #include <stdlib.h>
 #include "mem_controller.h"
 
+// TODO: rename this whole module, perhaps to memory.c
+
+static char* mmapped_registers[] = {
+  // 0xFE00
+  "$OAM",
+
+  // [0xFF00, 0xFF02]
+  "$P1",
+  "$SB",
+  "$SC",
+
+  // [0xFF04, 0xFF07]
+  "$DIV",
+  "$TIMA",
+  "$TMA",
+  "$TAC",
+
+  // 0xFF0F
+  "$IF",
+  // 0xFFFF
+  "$IE",
+
+  // [0xFF40, 0xFF4B]
+  "$LCDC",
+  "$STAT",
+  "$SCY",
+  "$SCX",
+  "$LY",
+  "$LYC",
+  "$DMA",
+  "$BGP",
+  "$OBP0",
+  "$OBP1",
+  "$WY",
+  "$WX",
+};
+
+char * mmapped_reg_to_str(uint16_t addr) {
+  // most common case, so fail fast
+  if (addr < 0xFE00)
+    return NULL;
+
+  if (addr >= 0xFF00 && addr <= 0xFF02) {
+    return mmapped_registers[addr-0xFF00+1];
+  } else if (addr >= 0xFF04 && addr <= 0xFF07) {
+    return mmapped_registers[addr-0xFF04+4];
+  } else if (addr == 0xFF0F) {
+    return "$IF";
+  } else if (addr == 0xFFFF) {
+    return "$IE";
+  } else if (addr >= 0xFF40 && addr <= 0xFF4B) {
+    return mmapped_registers[addr-0xFF40+10];
+  }
+
+  return NULL;
+}
+
+
+
 // TODO: handle banking
 static struct inst cached_insts[0x10000];
 static uint8_t cached_bitmap[0x10000 >> 3];
+
+void init_mem_controller(struct mem_controller *mc) {
+  struct port_controller pc = {0};
+  mc->pc = pc;
+}
 
 uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
   return mc->ram[addr];

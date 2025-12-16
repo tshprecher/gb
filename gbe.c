@@ -247,6 +247,7 @@ int main(int argc, char *argv[])
     struct cpu cpu = {0};
     struct gb gb = {0};
     struct mem_controller mc = {0};
+    init_mem_controller(&mc);
     cpu.mc = &mc;
     gb.mc = &mc;
     gb.cpu = &cpu;
@@ -262,6 +263,7 @@ int main(int argc, char *argv[])
     struct cpu cpu = {0};
     struct gb gb = {0};
     struct mem_controller mc = {0};
+    init_mem_controller(&mc);
     cpu.mc = &mc;
     gb.mc = &mc;
     gb.cpu = &cpu;
