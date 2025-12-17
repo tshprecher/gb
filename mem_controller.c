@@ -41,7 +41,7 @@ static char* mmapped_registers[] = {
 };
 
 char * mmapped_reg_to_str(uint16_t addr) {
-  // most common case, so fail fast
+  // fail fast in the commmon case
   if (addr < 0xFE00)
     return NULL;
 
@@ -60,8 +60,6 @@ char * mmapped_reg_to_str(uint16_t addr) {
   return NULL;
 }
 
-
-
 // TODO: handle banking
 static struct inst cached_insts[0x10000];
 static uint8_t cached_bitmap[0x10000 >> 3];
@@ -72,7 +70,24 @@ void init_mem_controller(struct mem_controller *mc) {
 }
 
 uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
-  return mc->ram[addr];
+  switch (addr) {
+  case 0xFF00:
+    return 0;
+  default:
+    return mc->ram[addr];
+  };
+}
+
+void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
+  if (addr < 0x8000) {
+    return;
+    //printf("ERROR: writing value 0x%02X to ROM address 0x%04X\n", byte, addr);
+    //    exit(1);
+  } else if (addr == 0xFF00) {
+    return;
+  } else {
+    mc->ram[addr] = byte;
+  }
 }
 
 struct inst* mem_read_inst(struct mem_controller *mc, uint16_t addr) {
@@ -86,16 +101,6 @@ struct inst* mem_read_inst(struct mem_controller *mc, uint16_t addr) {
     cached_bitmap[addr >> 3] = byte_map;
   }
   return &cached_insts[addr];
-}
-
-void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
-  if (addr < 0x8000) {
-    return;
-    //printf("ERROR: writing value 0x%02X to ROM address 0x%04X\n", byte, addr);
-    //    exit(1);
-  } else {
-    mc->ram[addr] = byte;
-  }
 }
 
 uint8_t* mem_ptr(struct mem_controller *mc, uint16_t addr) {

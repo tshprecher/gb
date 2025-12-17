@@ -155,8 +155,8 @@ void gb_run(struct gb *gb)
 	  printf("parsed_hex = 0x%02lX -> 0x%02X\n", parsed_hex, gb->mc->ram[parsed_hex]);
 	  sleep(3);
 	} else if (buf[0] == 's') {
-	  //	  gb->ram[0xFF44] = 0x91; // for zelda
-	  gb->mc->ram[0xFF44] = 0x94; // for tetris
+	  //	  gb->ram[0xFF44] = 0x91; // for zelda DEBUG
+	  gb->mc->ram[0xFF44] = 0x94; // for tetris DEBUG
 	} else if (buf[0] == 'd') {
 	  // dump the ram contents
 	  ssize_t result = gb_dump(gb);
@@ -174,31 +174,18 @@ void gb_run(struct gb *gb)
     }
   else {
     // run until error, dump core on error
-    int inst_cnt = 0;
-    char buf[16];
-    char buf2[128];
-    // HACK: unblock the check for the LY register
-    //gb->mc->ram[0xFF44] = 0x91; // for zelda
-    //    gb->mc->ram[0xFF44] = 0x94; // for tetris
-    int LIMIT = 0x1000000;
+    int t_cycles = 0;
+    int LIMIT = 0x10;
     gb->mc->ram[0xFF44] = 0x91;
-    while (inst_cnt < LIMIT) {
-      // HACK until the lcd controller is implemented
-      if (++gb->mc->ram[0xFF44] >= 0x100)
-	gb->mc->ram[0xFF44] = 0x91;
+    while (t_cycles < LIMIT) {
+      cpu_tick(gb->cpu);
+      t_cycles++;
 
-      struct inst *inst =  mem_read_inst(gb->mc, gb->cpu->PC);
-      inst_to_str(inst, buf);
-      DEBUG_cpu_to_str(buf2, gb->cpu);
-      printf("0x%04X\t%s\n\t%s\n", gb->cpu->PC, buf, buf2);
-      if (cpu_exec_instruction(gb->cpu, inst) <= 0) {
-	inst_to_str(inst, buf);
-	fprintf(stderr, "error: instruction # %d could not execute '%s' @ 0x%04X\n", inst_cnt, buf, gb->cpu->PC);
-	break;
-      }
-      inst_cnt++;
+      // DEBUG: until the lcd controller is implemented
+      //if (++gb->mc->ram[0xFF44] >= 0x100)
+      //gb->mc->ram[0xFF44] = 0x91;
     }
-    printf("ran %d instuctions\n", inst_cnt);
+    printf("ran %d clock cycles\n", t_cycles);
     if (gb_dump(gb) < LIMIT) {
       fprintf(stderr, "error: could not write dump file");
     }
@@ -230,9 +217,6 @@ void gb_load_rom(struct gb *gb, char *filename)
         fprintf(stderr, "error reading ROM: cannot read full 32K of ROM: %x\n", addr);
         exit(1);
     }
-    gb->cpu->PC = 0x150;
-    gb->cpu->SP = 0xFFFE;
-
     fclose(fin);
 }
 
@@ -245,6 +229,8 @@ int main(int argc, char *argv[])
     return 1;
   } else if (argc == 2) { // run game with debugger
     struct cpu cpu = {0};
+    init_cpu(&cpu);
+
     struct gb gb = {0};
     struct mem_controller mc = {0};
     init_mem_controller(&mc);
@@ -261,6 +247,8 @@ int main(int argc, char *argv[])
     }
 
     struct cpu cpu = {0};
+    init_cpu(&cpu);
+
     struct gb gb = {0};
     struct mem_controller mc = {0};
     init_mem_controller(&mc);

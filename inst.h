@@ -104,7 +104,7 @@ struct inst {
   // the length of the opcode in bytes
   uint8_t bytelen;
 
-  // the number of cycles needed to execute. note, few
+  // the number of machine cycles needed to execute. note, few
   // instructions take variable number of cycles. that's
   // delegated to the cpu at execution time.
   uint8_t cycles;

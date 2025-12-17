@@ -1,4 +1,3 @@
-
 #define rLCDC 0xFF40
 #define rSTAT 0xFF41
 #define rSCY  0xFF42
@@ -13,21 +12,10 @@
 #define rWX   0xFF4B
 
 struct lcd_controller {
-  uint32 t_cycle;
-
   // TODO: put global in its own memory controller, shared by call components?
-  uint8 *global_ram; // for lcd registers,
   uint8 local_ram[0x2000];
 };
 
-void lcd_init(struct *lcd_controller *lcd) {
-  lcd->global_ram[rLCDC] = 0x83;
-  lcd->global_ram[rSCY] = 0;
-  lcd->global_ram[rSCX] = 0;
-  lcd->global_ram[rLYC] = 0;
-  lcd->global_ram[rWY] = 0;
-  lcd->global_ram[rWX] = 0;
-}
 
 uint32 lcd_tick(struct lcd_controller *lcd) {
   /* DEBUG: dev notes

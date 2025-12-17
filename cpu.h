@@ -28,11 +28,17 @@ struct cpu {
 
   // interrupt master enable flag
   uint8_t IME;
+
+  // the number of t_cycles since last instruction execution
+  int8_t t_cycles;
+
+  // the next instruction to execute
+  struct inst *next_inst;
 };
 
-// execute a given number of cycles, return number of cycles run
-// or -1 on error.
-int cpu_exec_cycles(struct cpu *, unsigned int);
+void init_cpu(struct cpu *);
+
+void cpu_tick(struct cpu *);
 
 // execute a specific instruction, return the number of cycles run
 // or -1 on error.

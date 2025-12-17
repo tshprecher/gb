@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "cpu.h"
 #include "mem_controller.h"
 #include "inst.h"
@@ -11,16 +12,6 @@
 #define bytes_to_word(l, u) ((uint16_t) (u << 8 | l))
 #define nn_to_word(i, a) bytes_to_word(nn_lower(i,a),nn_upper(i,a))
 
-
-// cpu_exec_cycles takes a cpu and execute 'cycles' number of cycles.
-// It returns the number of cycles run.
-int cpu_exec_cycles(struct cpu *cpu, unsigned int cycles)
-{
-  if (cycles == 0)
-    return 0;
-  fprintf(stderr, "error cpu_exec_cycles: not implemented");
-  return -1;
-}
 
 static uint8_t * reg(struct cpu *cpu, uint8_t reg) {
   if (reg == rA)
@@ -171,6 +162,46 @@ static uint8_t alu_sub(struct cpu *cpu, uint8_t op1, uint8_t op2) {
 
   return result;
 }
+
+void init_cpu(struct cpu *cpu) {
+  cpu->PC = 0x150;
+  cpu->SP = 0xFFFE;
+}
+
+
+void cpu_tick(struct cpu *cpu) {
+  char buf[16];
+  if (cpu->t_cycles < 0) { // catch up for variably timed instructions
+      cpu->t_cycles++;
+      return;
+  }
+  if (!cpu->next_inst || cpu->t_cycles == 0) // TODO: put this in the init?
+    cpu->next_inst = mem_read_inst(cpu->mc, cpu->PC);
+
+  // 4 clock cycles per machine cycle
+  int8_t exec_cycle = (cpu->next_inst->cycles << 2);
+  cpu->t_cycles++;
+  printf("DEBUG: exec_cycle -> %d\n", exec_cycle);
+  printf("DEBUG: t_cycle -> %d\n", cpu->t_cycles);
+  if (cpu->t_cycles == exec_cycle) {
+    inst_to_str(cpu->next_inst, buf);
+    printf("0x%04X\t%s\n", cpu->PC, buf);
+    int cycles = cpu_exec_instruction(cpu, cpu->next_inst);
+    if (cycles < 0) {
+      fprintf(stderr, "error: could not execute instr '%s' @ 0x%04X\n",
+	      buf, cpu->PC);
+      exit(1);
+    }
+
+    if (exec_cycle > cpu->t_cycles) {
+      cpu->t_cycles -= exec_cycle; // go negative to catch up
+    } else {
+      cpu->t_cycles = 0;
+    }
+  }
+
+}
+
 
 // cpu_exec_instruction takes a cpu and instruction and executes
 // the instruction. It returns the number of cycles run, -1 on error
