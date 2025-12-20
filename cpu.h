@@ -15,6 +15,26 @@
 #define FLAG_CY 4
 
 
+struct interrupt_controller {
+  uint8_t IF, IE;
+};
+
+void interrupt_vblank(struct interrupt_controller *ic);
+
+
+struct timer_controller {
+  uint32_t div_t_cycles;
+
+  // divider register
+  uint8_t DIV;
+
+  // timer registers
+  uint8_t TIMA, TMA, TAC;
+};
+
+void timer_tick(struct timer_controller *tc);
+
+
 // TODO: probably should have debugger support injected here
 struct cpu {
   // 8 bit registers
@@ -25,6 +45,8 @@ struct cpu {
 
   // memory controller monitors access to ram
   struct mem_controller *mc;
+
+  struct interrupt_controller *ic;
 
   // interrupt master enable flag
   uint8_t IME;

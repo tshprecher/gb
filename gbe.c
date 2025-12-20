@@ -12,6 +12,9 @@ struct gb
 {
   struct cpu *cpu;
   struct mem_controller *mc;
+  struct interrupt_controller *ic;
+  struct lcd_controller *lcd;
+  struct timer_controller *tc;
 
   int debug_mode;
 };
@@ -154,9 +157,6 @@ void gb_run(struct gb *gb)
 
 	  printf("parsed_hex = 0x%02lX -> 0x%02X\n", parsed_hex, gb->mc->ram[parsed_hex]);
 	  sleep(3);
-	} else if (buf[0] == 's') {
-	  //	  gb->ram[0xFF44] = 0x91; // for zelda DEBUG
-	  gb->mc->ram[0xFF44] = 0x94; // for tetris DEBUG
 	} else if (buf[0] == 'd') {
 	  // dump the ram contents
 	  ssize_t result = gb_dump(gb);
@@ -175,10 +175,10 @@ void gb_run(struct gb *gb)
   else {
     // run until error, dump core on error
     int t_cycles = 0;
-    int LIMIT = 0x10;
-    gb->mc->ram[0xFF44] = 0x91;
+    int LIMIT = 453179;
     while (t_cycles < LIMIT) {
       cpu_tick(gb->cpu);
+      lcd_tick(gb->lcd);
       t_cycles++;
 
       // DEBUG: until the lcd controller is implemented
@@ -233,10 +233,24 @@ int main(int argc, char *argv[])
 
     struct gb gb = {0};
     struct mem_controller mc = {0};
-    init_mem_controller(&mc);
+    struct interrupt_controller ic = {0};
+    struct lcd_controller lcd = {0};
+    struct timer_controller tc = {0};
+
+    lcd.ic = &ic;
+
+    mc.ic = &ic;
+    mc.lcd = &lcd;
+    mc.tc = &tc;
+
     cpu.mc = &mc;
-    gb.mc = &mc;
+    cpu.ic = &ic;
+
     gb.cpu = &cpu;
+    gb.mc = &mc;
+    gb.lcd = &lcd;
+    gb.tc = &tc;
+
     //    gb.debug_mode = 1;
     gb_load_rom(&gb, argv[1]);
     gb_run(&gb);
@@ -251,13 +265,27 @@ int main(int argc, char *argv[])
 
     struct gb gb = {0};
     struct mem_controller mc = {0};
-    init_mem_controller(&mc);
+    struct interrupt_controller ic = {0};
+    struct lcd_controller lcd = {0};
+    struct timer_controller tc = {0};
+
+    lcd.ic = &ic;
+
+    mc.ic = &ic;
+    mc.lcd = &lcd;
+    mc.tc = &tc;
+
     cpu.mc = &mc;
-    gb.mc = &mc;
+    cpu.ic = &ic;
+
     gb.cpu = &cpu;
+    gb.mc = &mc;
+    gb.lcd = &lcd;
+    gb.tc = &tc;
+
     gb_load_rom(&gb, argv[2]);
 
-    int addr = 0x150;
+    int addr = 0x0;
     struct inst *decoded;
     char buf[16];
     while (addr < 0x8000) {

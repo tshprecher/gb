@@ -12,6 +12,15 @@
 #define bytes_to_word(l, u) ((uint16_t) (u << 8 | l))
 #define nn_to_word(i, a) bytes_to_word(nn_lower(i,a),nn_upper(i,a))
 
+void timer_tick(struct timer_controller *tc) {
+  // TODO: implement;
+}
+
+void interrupt_vblank(struct interrupt_controller *ic) {
+  printf("DEBUG: interrupt_vblank\n");
+  ic->IF |= 0x1;
+}
+
 
 static uint8_t * reg(struct cpu *cpu, uint8_t reg) {
   if (reg == rA)
@@ -175,14 +184,31 @@ void cpu_tick(struct cpu *cpu) {
       cpu->t_cycles++;
       return;
   }
+  if (cpu->t_cycles == 0 && cpu->IME) {
+    if (cpu->ic->IF) {
+      printf("DEBUG: caught interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->ic->IF, cpu->ic->IE);
+      // handle the first priority interrupt
+      // TODO: handle this properly, not just vblank
+      if ((cpu->ic->IF % 2) == 1 && (cpu->ic->IE % 2) == 1) {
+	cpu->ic->IF ^= 0x1;
+	printf("DEBUG: handling vblank interrupt\n");
+	// TODO: do the right thing and push to stack with the right number of cycles
+	printf("DEBUG: jumping to vblank interrupt\n");
+	// TODO: consolidate PUSH into one operation?
+	mem_write(cpu->mc,cpu->SP-1,  upper_8(cpu->PC));
+	mem_write(cpu->mc,cpu->SP-2, lower_8(cpu->PC));
+	cpu->SP -= 2;
+	cpu->PC = 0x40;
+      }
+    }
+  }
+
   if (!cpu->next_inst || cpu->t_cycles == 0) // TODO: put this in the init?
     cpu->next_inst = mem_read_inst(cpu->mc, cpu->PC);
 
   // 4 clock cycles per machine cycle
   int8_t exec_cycle = (cpu->next_inst->cycles << 2);
   cpu->t_cycles++;
-  printf("DEBUG: exec_cycle -> %d\n", exec_cycle);
-  printf("DEBUG: t_cycle -> %d\n", cpu->t_cycles);
   if (cpu->t_cycles == exec_cycle) {
     inst_to_str(cpu->next_inst, buf);
     printf("0x%04X\t%s\n", cpu->PC, buf);
