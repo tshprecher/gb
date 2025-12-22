@@ -33,7 +33,7 @@ extern int main(int argc, char *argv[])
   screen = DefaultScreen(display);
 
   /* 2. Create a simple window */
-  window = XCreateSimpleWindow(display, RootWindow(display, screen), 10, 10, 1000, 1000, 1,
+  window = XCreateSimpleWindow(display, RootWindow(display, screen), 10, 10, 1500, 1500, 1,
 			       BlackPixel(display, screen), WhitePixel(display, screen));
 
   /* 3. Select input events (we need Expose events to know when to draw) */
