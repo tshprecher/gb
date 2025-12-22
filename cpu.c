@@ -12,6 +12,9 @@
 #define bytes_to_word(l, u) ((uint16_t) (u << 8 | l))
 #define nn_to_word(i, a) bytes_to_word(nn_lower(i,a),nn_upper(i,a))
 
+// hard coded interrupt handler addresses by interrupt priority
+static uint16_t interrupt_handlers[] = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060};
+
 void timer_tick(struct timer_controller *tc) {
   // TODO: implement;
 }
@@ -187,18 +190,21 @@ void cpu_tick(struct cpu *cpu) {
   if (cpu->t_cycles == 0 && cpu->IME) {
     if (cpu->ic->IF) {
       printf("DEBUG: caught interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->ic->IF, cpu->ic->IE);
-      // handle the first priority interrupt
-      // TODO: handle this properly, not just vblank
-      if ((cpu->ic->IF % 2) == 1 && (cpu->ic->IE % 2) == 1) {
-	cpu->ic->IF ^= 0x1;
-	printf("DEBUG: handling vblank interrupt\n");
-	// TODO: do the right thing and push to stack with the right number of cycles
-	printf("DEBUG: jumping to vblank interrupt\n");
-	// TODO: consolidate PUSH into one operation?
-	mem_write(cpu->mc,cpu->SP-1,  upper_8(cpu->PC));
-	mem_write(cpu->mc,cpu->SP-2, lower_8(cpu->PC));
-	cpu->SP -= 2;
-	cpu->PC = 0x40;
+      for (int i = 0; i < 5; i++) {
+	uint8_t mask = 1 << i;
+	if ((cpu->ic->IF & mask) && (cpu->ic->IE & mask)) {
+	  cpu->ic->IF ^= mask;
+	  cpu->IME = 0;
+	  printf("DEBUG: handling interrupt #%d\n", i);
+
+	  // TODO: do the right thing and push to stack with the right number of cycles
+	  // TODO: consolidate PUSH into one operation?
+	  printf("DEBUG: pushing interrupt return address: 0x%04X\n", cpu->PC);
+	  mem_write(cpu->mc,cpu->SP-1,  upper_8(cpu->PC));
+	  mem_write(cpu->mc,cpu->SP-2, lower_8(cpu->PC));
+	  cpu->SP -= 2;
+	  cpu->PC = interrupt_handlers[i];
+	}
       }
     }
   }
@@ -670,6 +676,11 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       break;
     }
     break;
+  case (RETI):
+    cpu->IME = 1;
+    cpu->PC = bytes_to_word(mem_read(cpu->mc, cpu->SP), mem_read(cpu->mc, cpu->SP+1));
+    cpu->SP+=2;
+    return inst->cycles;
   case (RST):
     mem_write(cpu->mc, cpu->SP-1, upper_8((cpu->PC+1)));
     mem_write(cpu->mc, cpu->SP-2, lower_8((cpu->PC+1)));

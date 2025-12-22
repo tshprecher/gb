@@ -175,7 +175,8 @@ void gb_run(struct gb *gb)
   else {
     // run until error, dump core on error
     int t_cycles = 0;
-    int LIMIT = 453179;
+    //    int LIMIT = 453179;
+    int LIMIT = 5500000;
     while (t_cycles < LIMIT) {
       cpu_tick(gb->cpu);
       lcd_tick(gb->lcd);
