@@ -51,7 +51,7 @@ extern int main(int argc, char *argv[])
 
   // read from a dump file and draw rectangles based on the character data
 
-  char *filename = "tmp/tetris.gb";
+  char *filename = "dump.bin";
   FILE *fin = fopen(filename, "rb");
   if (NULL == fin) {
     fprintf(stderr, "error opening file: %s\n", filename);
@@ -65,15 +65,23 @@ extern int main(int argc, char *argv[])
     XNextEvent(display, &event);
     if (event.type == Expose) {
 
-      fseek(fin, 0x41A7 + 0x50, SEEK_SET);
+      int addr = 0x9800;
+      while (addr < 0x9C00) {
+	fseek(fin, addr, SEEK_SET);
+	// get char code
+	int chr_code;
+	fread(&chr_code, 1, 1, fin);
+	printf("DEBUG: chr_code -> 0x%02X\n", chr_code);
 
-      for (int chrs = 0; chrs < 6; chrs++) {
+	// print character
+	fseek(fin, 0x8000 + (chr_code << 4), SEEK_SET);
 	char chr[16];
 	size_t count = fread(&chr, 1, 16, fin);
-	if (count != 16) {
-	  fprintf(stderr, "error reading full 16 bytes CHR\n");
-	  exit(1);
-	}
+
+	int blockX = addr % 32;
+	int blockY = addr / 32 - 1216;
+
+	printf("DEBUG: blockX -> %d, blockY -> %d\n", blockX, blockY);
 
 	for (int c = 0; c < 16; c+=2) {
 	  for (int b = 7; b >= 0; b--) {
@@ -87,9 +95,11 @@ extern int main(int argc, char *argv[])
 	    int row = c >> 1;
 	    int column = 7-b;
 	    //XFillRectangle(display, window, gc, column * 20, (chrs*160) + row*20, 20, 20);
-	    XFillRectangle(display, window, gc, (chrs * 160) + column * 20, row*20, 20, 20);
+	    XFillRectangle(display, window, gc, blockX*40 + column*5, blockY*40 + row*5, 5, 5);
 	  }
 	}
+
+	addr++;
       }
 
       /* Flush the drawing commands to the X server immediately */
