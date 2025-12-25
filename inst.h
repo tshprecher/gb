@@ -83,7 +83,7 @@ enum reg { // Z80 index of each register in opcodes
 };
 
 struct inst_arg {
-  enum arg_type type; // TODO: this isn't used outside the private fn's, so delete
+  enum arg_type type;
   union {
     uint8_t byte;
     uint8_t word[2]; // little endian: first byte is lower part
@@ -126,8 +126,8 @@ enum cond {NZ = 0, Z, NC, YC };
 int init_inst_from_bytes(struct inst*, void *);
 int init_inst_from_asm(struct inst*, char *);
 
-// TODO: swap the order of these args
-// What does this return?
-int inst_to_str(struct inst *, char *);
+
+// TODO: What does this return?
+int inst_to_str(char *, struct inst *);
 
 #endif

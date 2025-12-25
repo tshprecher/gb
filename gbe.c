@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
     while (addr < 0x8000) {
       decoded = mem_read_inst(&mc, addr);
       if (decoded) {
-	inst_to_str(decoded, buf);
+	inst_to_str(buf, decoded);
 	printf("0x%02X\t%s\n", addr, buf);
 	addr+=decoded->bytelen;
       } else {

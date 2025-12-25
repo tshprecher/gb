@@ -536,7 +536,7 @@ int arg_to_str(struct inst_arg *arg, char *buf, int check_special_register) {
   }
 }
 
-int inst_to_str(struct inst * inst, char *buf) {
+int inst_to_str(char *buf, struct inst * inst) {
   int len = 0;
   char *pattern = inst->txt_pattern;
   struct inst_arg *current_arg = inst->args;

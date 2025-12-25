@@ -21,7 +21,7 @@ void timer_tick(struct timer_controller *tc) {
 
 void interrupt_vblank(struct interrupt_controller *ic) {
   printf("DEBUG: interrupt_vblank\n");
-  ic->IF |= 0x1;
+  ic->IF |= 1;
 }
 
 
@@ -216,7 +216,7 @@ void cpu_tick(struct cpu *cpu) {
   int8_t exec_cycle = (cpu->next_inst->cycles << 2);
   cpu->t_cycles++;
   if (cpu->t_cycles == exec_cycle) {
-    inst_to_str(cpu->next_inst, buf);
+    inst_to_str(buf, cpu->next_inst);
     printf("0x%04X\t%s\n", cpu->PC, buf);
     int cycles = cpu_exec_instruction(cpu, cpu->next_inst);
     if (cycles < 0) {
@@ -484,7 +484,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       bytePtr = &cpu->mc->ram[regs_to_word(cpu, rH, rL)];
       break;
     }
-    cy = *bytePtr & 0x1;
+    cy = *bytePtr & 1;
     *bytePtr = (*bytePtr >> 1) | (cy << 7);
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
@@ -500,7 +500,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       bytePtr = &cpu->mc->ram[regs_to_word(cpu, rH, rL)];
       break;
     }
-    cy = *bytePtr & 0x1;
+    cy = *bytePtr & 1;
     *bytePtr = (*bytePtr >> 1) | (cpu_flag(cpu, FLAG_CY) << 7);
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
@@ -532,7 +532,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       bytePtr = mem_ptr(cpu->mc,regs_to_word(cpu, rH, rL));
       break;
     }
-    cy = *bytePtr & 0x1; // TODO: replace all 0x01 and 0x1 with 1
+    cy = *bytePtr & 1;
     *bytePtr = (*bytePtr >> 1) | (*bytePtr & 0x80);
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
@@ -548,7 +548,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       bytePtr = mem_ptr(cpu->mc,regs_to_word(cpu, rH, rL));
       break;
     }
-    cy = *bytePtr & 0x1;
+    cy = *bytePtr & 1;
     *bytePtr >>= 1;
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
