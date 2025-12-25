@@ -189,17 +189,17 @@ void cpu_tick(struct cpu *cpu) {
   }
   if (cpu->t_cycles == 0 && cpu->IME) {
     if (cpu->ic->IF) {
-      printf("DEBUG: caught interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->ic->IF, cpu->ic->IE);
+      //printf("DEBUG: caught interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->ic->IF, cpu->ic->IE);
       for (int i = 0; i < 5; i++) {
 	uint8_t mask = 1 << i;
 	if ((cpu->ic->IF & mask) && (cpu->ic->IE & mask)) {
 	  cpu->ic->IF ^= mask;
 	  cpu->IME = 0;
-	  printf("DEBUG: handling interrupt #%d\n", i);
+	  //printf("DEBUG: handling interrupt #%d\n", i);
 
 	  // TODO: do the right thing and push to stack with the right number of cycles
 	  // TODO: consolidate PUSH into one operation?
-	  printf("DEBUG: pushing interrupt return address: 0x%04X\n", cpu->PC);
+	  //printf("DEBUG: pushing interrupt return address: 0x%04X\n", cpu->PC);
 	  mem_write(cpu->mc,cpu->SP-1,  upper_8(cpu->PC));
 	  mem_write(cpu->mc,cpu->SP-2, lower_8(cpu->PC));
 	  cpu->SP -= 2;
@@ -216,8 +216,8 @@ void cpu_tick(struct cpu *cpu) {
   int8_t exec_cycle = (cpu->next_inst->cycles << 2);
   cpu->t_cycles++;
   if (cpu->t_cycles == exec_cycle) {
-    inst_to_str(buf, cpu->next_inst);
-    printf("0x%04X\t%s\n", cpu->PC, buf);
+    //    inst_to_str(buf, cpu->next_inst);
+    //printf("0x%04X\t%s\n", cpu->PC, buf);
     int cycles = cpu_exec_instruction(cpu, cpu->next_inst);
     if (cycles < 0) {
       fprintf(stderr, "error: could not execute instr '%s' @ 0x%04X\n",

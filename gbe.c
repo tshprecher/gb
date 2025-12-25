@@ -3,10 +3,25 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 #include <unistd.h>
 #include "inst.h"
 #include "cpu.h"
 #include "mem_controller.h"
+
+// sleep at after every frame refresh at 59.7Hz, the inverse of which
+// approximates to 16750418 nanoseconds.
+// TOOD: handle the fractional nanoseconds for better
+// precision, dynamically set the period based on work done.
+static const struct timespec tick_timespec = {tv_nsec: 16750418};
+
+static void sleep_frame() {
+  // TODO: handle error case, remain
+  int res = clock_nanosleep(CLOCK_MONOTONIC, 0, &tick_timespec, NULL);
+  if (res) {
+    printf("DEBUG: error in sleep: %d\n", res);
+  }
+}
 
 struct gb
 {
@@ -40,23 +55,24 @@ void gb_run(struct gb *gb)
 {
   // run until error, dump core on error
   int t_cycles = 0;
-  //    int LIMIT = 453179;
-  int LIMIT = 5500000;
+  int t_cycles_since_last_frame = 0;
+  int LIMIT = 4194304;
+    //int LIMIT = 10000;
   while (t_cycles < LIMIT) {
     cpu_tick(gb->cpu);
     lcd_tick(gb->lcd);
     t_cycles++;
-
-    // DEBUG: until the lcd controller is implemented
-    //if (++gb->mc->ram[0xFF44] >= 0x100)
-    //gb->mc->ram[0xFF44] = 0x91;
+    t_cycles_since_last_frame++;
+    if (t_cycles_since_last_frame == 70256) { // 70256.3484087 ticks/refresh as 59.7Hz
+      t_cycles_since_last_frame = 0;
+      sleep_frame();
+    }
   }
   printf("ran %d clock cycles\n", t_cycles);
   if (gb_dump(gb) < LIMIT) {
     fprintf(stderr, "error: could not write dump file");
   }
 }
-
 
 
 // TODO: make this a method of memory controller
