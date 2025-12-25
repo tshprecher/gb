@@ -53,11 +53,13 @@ static void DEBUG_cpu_to_str(char *buf, struct cpu *cpu) {
 
 void gb_run(struct gb *gb)
 {
+  init_lcd();
+
   // run until error, dump core on error
   int t_cycles = 0;
   int t_cycles_since_last_frame = 0;
-  int LIMIT = 4194304;
-    //int LIMIT = 10000;
+  int LIMIT = 4194304 * 10;
+  //int LIMIT = 1000;
   while (t_cycles < LIMIT) {
     cpu_tick(gb->cpu);
     lcd_tick(gb->lcd);
@@ -65,7 +67,7 @@ void gb_run(struct gb *gb)
     t_cycles_since_last_frame++;
     if (t_cycles_since_last_frame == 70256) { // 70256.3484087 ticks/refresh as 59.7Hz
       t_cycles_since_last_frame = 0;
-      sleep_frame();
+      //      sleep_frame();
     }
   }
   printf("ran %d clock cycles\n", t_cycles);

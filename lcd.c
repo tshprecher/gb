@@ -1,6 +1,44 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <X11/Xlib.h>
 #include "lcd.h"
 
+
+// X11 variables
+// TODO: put these in the lcd struct later
+static Display *display = NULL;
+static Window window;
+//static XEvent event;
+static GC gc;
+static int screen;
+
+void init_lcd() {
+  if (!display) {
+    printf("DEBUG: inside lcd init\n");
+    display = XOpenDisplay(NULL);
+    if (!display) {
+      fprintf(stderr, "could not initialize display\n");
+      exit(1);
+    }
+
+    screen = DefaultScreen(display);
+    window = XCreateSimpleWindow(display, RootWindow(display, screen), 10, 10, 1500, 1500, 1,
+				 BlackPixel(display, screen), WhitePixel(display, screen));
+
+
+    /* 3. Select input events (we need Expose events to know when to draw) */
+    XSelectInput(display, window, ExposureMask | KeyPressMask);
+
+
+    // create graphics context
+    gc = XCreateGC(display, window, 0, NULL);
+    XSetForeground(display, gc, BlackPixel(display, screen)); // Set foreground color for drawing
+
+    // map to make visible
+    XMapWindow(display, window);
+    XFlush(display);
+  }
+}
 
 void lcd_tick(struct lcd_controller *lcd) {
   /* DEBUG: dev notes

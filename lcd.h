@@ -26,6 +26,8 @@ struct lcd_controller {
   struct interrupt_controller *ic;
 };
 
+void init_lcd();
 void lcd_tick(struct lcd_controller *lcd);
+
 
 #endif
