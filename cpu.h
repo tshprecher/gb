@@ -35,7 +35,6 @@ struct timer_controller {
 void timer_tick(struct timer_controller *tc);
 
 
-// TODO: probably should have debugger support injected here
 struct cpu {
   // 8 bit registers
   uint8_t A, B, C, D, E, F /*flags register*/, H, L;
@@ -43,13 +42,12 @@ struct cpu {
   // 16 bit registers
   uint16_t PC, SP;
 
-  // memory controller monitors access to ram
-  struct mem_controller *mc;
-
-  struct interrupt_controller *ic;
-
   // interrupt master enable flag
   uint8_t IME;
+
+  // controllers to interface with other hardware
+  struct mem_controller *mc;
+  struct interrupt_controller *ic;
 
   // the number of t_cycles since last instruction execution
   int8_t t_cycles;
