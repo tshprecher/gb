@@ -12,6 +12,8 @@ static Window window;
 static GC gc;
 static int screen;
 
+static uint64_t colors[4] = {0xFFFFFF, 0xa9a9a9, 0x545454, 0x000000};
+
 void init_lcd() {
   if (!display) {
     printf("DEBUG: inside lcd init\n");
@@ -40,6 +42,98 @@ void init_lcd() {
   }
 }
 
+static void lcd_refresh_frame(struct lcd_controller *lcd) {
+  // background first
+  if (is_bit_set(lcd->LCDC, 0)) {
+    int bg_code_select_addr = is_bit_set(lcd->LCDC, 3) ? 0x9C00 : 0x9800;
+    int bg_char_select_addr = is_bit_set(lcd->LCDC, 4) ? 0x8800 : 0x8000;
+
+    printf("DEBUG: bg code select addr -> 0x%05X, char select addr -> 0x%04X\n", bg_code_select_addr, bg_char_select_addr);
+
+    // TODO: do the modes properly
+    int tile_idx = 0;
+    while (tile_idx < 1024) {
+      // get character code
+      int tile_addr = bg_code_select_addr + tile_idx;
+      uint16_t chr_code = mem_read(lcd->mc, tile_addr);
+      //printf("DEBUG: chr_code -> 0x%02X\n", chr_code);
+      chr_code <<= 4;
+      char chr[16];
+      for (int c = 0; c < 16; c++) {
+	chr[c] = mem_read(lcd->mc, bg_char_select_addr + chr_code + c);
+      }
+
+      int blockX = tile_addr % 32;
+      int blockY = tile_addr / 32 - 1216;
+
+      for (int c = 0; c < 16; c+=2) {
+	for (int b = 7; b >= 0; b--) {
+	  int upper = (chr[c] & (1 << b)) != 0;
+	  int lower = (chr[c+1] & (1 << b)) != 0;
+	  int color = (upper << 1) + lower;
+	  //printf("DEBUG: color -> %d\n", color);
+
+	  // set the pixel color
+	  XSetForeground(display, gc, colors[color]);
+	  int row = c >> 1;
+	  int column = 7-b;
+	  XFillRectangle(display, window, gc, blockX*40 + column*5, blockY*40 + row*5, 5, 5);
+	}
+      }
+
+      tile_idx++;
+    }
+  } else {
+    XSetForeground(display, gc, 0xAAAAAA);
+    XFillRectangle(display, window, gc, 0, 0, 1280, 1280);
+  }
+
+  XFlush(display);
+}
+
+
+void lcd_LCDC_write(struct lcd_controller *lcd, uint8_t value) {
+  // TODO: detect the changes and act accordinglingly
+  if (is_bit_set(lcd->LCDC,0) != is_bit_set(value, 0)) {
+    if (is_bit_set(value, 0))
+      printf("DEBUG: LCDC change -> BG display turning on\n");
+    else
+      printf("DEBUG: LCDC change -> BG display turning off\n");
+  }
+
+  if (is_bit_set(lcd->LCDC,1) != is_bit_set(value, 1)) {
+    if (is_bit_set(value, 1))
+      printf("DEBUG: LCDC change -> OBJ turning on\n");
+    else
+      printf("DEBUG: LCDC change -> OBJ turning off\n");
+  }
+
+  if (is_bit_set(lcd->LCDC,5) != is_bit_set(value, 5)) {
+    if (is_bit_set(value, 5))
+      printf("DEBUG: LCDC change -> windowing turning on\n");
+    else
+      printf("DEBUG: LCDC change -> windowing turning off\n");
+  }
+
+  if (is_bit_set(lcd->LCDC,7) != is_bit_set(value, 7)) {
+    if (is_bit_set(value, 7)) {
+      printf("DEBUG: LCDC change -> LCD turning on\n");
+    } else {
+      printf("DEBUG: LCDC change -> LCD turning off\n");
+      lcd->LY = 0;
+      lcd->t_cycles = 0;
+      //      XSetForeground(display, gc, 0x000000);
+      //      XFillRectangle(display, window, gc, 0, 0, 1280, 1280);
+      //      XFlush(display);
+    }
+
+  }
+
+  lcd->LCDC = value;
+  lcd_refresh_frame(lcd);
+}
+
+
 void lcd_tick(struct lcd_controller *lcd) {
   /* DEBUG: dev notes
      - cpu clock is 4.1943MHz
@@ -52,6 +146,8 @@ void lcd_tick(struct lcd_controller *lcd) {
          - 4571.787 cycles, round to 4572 for now
 	 - round to 457/line for now
   */
+
+  // skip if off
   if (!is_bit_set(lcd->LCDC, 7))
     return;
 
@@ -59,14 +155,15 @@ void lcd_tick(struct lcd_controller *lcd) {
   lcd->LY = lcd->t_cycles / 457;
   if (lcd->t_cycles % 457 == 0) {
     lcd->LY++;
+    printf("DEBUG: incremented LY to %d\n", lcd->LY);
     if (lcd->LY == 144) {
-      interrupt_vblank(lcd->ic);
-    }
-    if (lcd->LY == 154) {
+      // last line, so refresh and trigger interrupt
+      printf("DEBUG: refreshing frame with LCDC ->  0x%02X\n", lcd->LCDC);
+      lcd_refresh_frame(lcd);
+      interrupt(lcd->ic, VBLANK);
+    } else if (lcd->LY == 155) {
       lcd->t_cycles = 0;
       lcd->LY = 0;
     }
-    printf("DEBUG: incremented LY to %d\n", lcd->LY);
   }
-
 }

@@ -58,8 +58,8 @@ void gb_run(struct gb *gb)
   // run until error, dump core on error
   int t_cycles = 0;
   int t_cycles_since_last_frame = 0;
-  int LIMIT = 4194304 * 10;
-  //int LIMIT = 1000;
+  //int LIMIT = 4194304 * 10;
+  int LIMIT = 4000000;
   while (t_cycles < LIMIT) {
     cpu_tick(gb->cpu);
     lcd_tick(gb->lcd);
@@ -67,10 +67,11 @@ void gb_run(struct gb *gb)
     t_cycles_since_last_frame++;
     if (t_cycles_since_last_frame == 70256) { // 70256.3484087 ticks/refresh as 59.7Hz
       t_cycles_since_last_frame = 0;
-      //      sleep_frame();
+      sleep_frame();
     }
   }
   printf("ran %d clock cycles\n", t_cycles);
+  sleep(5);
   if (gb_dump(gb) < LIMIT) {
     fprintf(stderr, "error: could not write dump file");
   }
@@ -121,7 +122,9 @@ int main(int argc, char *argv[])
     struct lcd_controller lcd = {0};
     struct timer_controller tc = {0};
 
+    lcd.mc = &mc;
     lcd.ic = &ic;
+    lcd.LCDC = 0x83; // TODO: put in an init?
 
     mc.ic = &ic;
     mc.lcd = &lcd;

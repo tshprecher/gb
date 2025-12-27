@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include "mem_controller.h"
+#include "lcd.h"
 
 // TODO: rename this whole module, perhaps to memory.c
 
@@ -147,7 +148,7 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
     // TODO: handle the permissioning here so no improper writes occur
     switch (addr-0xFF40) {
     case 0:
-      mc->lcd->LCDC = byte;
+      lcd_LCDC_write(mc->lcd, byte);
       break;
     case 1:
       mc->lcd->STAT = byte;

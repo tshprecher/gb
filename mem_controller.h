@@ -27,5 +27,4 @@ struct inst* mem_read_inst(struct mem_controller *, uint16_t);
 uint8_t* mem_ptr(struct mem_controller *, uint16_t);
 
 
-
 #endif

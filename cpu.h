@@ -14,12 +14,19 @@
 #define FLAG_H 5
 #define FLAG_CY 4
 
+enum Interrupt {
+  VBLANK = 0,
+  LCDC_STAT,
+  TIMER_OVERFLOW,
+  SERIAL_IO,
+  PORT
+};
 
 struct interrupt_controller {
   uint8_t IF, IE;
 };
 
-void interrupt_vblank(struct interrupt_controller *ic);
+void interrupt(struct interrupt_controller *, enum Interrupt);
 
 
 struct timer_controller {
@@ -54,6 +61,9 @@ struct cpu {
 
   // the next instruction to execute
   struct inst *next_inst;
+
+  // the number of t_cycles to count down after an interrupt
+  int8_t interrupt_t_cycles;
 };
 
 void init_cpu(struct cpu *);

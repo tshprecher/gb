@@ -19,9 +19,9 @@ void timer_tick(struct timer_controller *tc) {
   // TODO: implement;
 }
 
-void interrupt_vblank(struct interrupt_controller *ic) {
-  printf("DEBUG: interrupt_vblank\n");
-  ic->IF |= 1;
+void interrupt(struct interrupt_controller *ic, enum Interrupt interrupt) {
+  printf("DEBUG: interrupt %d\n", interrupt);
+  ic->IF |= (1 << interrupt);
 }
 
 
@@ -187,25 +187,29 @@ void cpu_tick(struct cpu *cpu) {
       cpu->t_cycles++;
       return;
   }
+
+  if (cpu->interrupt_t_cycles) {
+    cpu->interrupt_t_cycles--;
+    return;
+  }
+
   // check interrupt between completed instructions
-  if (cpu->t_cycles == 0 && cpu->IME) {
-    if (cpu->ic->IF) {
-      printf("DEBUG: caught interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->ic->IF, cpu->ic->IE);
-      for (int i = 0; i < 5; i++) {
-	uint8_t mask = 1 << i;
-	if ((cpu->ic->IF & mask) && (cpu->ic->IE & mask)) {
+  if (cpu->t_cycles == 0 && cpu->IME && cpu->ic->IF) {
+    printf("DEBUG: noticed interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->ic->IF, cpu->ic->IE);
+    for (int i = 0; i < 5; i++) {
+      uint8_t mask = 1 << i;
+      if ((cpu->ic->IF & mask) && (cpu->ic->IE & mask)) {
 	  cpu->ic->IF ^= mask;
 	  cpu->IME = 0;
 	  printf("DEBUG: handling interrupt #%d\n", i);
 
-	  // TODO: do the right thing and push to stack with the right number of cycles
 	  // TODO: consolidate PUSH into one operation?
 	  printf("DEBUG: pushing interrupt return address: 0x%04X\n", cpu->PC);
 	  mem_write(cpu->mc,cpu->SP-1,  upper_8(cpu->PC));
 	  mem_write(cpu->mc,cpu->SP-2, lower_8(cpu->PC));
 	  cpu->SP -= 2;
 	  cpu->PC = interrupt_handlers[i];
-	}
+	  cpu->interrupt_t_cycles = 6 << 2;
       }
     }
   }
@@ -236,8 +240,8 @@ void cpu_tick(struct cpu *cpu) {
 }
 
 
-// cpu_exec_instruction takes a cpu and instruction and executes
-// the instruction. It returns the number of cycles run, -1 on error
+// cpu_exec_instruction takes a executes the instruction.
+// It returns the number of cycles run, -1 on error
 // TODO: could use a few more macros for clarity?
 // TODO: should this return 0 cycles on error instead? makes some sense
 int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
