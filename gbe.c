@@ -58,17 +58,14 @@ void gb_run(struct gb *gb)
 
   // run until error, dump core on error
   int t_cycles = 0;
-  int t_cycles_since_last_frame = 0;
-  //int LIMIT = 4194304;
-  int LIMIT = 800000;
+  int LIMIT = 4194304 * 30;
+  //int LIMIT = 800000;
   while (t_cycles < LIMIT) {
     cpu_tick(gb->cpu);
     lcd_tick(gb->lcd);
     t_cycles++;
-    t_cycles_since_last_frame++;
-    /*    if (t_cycles_since_last_frame == 70256) { // 70256.3484087 ticks/refresh as 59.7Hz
-      t_cycles_since_last_frame = 0;
-
+    /*    if (t_cycles % 4194304 == 0) {
+      sleep(1);
       }*/
   }
   printf("ran %d clock cycles\n", t_cycles);
