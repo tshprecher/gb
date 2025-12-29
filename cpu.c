@@ -68,6 +68,7 @@ static uint16_t get_qq(struct cpu *cpu, uint8_t qq) {
   case 3:
     return regs_to_word(cpu, rA, rF);
   }
+  // TODO: panic here
   return 0;
 }
 

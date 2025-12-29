@@ -114,8 +114,11 @@ uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
       return mc->lcd->WX;
     };
    }
-
-   return mc->ram[addr];
+  if (addr == 0xFF80) {
+    printf("DEBUG: reading FF80, returning 0\n");
+    return 0;
+  }
+  return mc->ram[addr];
 }
 
 void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
@@ -163,6 +166,10 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
       mc->lcd->LYC = byte;
       break;
     case 6:
+      for (int b = 0; b <= 0x9F; b++) {
+	mem_write(mc, 0xFE00 + b, mem_read(mc, (byte<<8)+b));
+      }
+      printf("DEBUG: executed DMA transfer from 0x%02X00\n", byte);
       mc->lcd->DMA = byte;
       break;
     case 7:
@@ -182,8 +189,6 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
       break;
     };
   } else {
-    if (addr == 0xDFE9)
-      printf("DEBUG: writing value 0x%02X to  0xDFE9\n", byte);
     mc->ram[addr] = byte;
   }
 }

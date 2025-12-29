@@ -36,6 +36,7 @@ ssize_t gb_dump(struct gb *gb) {
   FILE *dump;
   if ((dump = fopen("dump.bin", "wb")) == NULL) {
     return 0;
+
   }
   size_t result = fwrite(gb->mc->ram, 1, 0x10000, dump);
   printf("DEBUG: dumped total %ld bytes\n", result);
@@ -58,17 +59,17 @@ void gb_run(struct gb *gb)
   // run until error, dump core on error
   int t_cycles = 0;
   int t_cycles_since_last_frame = 0;
-  //int LIMIT = 4194304 * 10;
-  int LIMIT = 4000000;
+  //int LIMIT = 4194304;
+  int LIMIT = 800000;
   while (t_cycles < LIMIT) {
     cpu_tick(gb->cpu);
     lcd_tick(gb->lcd);
     t_cycles++;
     t_cycles_since_last_frame++;
-    if (t_cycles_since_last_frame == 70256) { // 70256.3484087 ticks/refresh as 59.7Hz
+    /*    if (t_cycles_since_last_frame == 70256) { // 70256.3484087 ticks/refresh as 59.7Hz
       t_cycles_since_last_frame = 0;
-      sleep_frame();
-    }
+
+      }*/
   }
   printf("ran %d clock cycles\n", t_cycles);
   sleep(5);

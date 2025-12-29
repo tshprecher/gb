@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <X11/Xlib.h>
 #include "lcd.h"
 
@@ -45,8 +46,9 @@ void init_lcd() {
 static void lcd_refresh_frame(struct lcd_controller *lcd) {
   // background first
   if (is_bit_set(lcd->LCDC, 0)) {
+    printf("DEBUG: background on\n");
     int bg_code_select_addr = is_bit_set(lcd->LCDC, 3) ? 0x9C00 : 0x9800;
-    int bg_char_select_addr = is_bit_set(lcd->LCDC, 4) ? 0x8800 : 0x8000;
+    int bg_char_select_addr = is_bit_set(lcd->LCDC, 4) ? 0x8000 : 0x8800;
 
     printf("DEBUG: bg code select addr -> 0x%05X, char select addr -> 0x%04X\n", bg_code_select_addr, bg_char_select_addr);
 
@@ -84,6 +86,7 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
       tile_idx++;
     }
   } else {
+    printf("DEBUG: background off\n");
     XSetForeground(display, gc, 0xAAAAAA);
     XFillRectangle(display, window, gc, 0, 0, 1280, 1280);
   }
@@ -107,12 +110,38 @@ void lcd_LCDC_write(struct lcd_controller *lcd, uint8_t value) {
     else
       printf("DEBUG: LCDC change -> OBJ turning off\n");
   }
+  if (is_bit_set(lcd->LCDC,2) != is_bit_set(value, 2)) {
+    if (is_bit_set(value, 2))
+      printf("DEBUG: LCDC change -> OBJ block selection turning on\n");
+    else
+      printf("DEBUG: LCDC change -> OBJ block selection turning off\n");
+  }
+  if (is_bit_set(lcd->LCDC,3) != is_bit_set(value, 3)) {
+    if (is_bit_set(value, 3))
+      printf("DEBUG: LCDC change -> BG code selection turning on\n");
+    else
+      printf("DEBUG: LCDC change -> BG code selection selection turning off\n");
+  }
+
+  if (is_bit_set(lcd->LCDC,4) != is_bit_set(value, 4)) {
+    if (is_bit_set(value, 4))
+      printf("DEBUG: LCDC change -> BG char selection turning on\n");
+    else
+      printf("DEBUG: LCDC change -> BG char selection selection turning off\n");
+  }
 
   if (is_bit_set(lcd->LCDC,5) != is_bit_set(value, 5)) {
     if (is_bit_set(value, 5))
       printf("DEBUG: LCDC change -> windowing turning on\n");
     else
       printf("DEBUG: LCDC change -> windowing turning off\n");
+  }
+
+  if (is_bit_set(lcd->LCDC,6) != is_bit_set(value, 6)) {
+    if (is_bit_set(value, 6))
+      printf("DEBUG: LCDC change -> window code area turning on\n");
+    else
+      printf("DEBUG: LCDC change -> window code area turning off\n");
   }
 
   if (is_bit_set(lcd->LCDC,7) != is_bit_set(value, 7)) {
@@ -122,15 +151,14 @@ void lcd_LCDC_write(struct lcd_controller *lcd, uint8_t value) {
       printf("DEBUG: LCDC change -> LCD turning off\n");
       lcd->LY = 0;
       lcd->t_cycles = 0;
-      //      XSetForeground(display, gc, 0x000000);
-      //      XFillRectangle(display, window, gc, 0, 0, 1280, 1280);
-      //      XFlush(display);
+
+      XSetForeground(display, gc, 0x222222);
+      XFillRectangle(display, window, gc, 0, 0, 1280, 1280);
+      XFlush(display);
     }
 
   }
-
   lcd->LCDC = value;
-  lcd_refresh_frame(lcd);
 }
 
 
@@ -141,7 +169,7 @@ void lcd_tick(struct lcd_controller *lcd) {
      - 144 lines by 160 columns
          - implies 108.7 microseconds/line
          - implies 108.7/160 == .679375 microseconds/pixel moving left to right
-         - is horizontal "blJanking" instantaneous?
+         - is horizontal "blanking" instantaneous?
     - takes 10 lines for vertical blanking period
          - 4571.787 cycles, round to 4572 for now
 	 - round to 457/line for now
@@ -151,19 +179,22 @@ void lcd_tick(struct lcd_controller *lcd) {
   if (!is_bit_set(lcd->LCDC, 7))
     return;
 
+
   lcd->t_cycles++;
   lcd->LY = lcd->t_cycles / 457;
+
   if (lcd->t_cycles % 457 == 0) {
-    lcd->LY++;
-    printf("DEBUG: incremented LY to %d\n", lcd->LY);
-    if (lcd->LY == 144) {
-      // last line, so refresh and trigger interrupt
-      printf("DEBUG: refreshing frame with LCDC ->  0x%02X\n", lcd->LCDC);
-      lcd_refresh_frame(lcd);
-      interrupt(lcd->ic, VBLANK);
-    } else if (lcd->LY == 155) {
-      lcd->t_cycles = 0;
-      lcd->LY = 0;
-    }
+      printf("DEBUG: LY set to %d\n", lcd->LY);
+  }
+
+  if (lcd->LY == 154) {
+    lcd->LY = 0;
+    lcd->t_cycles = 0;
+  } else if (lcd->LY == 144 && lcd->t_cycles % 457 == 0) { // TODO: this whole function is hacky
+    // entered vblank period, so refresh and trigger interrupt
+    printf("DEBUG: refreshing frame with LCDC ->  0x%02X\n", lcd->LCDC);
+    lcd_refresh_frame(lcd);
+    sleep(1);
+    interrupt(lcd->ic, VBLANK);
   }
 }
