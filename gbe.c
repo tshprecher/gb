@@ -44,14 +44,6 @@ ssize_t gb_dump(struct gb *gb) {
   return result;
 }
 
-static void DEBUG_cpu_to_str(char *buf, struct cpu *cpu) {
-  int pos = sprintf(buf, "{A: 0x%02X,B: 0x%02X,", cpu->A, cpu->B);
-  pos += sprintf(buf+pos, "C: 0x%02X,D: 0x%02X,", cpu->C, cpu->D);
-  pos += sprintf(buf+pos, "E: 0x%02X,F: 0x%02X,", cpu->E, cpu->F);
-  pos += sprintf(buf+pos, "H: 0x%02X,L: 0x%02X,", cpu->H, cpu->L);
-  sprintf(buf+pos, "PC: 0x%04X,SP: 0x%04X}", cpu->PC, cpu->SP);
-}
-
 void gb_run(struct gb *gb)
 {
   init_lcd();
@@ -69,6 +61,9 @@ void gb_run(struct gb *gb)
       }*/
   }
   printf("ran %d clock cycles\n", t_cycles);
+  if (LIMIT % 4000000 == 0) {
+    sleep_frame();
+  }
   sleep(5);
   if (gb_dump(gb) < LIMIT) {
     fprintf(stderr, "error: could not write dump file");

@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <X11/Xlib.h>
 #include "lcd.h"
 
@@ -44,6 +43,9 @@ void init_lcd() {
 }
 
 static void lcd_refresh_frame(struct lcd_controller *lcd) {
+  // TODO: what does $BGP do?
+  char chr[16];
+
   // background first
   if (is_bit_set(lcd->LCDC, 0)) {
     printf("DEBUG: background on\n");
@@ -59,10 +61,8 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
       int tile_addr = bg_code_select_addr + tile_idx;
       uint16_t chr_code = mem_read(lcd->mc, tile_addr);
       //printf("DEBUG: chr_code -> 0x%02X\n", chr_code);
-      chr_code <<= 4;
-      char chr[16];
       for (int c = 0; c < 16; c++) {
-	chr[c] = mem_read(lcd->mc, bg_char_select_addr + chr_code + c);
+	chr[c] = mem_read(lcd->mc, bg_char_select_addr + (chr_code<<4) + c);
       }
 
       int blockX = tile_addr % 32;
@@ -70,6 +70,7 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
 
       for (int c = 0; c < 16; c+=2) {
 	for (int b = 7; b >= 0; b--) {
+	  // TODO: make function draw chr that does this for us?
 	  int upper = (chr[c] & (1 << b)) != 0;
 	  int lower = (chr[c+1] & (1 << b)) != 0;
 	  int color = (upper << 1) + lower;
@@ -89,6 +90,45 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
     printf("DEBUG: background off\n");
     XSetForeground(display, gc, 0xAAAAAA);
     XFillRectangle(display, window, gc, 0, 0, 1280, 1280);
+  }
+
+  if (is_bit_set(lcd->LCDC, 1)) { // obj display on
+    int obj_8_by_8 = is_bit_set(lcd->LCDC, 3) ? 0 : 1;
+    if (!obj_8_by_8) {
+      printf("DEBUG: unimplemented: 8 x 16 objects\n");
+    }
+
+    for (int oam_addr = 0xFE00; oam_addr < 0xFEA0; oam_addr+=4) {
+      uint16_t y_pos = mem_read(lcd->mc, oam_addr);
+      uint16_t x_pos = mem_read(lcd->mc, oam_addr+1);
+      uint16_t chr_code = mem_read(lcd->mc, oam_addr+2);
+      uint16_t attributes = mem_read(lcd->mc, oam_addr+3);
+
+      if (is_bit_set(attributes, 7)) {
+	continue;
+      }
+
+      for (int c = 0; c < 16; c++) {
+	chr[c] = mem_read(lcd->mc, 0x8000 + (chr_code<<4) + c);
+      }
+
+      for (int c = 0; c < 16; c+=2) {
+	for (int b = 7; b >= 0; b--) {
+	  // TODO: consolidate this code with the near copy above
+
+	  int upper = (chr[c] & (1 << b)) != 0;
+	  int lower = (chr[c+1] & (1 << b)) != 0;
+	  int color = (upper << 1) + lower;
+
+	  int row = c >> 1;
+	  int column = 7-b;
+
+	  XSetForeground(display, gc, colors[color]);
+	  // NOTE: for some reason the (0,0) top left corner of the LCD is represented by (8, 16)
+	  XFillRectangle(display, window, gc, (x_pos-8)*5 + column*5, (y_pos-16)*5 + row*5, 5, 5);
+	}
+      }
+    }
   }
 
   XFlush(display);
@@ -194,7 +234,6 @@ void lcd_tick(struct lcd_controller *lcd) {
     // entered vblank period, so refresh and trigger interrupt
     printf("DEBUG: refreshing frame with LCDC ->  0x%02X\n", lcd->LCDC);
     lcd_refresh_frame(lcd);
-    //sleep(1);
     interrupt(lcd->ic, VBLANK);
   }
 }
