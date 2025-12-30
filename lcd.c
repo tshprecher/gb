@@ -125,7 +125,7 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
 
 	  XSetForeground(display, gc, colors[color]);
 	  // NOTE: for some reason the (0,0) top left corner of the LCD is represented by (8, 16)
-	  XFillRectangle(display, window, gc, (x_pos-8)*5 + column*5, (y_pos-16)*5 + row*5, 5, 5);
+	  XFillRectangle(display, window, gc, (x_pos-8+column)*5, (y_pos-16+row)*5, 5, 5);
 	}
       }
     }
