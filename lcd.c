@@ -223,9 +223,9 @@ void lcd_tick(struct lcd_controller *lcd) {
   lcd->t_cycles++;
   lcd->LY = lcd->t_cycles / 457;
 
-  if (lcd->t_cycles % 457 == 0) {
-      printf("DEBUG: LY set to %d\n", lcd->LY);
-  }
+  // if (lcd->t_cycles % 457 == 0) {
+  //      printf("DEBUG: LY set to %d\n", lcd->LY);
+  //  }
 
   if (lcd->LY == 154) {
     lcd->LY = 0;

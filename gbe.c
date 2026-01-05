@@ -53,8 +53,8 @@ ssize_t gb_dump(struct gb *gb) {
 void gb_poll_buttons(struct gb *gb) {
   // Check if there are any events pending
   XEvent event;
-  char buf[128];
-  KeySym keysym;
+  KeySym ks;
+  char buf[1];
 
   if (XPending(display)) {
     XNextEvent(display, &event);
@@ -62,14 +62,42 @@ void gb_poll_buttons(struct gb *gb) {
     switch (event.type) {
     case KeyPress:
     case KeyRelease:
-      XLookupString(&event.xkey, buf, sizeof(buf), &keysym, NULL);
-      if (event.type == KeyPress) {
-	port_btn_press(gb->pc, BTN_SELECT);
-      } else if (event.type == KeyRelease) {
-	port_btn_unpress(gb->pc, BTN_SELECT);
+      enum btn btn = BTN_START;
+      XLookupString(&event.xkey, buf, sizeof(buf), &ks, NULL);
+
+      switch (ks) {
+      case XK_Right:
+	btn = BTN_RIGHT;
+	break;
+      case XK_Left:
+	btn = BTN_LEFT;
+	break;
+      case XK_Up:
+	btn = BTN_UP;
+	break;
+      case XK_Down:
+	btn = BTN_DOWN;
+	break;
+      case XK_a:
+	btn = BTN_A;
+	break;
+      case XK_b:
+	btn = BTN_B;
+	break;
+      case XK_space:
+	btn = BTN_SELECT;
+	break;
       }
 
-      printf("DEBUG: Key %s: %s\n", (event.type == KeyPress) ? "pressed" : "released", XKeysymToString(keysym));
+      printf("DEBUG: btn -> %d\n", btn);
+
+      if (event.type == KeyPress) {
+	port_btn_press(gb->pc, btn);
+      } else if (event.type == KeyRelease) {
+	port_btn_unpress(gb->pc, btn);
+      }
+
+      printf("DEBUG: key code -> %d\n", event.xkey.keycode);
       break;
     default:
       break;

@@ -222,8 +222,8 @@ void cpu_tick(struct cpu *cpu) {
   int8_t exec_cycle = (cpu->next_inst->cycles << 2);
   cpu->t_cycles++;
   if (cpu->t_cycles == exec_cycle) {
-    inst_to_str(buf, cpu->next_inst);
-    printf("0x%04X\t%s\n", cpu->PC, buf);
+    //inst_to_str(buf, cpu->next_inst);
+    //printf("0x%04X\t%s\n", cpu->PC, buf);
     int cycles = cpu_exec_instruction(cpu, cpu->next_inst);
     if (cycles < 0) {
       fprintf(stderr, "error: could not execute instr '%s' @ 0x%04X\n",
