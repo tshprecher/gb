@@ -5,9 +5,14 @@
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
+#include <X11/Xlib.h>
+#include <X11/keysym.h>
 #include "inst.h"
 #include "cpu.h"
 #include "mem_controller.h"
+
+
+extern Display *display; // for X window button events
 
 // sleep at after every frame refresh at 59.7Hz, the inverse of which
 // approximates to 16750418 nanoseconds.
@@ -30,6 +35,7 @@ struct gb
   struct interrupt_controller *ic;
   struct lcd_controller *lcd;
   struct timer_controller *tc;
+  struct port_controller *pc;
 };
 
 ssize_t gb_dump(struct gb *gb) {
@@ -44,18 +50,50 @@ ssize_t gb_dump(struct gb *gb) {
   return result;
 }
 
+void gb_poll_buttons(struct gb *gb) {
+  // Check if there are any events pending
+  XEvent event;
+  char buf[128];
+  KeySym keysym;
+
+  if (XPending(display)) {
+    XNextEvent(display, &event);
+
+    switch (event.type) {
+    case KeyPress:
+    case KeyRelease:
+      XLookupString(&event.xkey, buf, sizeof(buf), &keysym, NULL);
+      if (event.type == KeyPress) {
+	port_btn_press(gb->pc, BTN_SELECT);
+      } else if (event.type == KeyRelease) {
+	port_btn_unpress(gb->pc, BTN_SELECT);
+      }
+
+      printf("DEBUG: Key %s: %s\n", (event.type == KeyPress) ? "pressed" : "released", XKeysymToString(keysym));
+      break;
+    default:
+      break;
+    }
+  }
+}
+
 void gb_run(struct gb *gb)
 {
   init_lcd();
 
   // run until error, dump core on error
   int t_cycles = 0;
-  int LIMIT = 4194304 * 30;
+  int LIMIT = 4194304 * 20;
   //int LIMIT = 800000;
   while (t_cycles < LIMIT) {
+    t_cycles++;
+
     cpu_tick(gb->cpu);
     lcd_tick(gb->lcd);
-    t_cycles++;
+    port_tick(gb->pc);
+    if (t_cycles % 1024 == 0)
+      gb_poll_buttons(gb);
+
     /*    if (t_cycles % 4194304 == 0) {
       sleep(1);
       }*/
@@ -111,6 +149,7 @@ int main(int argc, char *argv[])
 
     struct gb gb = {0};
     struct mem_controller mc = {0};
+    struct port_controller pc = {0};
     struct interrupt_controller ic = {0};
     struct lcd_controller lcd = {0};
     struct timer_controller tc = {0};
@@ -122,6 +161,7 @@ int main(int argc, char *argv[])
     mc.ic = &ic;
     mc.lcd = &lcd;
     mc.tc = &tc;
+    mc.pc = &pc;
 
     cpu.mc = &mc;
     cpu.ic = &ic;
@@ -130,6 +170,7 @@ int main(int argc, char *argv[])
     gb.mc = &mc;
     gb.lcd = &lcd;
     gb.tc = &tc;
+    gb.pc = &pc;
 
     load_rom(gb.mc, argv[1]);
     gb_run(&gb);

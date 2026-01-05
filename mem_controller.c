@@ -4,6 +4,54 @@
 #include "mem_controller.h"
 #include "lcd.h"
 
+// TODO: handle interrupt
+void port_tick(struct port_controller *pc) {
+  if (pc->t_cycles_to_read)
+    pc->t_cycles_to_read--;
+}
+
+void port_btn_press(struct port_controller *pc, enum btn btn) {
+  pc->btns_pressed |= (1 << btn);
+}
+
+void port_btn_unpress(struct port_controller *pc, enum btn btn) {
+  pc->btns_pressed &= ~(1 << btn);
+}
+
+void port_write_P1(struct port_controller *pc, uint8_t value) {
+  switch (value) {
+  case 0x10:
+    pc->status = value;
+    //    pc->t_cycles_to_read = 4;
+    break;
+  case 0x20:
+    pc->status = value;
+    //    pc->t_cycles_to_read = 16;
+    break;
+  case 0x30:
+    pc->status = value;
+    pc->t_cycles_to_read = 0;
+    break;
+  default:
+    fprintf(stderr, "error: no-op, writing value 0x%02x to reg $P1", value);
+  }
+}
+
+int port_read_P1(struct port_controller *pc, uint8_t *result) {
+  if (pc->status == 0x30)
+    return 0;
+  if (pc->t_cycles_to_read)
+    return 0;
+
+  if (pc->status == 0x10) {
+    *result = (~pc->btns_pressed >> 4) & 0x0F;
+  } else if (pc->status == 0x20) {
+    *result = (~pc->btns_pressed) & 0x0F;
+  }
+  return 1;
+}
+
+
 // TODO: rename this whole module, perhaps to memory.c
 
 static char* mmapped_registers[] = {
@@ -67,8 +115,13 @@ static uint8_t cached_bitmap[0x10000 >> 3];
 
 uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
   // TODO: this looks uglier than necessary. consolidate into one switch
-  if (addr >= 0xFF04 && addr <= 0xFF07) {
-    printf("DEBUG: writing timer register @ 0x%04X\n", addr);
+  if (addr == 0xFF00) {
+    uint8_t ports = 0; // TODO: does this need to be 0x0F
+    port_read_P1(mc->pc, &ports);
+    printf("DEBUG: reading port register, value -> 0x%04X\n", ports);
+    return ports;
+  } else if (addr >= 0xFF04 && addr <= 0xFF07) {
+    printf("DEBUG: reading timer register @ 0x%04X\n", addr);
     switch (addr - 0xFF04) {
     case 0:
       return mc->tc->DIV;
@@ -114,10 +167,10 @@ uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
       return mc->lcd->WX;
     };
    }
-  if (addr == 0xFF80) {
+  /*  if (addr == 0xFF80) {
     printf("DEBUG: reading FF80, returning 0\n");
     return 0;
-  }
+    }*/
   return mc->ram[addr];
 }
 
@@ -125,7 +178,7 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
   if (addr < 0x8000) {
     return;
   } else if (addr == 0xFF00) { // P1 register
-    return;
+    port_write_P1(mc->pc, byte);
   } else if (addr >= 0xFF04 && addr <= 0xFF07) {
     printf("DEBUG: writing 0x%02X to timer register @ 0x%04X\n", byte, addr);
     switch (addr - 0xFF04) {

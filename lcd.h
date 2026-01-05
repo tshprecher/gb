@@ -2,6 +2,7 @@
 #define LCD_H
 
 #include <stdint.h>
+#include <X11/Xlib.h>
 #include "cpu.h"
 #include "mem_controller.h"
 

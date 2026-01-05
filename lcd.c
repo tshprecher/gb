@@ -6,7 +6,7 @@
 
 // X11 variables
 // TODO: put these in the lcd struct later
-static Display *display = NULL;
+Display *display = NULL;
 static Window window;
 //static XEvent event;
 static GC gc;
@@ -29,7 +29,7 @@ void init_lcd() {
 
 
     /* 3. Select input events (we need Expose events to know when to draw) */
-    XSelectInput(display, window, ExposureMask | KeyPressMask);
+    XSelectInput(display, window, KeyReleaseMask | KeyPressMask);
 
 
     // create graphics context
@@ -234,6 +234,13 @@ void lcd_tick(struct lcd_controller *lcd) {
     // entered vblank period, so refresh and trigger interrupt
     printf("DEBUG: refreshing frame with LCDC ->  0x%02X\n", lcd->LCDC);
     lcd_refresh_frame(lcd);
+
+    // HACK: pause
+    int i = 0;
+    while (i < 10000000)
+      i++;
+
+
     interrupt(lcd->ic, VBLANK);
   }
 }
