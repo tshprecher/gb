@@ -11,21 +11,30 @@
 #include "cpu.h"
 #include "mem_controller.h"
 
+#define CLOCK_FREQ 4194304
 
 extern Display *display; // for X window button events
 
-// sleep at after every frame refresh at 59.7Hz, the inverse of which
-// approximates to 16750418 nanoseconds.
-// TOOD: handle the fractional nanoseconds for better
-// precision, dynamically set the period based on work done.
-static const struct timespec tick_timespec = {tv_nsec: 16750418};
-
-static void sleep_frame() {
-  // TODO: handle error case, remain
-  int res = clock_nanosleep(CLOCK_MONOTONIC, 0, &tick_timespec, NULL);
-  if (res) {
-    printf("DEBUG: error in sleep: %d\n", res);
+static void sleep_ns(int64_t ns) {
+  const struct timespec ts = {tv_nsec: ns};
+  struct timespec rem;
+  int res;
+  printf("DEBUG: ns -> %ld\n", ns);
+  if (res = nanosleep(&ts, &rem)) { // TODO: change to clock_nanosleep
+    printf("DEBUG: res -> %d\n", res);
+    perror("nanosleep() failed");
+    exit(1);
   }
+}
+
+static int64_t get_time_ns() {
+  struct timespec ts = {0};
+  if (clock_gettime(CLOCK_MONOTONIC, &ts)) {
+    perror("clock_gettime() failed");
+    exit(1);
+  }
+  printf("DEBUG: returning get_time_ns -> %ld\n", ts.tv_nsec);
+  return ts.tv_nsec;
 }
 
 struct gb
@@ -111,8 +120,10 @@ void gb_run(struct gb *gb)
 
   // run until error, dump core on error
   int t_cycles = 0;
-  int LIMIT = 4194304 * 20;
-  //int LIMIT = 800000;
+  int LIMIT = CLOCK_FREQ * 10;
+
+  int64_t last_cycle_time_ns = get_time_ns();
+
   while (t_cycles < LIMIT) {
     t_cycles++;
 
@@ -122,15 +133,23 @@ void gb_run(struct gb *gb)
     if (t_cycles % 1024 == 0)
       gb_poll_buttons(gb);
 
-    /*    if (t_cycles % 4194304 == 0) {
-      sleep(1);
-      }*/
+    if (t_cycles % (1<<16) == 0) {
+      int64_t cur_cycle_time_ns = get_time_ns();
+      int64_t cur_period_time_ns;
+      if (cur_cycle_time_ns > last_cycle_time_ns) {
+	 cur_period_time_ns = cur_cycle_time_ns - last_cycle_time_ns;
+      } else {
+	cur_period_time_ns = 999999999 - last_cycle_time_ns + cur_cycle_time_ns;
+      }
+
+      printf("DEBUG: period in ns for 65K clock cycles: %ld\n", cur_period_time_ns);
+      last_cycle_time_ns = cur_cycle_time_ns;
+      int sleep_time_ns = 15625000 > cur_period_time_ns ? (15625000 - cur_period_time_ns) : 0;
+      sleep_ns(sleep_time_ns);
+    }
+
   }
   printf("ran %d clock cycles\n", t_cycles);
-  if (LIMIT % 4000000 == 0) {
-    sleep_frame();
-  }
-  sleep(5);
   if (gb_dump(gb) < LIMIT) {
     fprintf(stderr, "error: could not write dump file");
   }
@@ -151,16 +170,16 @@ void load_rom(struct mem_controller *mc, char *filename)
     int addr = 0;
     while (addr < 0x8000)
     {
-        size_t c = fread(&b, 1, 1, fin);
-        if (c == 0)
-            break;
-	mc->ram[addr++] = b;
+      size_t c = fread(&b, 1, 1, fin);
+      if (c == 0)
+	break;
+      mc->ram[addr++] = b;
     }
     if (addr != 0x8000)
-    {
+      {
         fprintf(stderr, "error reading ROM: cannot read full 32K of ROM: %x\n", addr);
         exit(1);
-    }
+      }
     fclose(fin);
 }
 

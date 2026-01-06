@@ -234,13 +234,6 @@ void lcd_tick(struct lcd_controller *lcd) {
     // entered vblank period, so refresh and trigger interrupt
     printf("DEBUG: refreshing frame with LCDC ->  0x%02X\n", lcd->LCDC);
     lcd_refresh_frame(lcd);
-
-    // HACK: pause
-    int i = 0;
-    while (i < 10000000)
-      i++;
-
-
     interrupt(lcd->ic, VBLANK);
   }
 }
