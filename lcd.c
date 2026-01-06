@@ -42,9 +42,23 @@ void init_lcd() {
   }
 }
 
+static void frame_put_chr(uint8_t frame[256][256], uint8_t x, uint8_t y, uint8_t *chr, uint8_t palette) {
+  for (int c = 0; c < 16; c+=2) {
+    for (int b = 7; b >= 0; b--) {
+      int upper = (chr[c] & (1 << b)) != 0;
+      int lower = (chr[c+1] & (1 << b)) != 0;
+      int color = (upper << 1) + lower;
+
+      int row = c >> 1;
+      int col = 7-b;
+      frame[y+row][x+col] = (palette >> (color<<1)) & 0x3;
+    }
+  }
+}
+
 static void lcd_refresh_frame(struct lcd_controller *lcd) {
-  // TODO: what does $BGP do?
-  char chr[16];
+  uint8_t chr[16];
+  uint8_t frame[256][256];
 
   // background first
   if (is_bit_set(lcd->LCDC, 0)) {
@@ -52,38 +66,21 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
     int bg_code_select_addr = is_bit_set(lcd->LCDC, 3) ? 0x9C00 : 0x9800;
     int bg_char_select_addr = is_bit_set(lcd->LCDC, 4) ? 0x8000 : 0x8800;
 
-    printf("DEBUG: bg code select addr -> 0x%05X, char select addr -> 0x%04X\n", bg_code_select_addr, bg_char_select_addr);
-
     // TODO: do the modes properly
     int tile_idx = 0;
     while (tile_idx < 1024) {
       // get character code
       int tile_addr = bg_code_select_addr + tile_idx;
       uint16_t chr_code = mem_read(lcd->mc, tile_addr);
-      //printf("DEBUG: chr_code -> 0x%02X\n", chr_code);
       for (int c = 0; c < 16; c++) {
 	chr[c] = mem_read(lcd->mc, bg_char_select_addr + (chr_code<<4) + c);
       }
 
       int blockX = tile_addr % 32;
       int blockY = tile_addr / 32 - 1216;
+      uint8_t palette = lcd->BGP;
 
-      for (int c = 0; c < 16; c+=2) {
-	for (int b = 7; b >= 0; b--) {
-	  // TODO: make function draw chr that does this for us?
-	  int upper = (chr[c] & (1 << b)) != 0;
-	  int lower = (chr[c+1] & (1 << b)) != 0;
-	  int color = (upper << 1) + lower;
-	  //printf("DEBUG: color -> %d\n", color);
-
-	  // set the pixel color
-	  XSetForeground(display, gc, colors[color]);
-	  int row = c >> 1;
-	  int column = 7-b;
-	  XFillRectangle(display, window, gc, blockX*40 + column*5, blockY*40 + row*5, 5, 5);
-	}
-      }
-
+      frame_put_chr(frame, blockX*8, blockY*8, chr, palette);
       tile_idx++;
     }
   } else {
@@ -96,6 +93,7 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
     int obj_8_by_8 = is_bit_set(lcd->LCDC, 3) ? 0 : 1;
     if (!obj_8_by_8) {
       printf("DEBUG: unimplemented: 8 x 16 objects\n");
+      exit(1);
     }
 
     for (int oam_addr = 0xFE00; oam_addr < 0xFEA0; oam_addr+=4) {
@@ -104,30 +102,27 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
       uint16_t chr_code = mem_read(lcd->mc, oam_addr+2);
       uint16_t attributes = mem_read(lcd->mc, oam_addr+3);
 
+
       if (is_bit_set(attributes, 7)) {
 	continue;
       }
+
+      uint8_t palette = is_bit_set(attributes, 4) ? lcd->OBP1 : lcd->OBP0;
+
 
       for (int c = 0; c < 16; c++) {
 	chr[c] = mem_read(lcd->mc, 0x8000 + (chr_code<<4) + c);
       }
 
-      for (int c = 0; c < 16; c+=2) {
-	for (int b = 7; b >= 0; b--) {
-	  // TODO: consolidate this code with the near copy above
+      // NOTE: for some reason the (0,0) top left corner of the LCD is represented by (8, 16)
+      frame_put_chr(frame, x_pos-8, y_pos-16, chr, palette);
+    }
+  }
 
-	  int upper = (chr[c] & (1 << b)) != 0;
-	  int lower = (chr[c+1] & (1 << b)) != 0;
-	  int color = (upper << 1) + lower;
-
-	  int row = c >> 1;
-	  int column = 7-b;
-
-	  XSetForeground(display, gc, colors[color]);
-	  // NOTE: for some reason the (0,0) top left corner of the LCD is represented by (8, 16)
-	  XFillRectangle(display, window, gc, (x_pos-8+column)*5, (y_pos-16+row)*5, 5, 5);
-	}
-      }
+  for (int y = 0; y < 256; y++) {
+    for (int x = 0; x < 256; x++) {
+      XSetForeground(display, gc, colors[frame[y][x]]);
+      XFillRectangle(display, window, gc, x*5, y*5, 5, 5);
     }
   }
 
@@ -222,10 +217,6 @@ void lcd_tick(struct lcd_controller *lcd) {
 
   lcd->t_cycles++;
   lcd->LY = lcd->t_cycles / 457;
-
-  // if (lcd->t_cycles % 457 == 0) {
-  //      printf("DEBUG: LY set to %d\n", lcd->LY);
-  //  }
 
   if (lcd->LY == 154) {
     lcd->LY = 0;

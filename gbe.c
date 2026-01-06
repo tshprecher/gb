@@ -120,7 +120,7 @@ void gb_run(struct gb *gb)
 
   // run until error, dump core on error
   int t_cycles = 0;
-  int LIMIT = CLOCK_FREQ * 10;
+  int LIMIT = CLOCK_FREQ * 30;
 
   int64_t last_cycle_time_ns = get_time_ns();
 
