@@ -60,9 +60,8 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
   uint8_t chr[16];
   uint8_t frame[256][256];
 
-  // background first
+  // first: background
   if (is_bit_set(lcd->LCDC, 0)) {
-    printf("DEBUG: background on\n");
     int bg_code_select_addr = is_bit_set(lcd->LCDC, 3) ? 0x9C00 : 0x9800;
     int bg_char_select_addr = is_bit_set(lcd->LCDC, 4) ? 0x8000 : 0x8800;
 
@@ -84,12 +83,12 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
       tile_idx++;
     }
   } else {
-    printf("DEBUG: background off\n");
     XSetForeground(display, gc, 0xAAAAAA);
     XFillRectangle(display, window, gc, 0, 0, 1280, 1280);
   }
 
-  if (is_bit_set(lcd->LCDC, 1)) { // obj display on
+  // second: objects
+  if (is_bit_set(lcd->LCDC, 1)) {
     int obj_8_by_8 = is_bit_set(lcd->LCDC, 3) ? 0 : 1;
     if (!obj_8_by_8) {
       printf("DEBUG: unimplemented: 8 x 16 objects\n");
@@ -102,13 +101,12 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
       uint16_t chr_code = mem_read(lcd->mc, oam_addr+2);
       uint16_t attributes = mem_read(lcd->mc, oam_addr+3);
 
-
-      if (is_bit_set(attributes, 7)) {
+      // TOOD: handle priority
+      /*      if (is_bit_set(attributes, 7)) {
 	continue;
-      }
+	}*/
 
       uint8_t palette = is_bit_set(attributes, 4) ? lcd->OBP1 : lcd->OBP0;
-
 
       for (int c = 0; c < 16; c++) {
 	chr[c] = mem_read(lcd->mc, 0x8000 + (chr_code<<4) + c);
@@ -118,6 +116,28 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
       frame_put_chr(frame, x_pos-8, y_pos-16, chr, palette);
     }
   }
+
+  // third: window
+  /*  if (is_bit_set(lcd->LCDC, 1)) {
+    int win_code_select_addr = is_bit_set(lcd->LCDC, 6) ? 0x9C00 : 0x9800;
+    int win_char_select_addr = is_bit_set(lcd->LCDC, 4) ? 0x8000 : 0x8800;
+
+    int tile_idx = 0;
+    while (tile_idx < 1024) {
+      int tile_addr = win_code_select_addr + tile_idx;
+      uint16_t chr_code = mem_read(lcd->mc, tile_addr);
+      for (int c = 0; c < 16; c++) {
+	chr[c] = mem_read(lcd->mc, win_char_select_addr + (chr_code<<4) + c);
+      }
+
+      int blockX = tile_addr % 32;
+      int blockY = tile_addr / 32 - 1216;
+      uint8_t palette = lcd->BGP;
+
+      frame_put_chr(frame, blockX*8, blockY*8, chr, palette);
+      tile_idx++;
+    }
+    }*/
 
   for (int y = 0; y < 256; y++) {
     for (int x = 0; x < 256; x++) {

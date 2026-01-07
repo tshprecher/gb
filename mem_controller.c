@@ -114,11 +114,10 @@ static struct inst cached_insts[0x10000];
 static uint8_t cached_bitmap[0x10000 >> 3];
 
 uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
-  // TODO: this looks uglier than necessary. consolidate into one switch
+  // TODO: this looks uglier than necessary. consolidate into one switch?
   if (addr == 0xFF00) {
-    uint8_t ports = 0; // TODO: does this need to be 0x0F
+    uint8_t ports = 0;
     port_read_P1(mc->pc, &ports);
-    printf("DEBUG: reading port register, value -> 0x%04X\n", ports);
     return ports;
   } else if (addr >= 0xFF04 && addr <= 0xFF07) {
     printf("DEBUG: reading timer register @ 0x%04X\n", addr);
@@ -167,10 +166,6 @@ uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
       return mc->lcd->WX;
     };
    }
-  /*  if (addr == 0xFF80) {
-    printf("DEBUG: reading FF80, returning 0\n");
-    return 0;
-    }*/
   return mc->ram[addr];
 }
 

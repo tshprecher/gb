@@ -98,15 +98,12 @@ void gb_poll_buttons(struct gb *gb) {
 	break;
       }
 
-      printf("DEBUG: btn -> %d\n", btn);
-
       if (event.type == KeyPress) {
 	port_btn_press(gb->pc, btn);
       } else if (event.type == KeyRelease) {
 	port_btn_unpress(gb->pc, btn);
       }
 
-      printf("DEBUG: key code -> %d\n", event.xkey.keycode);
       break;
     default:
       break;
@@ -120,7 +117,7 @@ void gb_run(struct gb *gb)
 
   // run until error, dump core on error
   int t_cycles = 0;
-  int LIMIT = CLOCK_FREQ * 30;
+  int LIMIT = CLOCK_FREQ * 60;
 
   int64_t last_cycle_time_ns = get_time_ns();
 
