@@ -123,7 +123,7 @@ uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
     printf("DEBUG: reading timer register @ 0x%04X\n", addr);
     switch (addr - 0xFF04) {
     case 0:
-      return mc->tc->DIV;
+      return (uint8_t) ((mc->tc->div_t_cycles >> 8) & 0xFF);
     case 1:
       return mc->tc->TIMA;
     case 2:
@@ -180,7 +180,6 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
     case 0:
       // TODO: delegate to underlying controller is better
       mc->tc->div_t_cycles = 0;
-      mc->tc->DIV = 0;
     case 1:
       mc->tc->TIMA = byte;
     case 2:

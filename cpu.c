@@ -15,8 +15,10 @@
 // hard coded interrupt handler addresses by interrupt priority
 static uint16_t interrupt_handlers[] = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060};
 
-void timer_tick(struct timer_controller *tc) {
-  // TODO: implement;
+void timing_tick(struct timing_controller *tc) {
+  tc->div_t_cycles++;
+
+  // TODO: implement timer logic;
 }
 
 void interrupt(struct interrupt_controller *ic, enum Interrupt interrupt) {

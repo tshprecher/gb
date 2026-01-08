@@ -43,7 +43,7 @@ struct gb
   struct mem_controller *mc;
   struct interrupt_controller *ic;
   struct lcd_controller *lcd;
-  struct timer_controller *tc;
+  struct timing_controller *tc;
   struct port_controller *pc;
 };
 
@@ -117,7 +117,7 @@ void gb_run(struct gb *gb)
 
   // run until error, dump core on error
   int t_cycles = 0;
-  int LIMIT = CLOCK_FREQ * 60;
+  int LIMIT = CLOCK_FREQ * 120;
 
   int64_t last_cycle_time_ns = get_time_ns();
 
@@ -127,10 +127,11 @@ void gb_run(struct gb *gb)
     cpu_tick(gb->cpu);
     lcd_tick(gb->lcd);
     port_tick(gb->pc);
+    timing_tick(gb->tc);
     if (t_cycles % 1024 == 0)
       gb_poll_buttons(gb);
 
-    if (t_cycles % (1<<16) == 0) {
+    if (t_cycles % ((1<<16) + 1) == 0) {
       int64_t cur_cycle_time_ns = get_time_ns();
       int64_t cur_period_time_ns;
       if (cur_cycle_time_ns > last_cycle_time_ns) {
@@ -196,7 +197,7 @@ int main(int argc, char *argv[])
     struct port_controller pc = {0};
     struct interrupt_controller ic = {0};
     struct lcd_controller lcd = {0};
-    struct timer_controller tc = {0};
+    struct timing_controller tc = {0};
 
     lcd.mc = &mc;
     lcd.ic = &ic;

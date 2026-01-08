@@ -34,7 +34,7 @@ struct mem_controller {
   uint8_t ram[0x10000];
   struct interrupt_controller *ic;
   struct lcd_controller *lcd;
-  struct timer_controller *tc;
+  struct timing_controller *tc;
   struct port_controller *pc;
 };
 
