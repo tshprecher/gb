@@ -222,8 +222,10 @@ void cpu_tick(struct cpu *cpu) {
   // 4 clock cycles per machine cycle
   int8_t exec_cycle = (cpu->next_inst->cycles << 2);
   cpu->t_cycles++;
+  char buf[32];
   if (cpu->t_cycles == exec_cycle) {
-    //printf("0x%04X\t%s\n", cpu->PC, buf);
+    inst_to_str(buf, cpu->next_inst);
+    printf("0x%04X\t%s\n", cpu->PC, buf);
     int cycles = cpu_exec_instruction(cpu, cpu->next_inst);
     if (cycles < 0) {
       char buf[16];

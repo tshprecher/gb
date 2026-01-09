@@ -87,6 +87,36 @@ static char* mmapped_registers[] = {
   "$OBP1",
   "$WY",
   "$WX",
+
+  // [0xFF10, 0xFF26]
+  "NR10",
+  "NR11",
+  "NR12",
+  "NR13",
+  "NR14",
+  "_err_NR15", // does not exist, 0xFF15 isn't allocated
+
+
+  "NR21",
+  "NR22",
+  "NR23",
+  "NR24",
+
+  "NR30",
+  "NR31",
+  "NR32",
+  "NR33",
+  "NR34",
+  "_err_NR35", // does not exist, 0xFF1F isn't allocated, TODO: find out why it's used
+
+  "NR41",
+  "NR42",
+  "NR43",
+  "NR44",
+
+  "NR50",
+  "NR51",
+  "NR52",
 };
 
 char * mmapped_reg_to_str(uint16_t addr) {
@@ -104,6 +134,8 @@ char * mmapped_reg_to_str(uint16_t addr) {
     return "$IE";
   } else if (addr >= 0xFF40 && addr <= 0xFF4B) {
     return mmapped_registers[addr-0xFF40+10];
+  } else if (addr >= 0xFF10 && addr <= 0xFF26) {
+    return mmapped_registers[addr-0xFF10+22];
   }
 
   return NULL;
