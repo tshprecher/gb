@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
+#include "audio.h"
 #include "inst.h"
 #include "cpu.h"
 #include "mem_controller.h"
@@ -114,14 +115,12 @@ void gb_poll_buttons(struct gb *gb) {
 void gb_run(struct gb *gb)
 {
   init_lcd();
+  init_audio();
 
-  // run until error, dump core on error
   int t_cycles = 0;
-  int LIMIT = CLOCK_FREQ * 120;
-
   int64_t last_cycle_time_ns = get_time_ns();
 
-  while (t_cycles < LIMIT) {
+  while (1) {
     t_cycles++;
 
     cpu_tick(gb->cpu);
@@ -148,9 +147,6 @@ void gb_run(struct gb *gb)
 
   }
   printf("ran %d clock cycles\n", t_cycles);
-  if (gb_dump(gb) < LIMIT) {
-    fprintf(stderr, "error: could not write dump file");
-  }
 }
 
 
@@ -198,6 +194,7 @@ int main(int argc, char *argv[])
     struct interrupt_controller ic = {0};
     struct lcd_controller lcd = {0};
     struct timing_controller tc = {0};
+    struct sound_controller sc = {0};
 
     lcd.mc = &mc;
     lcd.ic = &ic;
@@ -207,6 +204,7 @@ int main(int argc, char *argv[])
     mc.lcd = &lcd;
     mc.tc = &tc;
     mc.pc = &pc;
+    mc.sc = &sc;
 
     cpu.mc = &mc;
     cpu.ic = &ic;

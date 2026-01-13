@@ -26,6 +26,7 @@ struct port_controller {
 
 void port_tick(struct port_controller *pc);
 void port_btn_press(struct port_controller *pc, enum btn btn);
+// TODO: rename to btn_release
 void port_btn_unpress(struct port_controller *pc, enum btn btn);
 void port_write_P1(struct port_controller *, uint8_t);
 int port_read_P1(struct port_controller *, uint8_t *);
@@ -36,6 +37,7 @@ struct mem_controller {
   struct lcd_controller *lcd;
   struct timing_controller *tc;
   struct port_controller *pc;
+  struct sound_controller *sc;
 };
 
 uint8_t mem_read(struct mem_controller *, uint16_t);

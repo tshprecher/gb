@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "mem_controller.h"
 #include "lcd.h"
+#include "audio.h"
 
 // TODO: handle interrupt
 void port_tick(struct port_controller *pc) {
@@ -197,7 +198,54 @@ uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
     case 0xB:
       return mc->lcd->WX;
     };
-   }
+  } else if (addr >= 0xFF10 && addr <= 0xFF26 &&
+	     addr != 0xFF15 && addr != 0xFF1F) {
+    printf("DEBUG: reading sound register @ 0x%04X\n", addr);
+    switch (addr) {
+    case 0xFF10:
+      return mc->sc->NR10;
+    case 0xFF11:
+      return mc->sc->NR11;
+    case 0xFF12:
+      return mc->sc->NR12;
+    case 0xFF13:
+      return mc->sc->NR13;
+    case 0xFF14:
+      return mc->sc->NR14;
+    case 0xFF16:
+      return mc->sc->NR21;
+    case 0xFF17:
+      return mc->sc->NR22;
+    case 0xFF18:
+      return mc->sc->NR23;
+    case 0xFF19:
+      return mc->sc->NR24;
+    case 0xFF1A:
+      return mc->sc->NR30;
+    case 0xFF1B:
+      return mc->sc->NR31;
+    case 0xFF1C:
+      return mc->sc->NR32;
+    case 0xFF1D:
+      return mc->sc->NR33;
+    case 0xFF1E:
+      return mc->sc->NR34;
+    case 0xFF20:
+      return mc->sc->NR41;
+    case 0xFF21:
+      return mc->sc->NR42;
+    case 0xFF22:
+      return mc->sc->NR43;
+    case 0xFF23:
+      return mc->sc->NR44;
+    case 0xFF24:
+      return mc->sc->NR50;
+    case 0xFF25:
+      return mc->sc->NR51;
+    case 0xFF26:
+      return mc->sc->NR52;
+    }
+  }
   return mc->ram[addr];
 }
 
@@ -217,6 +265,7 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
     case 2:
       mc->tc->TMA = byte;
     case 3:
+      printf("DEBUG: writing TAC: 0x%02X\n", byte);
       mc->tc->TAC = byte;
     };
   } else if (addr == 0xFF0F) {
@@ -267,6 +316,53 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
       mc->lcd->WX = byte;
       break;
     };
+  } else if (addr >= 0xFF10 && addr <= 0xFF26 &&
+	     addr != 0xFF15 && addr != 0xFF1F) {
+    printf("DEBUG: writing 0x%02X to sound register 0x%04X\n", byte, addr);
+    switch (addr) {
+    case 0xFF10:
+      sc_write_NR10(sc, byte);
+    case 0xFF11:
+      sc_write_NR11(sc, byte);
+    case 0xFF12:
+      sc_write_NR12(sc, byte);
+    case 0xFF13:
+      sc_write_NR13(sc, byte);
+    case 0xFF14:
+      sc_write_NR14(sc, byte);
+    case 0xFF16:
+       mc->sc->NR21 = byte;
+    case 0xFF17:
+       mc->sc->NR22 = byte;
+    case 0xFF18:
+       mc->sc->NR23 = byte;
+    case 0xFF19:
+       mc->sc->NR24 = byte;
+    case 0xFF1A:
+       mc->sc->NR30 = byte;
+    case 0xFF1B:
+       mc->sc->NR31 = byte;
+    case 0xFF1C:
+       mc->sc->NR32 = byte;
+    case 0xFF1D:
+       mc->sc->NR33 = byte;
+    case 0xFF1E:
+       mc->sc->NR34 = byte;
+    case 0xFF20:
+       mc->sc->NR41 = byte;
+    case 0xFF21:
+       mc->sc->NR42 = byte;
+    case 0xFF22:
+       mc->sc->NR43 = byte;
+    case 0xFF23:
+       mc->sc->NR44 = byte;
+    case 0xFF24:
+       mc->sc->NR50 = byte;
+    case 0xFF25:
+       mc->sc->NR51 = byte;
+    case 0xFF26:
+       mc->sc->NR52 = byte;
+    }
   } else {
     mc->ram[addr] = byte;
   }
