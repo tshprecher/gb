@@ -34,13 +34,12 @@ int write_sound_1(pa_simple *s,
 		  uint8_t reg_NR14) {
 
   uint8_t sweep_shift_num = reg_NR10 & 3;
-  uint8_t is_sweeping_freq = sweep_shift_num != 0;
   uint8_t is_sweep_decrease = (reg_NR10 >> 3) & 1;
   uint8_t sweep_time_ts = (reg_NR10 >> 4) & 7;
 
   printf("info: sweep_time_ts: %d\n", sweep_time_ts);
 
-  int freq_X = (reg_NR14 & 7) << 8 + reg_NR13;
+  int freq_X = ((reg_NR14 & 7) << 8) + reg_NR13;
   int freq = (4194304 >> 5) / (2048 - freq_X);
 
   // TODO: handle continuous sound
@@ -102,9 +101,9 @@ int write_sound_1(pa_simple *s,
     }
   }
 
-  for (int d = 0; d < sound_length_samples; d++) {
+  /*for (int d = 0; d < sound_length_samples; d++) {
     printf("debug: gnu plot %d\t%d\n", d, data[d]);
-  }
+    }*/
 
   pa_simple_write(s, data, sizeof(data), NULL);
   return error;
@@ -135,8 +134,8 @@ int main() {
   printf("pa_frame_size: %ld\n", pa_frame_size(&ss));
   printf("pa_bytes_per_second: %ld\n", pa_bytes_per_second(&ss));
 
-  //  error = write_sound_1(s, 0x00 , 0x00, 0x08, 0x00, 0x80);
-  error = write_sound_1(s, 0x79 , 0x00, 0x08, 0x00, 0x04);
+  error = write_sound_1(s, 0 , 0, 8, 0, 128);
+  //error = write_sound_1(s, 0x79 , 0x00, 0x08, 0x00, 0x04);
 
   if (error) {
     printf("error code: %d\n", error);

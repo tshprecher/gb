@@ -90,34 +90,33 @@ static char* mmapped_registers[] = {
   "$WX",
 
   // [0xFF10, 0xFF26]
-  "NR10",
-  "NR11",
-  "NR12",
-  "NR13",
-  "NR14",
+  "$NR10",
+  "$NR11",
+  "$NR12",
+  "$NR13",
+  "$NR14",
   "_err_NR15", // does not exist, 0xFF15 isn't allocated
 
+  "$NR21",
+  "$NR22",
+  "$NR23",
+  "$NR24",
 
-  "NR21",
-  "NR22",
-  "NR23",
-  "NR24",
-
-  "NR30",
-  "NR31",
-  "NR32",
-  "NR33",
-  "NR34",
+  "$NR30",
+  "$NR31",
+  "$NR32",
+  "$NR33",
+  "$NR34",
   "_err_NR35", // does not exist, 0xFF1F isn't allocated, TODO: find out why it's used
 
-  "NR41",
-  "NR42",
-  "NR43",
-  "NR44",
+  "$NR41",
+  "$NR42",
+  "$NR43",
+  "$NR44",
 
-  "NR50",
-  "NR51",
-  "NR52",
+  "$NR50",
+  "$NR51",
+  "$NR52",
 };
 
 char * mmapped_reg_to_str(uint16_t addr) {
@@ -322,46 +321,67 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
     switch (addr) {
     case 0xFF10:
       sc_write_NR10(mc->sc, byte);
+      break;
     case 0xFF11:
       sc_write_NR11(mc->sc, byte);
+      break;
     case 0xFF12:
       sc_write_NR12(mc->sc, byte);
+      break;
     case 0xFF13:
       sc_write_NR13(mc->sc, byte);
+      break;
     case 0xFF14:
       sc_write_NR14(mc->sc, byte);
+      break;
     case 0xFF16:
-       mc->sc->NR21 = byte;
+      mc->sc->NR21 = byte;
+      break;
     case 0xFF17:
-       mc->sc->NR22 = byte;
+      mc->sc->NR22 = byte;
+      break;
     case 0xFF18:
-       mc->sc->NR23 = byte;
+      mc->sc->NR23 = byte;
+      break;
     case 0xFF19:
-       mc->sc->NR24 = byte;
+      mc->sc->NR24 = byte;
+      break;
     case 0xFF1A:
-       mc->sc->NR30 = byte;
+      mc->sc->NR30 = byte;
+      break;
     case 0xFF1B:
-       mc->sc->NR31 = byte;
+      mc->sc->NR31 = byte;
+      break;
     case 0xFF1C:
-       mc->sc->NR32 = byte;
+      mc->sc->NR32 = byte;
+      break;
     case 0xFF1D:
-       mc->sc->NR33 = byte;
+      mc->sc->NR33 = byte;
+      break;
     case 0xFF1E:
-       mc->sc->NR34 = byte;
+      mc->sc->NR34 = byte;
+      break;
     case 0xFF20:
-       mc->sc->NR41 = byte;
+      mc->sc->NR41 = byte;
+      break;
     case 0xFF21:
-       mc->sc->NR42 = byte;
+      mc->sc->NR42 = byte;
+      break;
     case 0xFF22:
-       mc->sc->NR43 = byte;
+      mc->sc->NR43 = byte;
+      break;
     case 0xFF23:
-       mc->sc->NR44 = byte;
+      mc->sc->NR44 = byte;
+      break;
     case 0xFF24:
-       mc->sc->NR50 = byte;
+      mc->sc->NR50 = byte;
+      break;
     case 0xFF25:
-       mc->sc->NR51 = byte;
+      mc->sc->NR51 = byte;
+      break;
     case 0xFF26:
-       mc->sc->NR52 = byte;
+      mc->sc->NR52 = byte;
+      break;
     }
   } else {
     mc->ram[addr] = byte;
