@@ -110,6 +110,12 @@ void init_audio() {
 
 }
 
+static int sound_enabled(struct sound_controller* sc, uint8_t sound_type) {
+  sound_type &= 3;
+  uint8_t nr51_mask = 0x11 << sound_type;
+  uint8_t nr52_mask = 0x80 + (1 << sound_type);
+  return (sc->NR51 & nr51_mask) && (sc->NR52 & nr52_mask);
+}
 
 
 void sc_write_NR10(struct sound_controller* sc, uint8_t byte) { sc->NR10 = byte; }
@@ -118,7 +124,7 @@ void sc_write_NR12(struct sound_controller* sc, uint8_t byte) { sc->NR12 = byte;
 void sc_write_NR13(struct sound_controller* sc, uint8_t byte) { sc->NR13 = byte; }
 void sc_write_NR14(struct sound_controller* sc, uint8_t byte) {
   sc->NR14 = byte;
-  if (sc->NR14 & 0x80) {
+  if ((sc->NR14 & 0x80) && sound_enabled(sc, 0)) {
     sc_play_sound_1(sc, s);
   }
 }
