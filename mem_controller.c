@@ -321,15 +321,15 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
     printf("DEBUG: writing 0x%02X to sound register 0x%04X\n", byte, addr);
     switch (addr) {
     case 0xFF10:
-      sc_write_NR10(sc, byte);
+      sc_write_NR10(mc->sc, byte);
     case 0xFF11:
-      sc_write_NR11(sc, byte);
+      sc_write_NR11(mc->sc, byte);
     case 0xFF12:
-      sc_write_NR12(sc, byte);
+      sc_write_NR12(mc->sc, byte);
     case 0xFF13:
-      sc_write_NR13(sc, byte);
+      sc_write_NR13(mc->sc, byte);
     case 0xFF14:
-      sc_write_NR14(sc, byte);
+      sc_write_NR14(mc->sc, byte);
     case 0xFF16:
        mc->sc->NR21 = byte;
     case 0xFF17:

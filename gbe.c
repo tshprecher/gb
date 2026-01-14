@@ -21,7 +21,7 @@ static void sleep_ns(int64_t ns) {
   struct timespec rem;
   int res;
   printf("DEBUG: ns -> %ld\n", ns);
-  if (res = nanosleep(&ts, &rem)) { // TODO: change to clock_nanosleep
+  if ((res = nanosleep(&ts, &rem))) { // TODO: change to clock_nanosleep
     printf("DEBUG: res -> %d\n", res);
     perror("nanosleep() failed");
     exit(1);

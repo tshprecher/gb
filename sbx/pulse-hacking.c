@@ -6,8 +6,6 @@ pa_simple *s;
 pa_sample_spec ss;
 
 
-
-
 int write_squarewave(pa_simple *s, int freq, int seconds) {
   uint8_t data[ss.rate*seconds];
   int error = 0;
@@ -28,7 +26,6 @@ int write_squarewave(pa_simple *s, int freq, int seconds) {
   return error;
 }
 
-
 int write_sound_1(pa_simple *s,
 		  uint8_t reg_NR10,
 		  uint8_t reg_NR11,
@@ -37,17 +34,18 @@ int write_sound_1(pa_simple *s,
 		  uint8_t reg_NR14) {
 
   uint8_t sweep_shift_num = reg_NR10 & 3;
+  uint8_t is_sweeping_freq = sweep_shift_num != 0;
   uint8_t is_sweep_decrease = (reg_NR10 >> 3) & 1;
-  uint8_t sweep_time_ts = (reg_NR10 >> 4) & 3;
+  uint8_t sweep_time_ts = (reg_NR10 >> 4) & 7;
 
   printf("info: sweep_time_ts: %d\n", sweep_time_ts);
 
-  int freq_X = (reg_NR14 & 3) << 8 + reg_NR13;
+  int freq_X = (reg_NR14 & 7) << 8 + reg_NR13;
   int freq = (4194304 >> 5) / (2048 - freq_X);
 
   // TODO: handle continuous sound
-  //  int sound_length_samples = (ss.rate * (64-(reg_NR11 & 0x4F))) >> 8;
-  int sound_length_samples = 44100*2; // two seconds
+  int sound_length_samples = (ss.rate * (64-(reg_NR11 & 0x4F))) >> 8;
+  //  int sound_length_samples = 44100*2; // two seconds
   int sweep_time_samples = sweep_time_ts ? (ss.rate / freq) * sweep_time_ts : 0;
 
 
@@ -60,6 +58,7 @@ int write_sound_1(pa_simple *s,
   int d = 0;
   int samples_per_wave = ss.rate / freq;
   int waveform_duty_cycle = reg_NR11 >> 6;
+  int sweep_count = 0;
 
   printf("info: samples_per_wave: %d, waveform_duty_cycle: %d\n", samples_per_wave, waveform_duty_cycle);
   while (d < sound_length_samples) {
@@ -84,12 +83,28 @@ int write_sound_1(pa_simple *s,
     for (int ts = 0; ts < samples_per_wave_slice && d < sound_length_samples; ts++) {
       data[d++] = is_high ? 0x4000 : 0;
     }
+    if (sweep_time_ts && (d / sweep_time_samples > sweep_count) && sweep_shift_num)  {
+      sweep_count++;
+      int diff = freq >> (1 << sweep_shift_num);
+      if (is_sweep_decrease) {
+	if (diff > 0) {
+	  freq = freq - diff;
+	}
+      } else {
+	freq = freq + diff;
+      }
+      // TODO: check if the result frequency is greater than 11 bits and stop
+      printf("info: new freq: %d\n", freq);
+      if (freq > (1 << 10)) {
+	printf("warn: should stop here @ freq: %d\n", freq);
+      }
+      samples_per_wave = ss.rate / freq; // redefine samples per wave
+    }
   }
 
-  /*
   for (int d = 0; d < sound_length_samples; d++) {
     printf("debug: gnu plot %d\t%d\n", d, data[d]);
-    }*/
+  }
 
   pa_simple_write(s, data, sizeof(data), NULL);
   return error;
@@ -120,8 +135,8 @@ int main() {
   printf("pa_frame_size: %ld\n", pa_frame_size(&ss));
   printf("pa_bytes_per_second: %ld\n", pa_bytes_per_second(&ss));
 
-  //  error = write_squarewave(s, 440, 10);
-  error = write_sound_1(s, 0x00 , 0x00, 0x08, 0x00, 0x80);
+  //  error = write_sound_1(s, 0x00 , 0x00, 0x08, 0x00, 0x80);
+  error = write_sound_1(s, 0x79 , 0x00, 0x08, 0x00, 0x04);
 
   if (error) {
     printf("error code: %d\n", error);

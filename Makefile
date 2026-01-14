@@ -5,7 +5,7 @@ gbe:	cpu gbe.c
 	gcc -g -O0 -Wall -o gbe gbe.c inst.o cpu.o mem_controller.o lcd.o audio.o -lX11 -lpulse -lpulse-simple
 
 tests:  inst cpu
-	gcc -g -O0 -Wall -o tests tests.c cpu.o inst.o mem_controller.o lcd.o -lX11
+	gcc -g -O0 -Wall -o tests tests.c cpu.o inst.o mem_controller.o lcd.o audio.o -lX11 -lpulse -lpulse-simple
 
 cpu:    inst cpu.c
 	gcc -g -O0 -Wall -c cpu.c mem_controller.c
