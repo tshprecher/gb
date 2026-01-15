@@ -26,46 +26,50 @@ int write_squarewave(pa_simple *s, int freq, int seconds) {
   return error;
 }
 
-int write_sound_1(pa_simple *s,
-		  uint8_t reg_NR10,
-		  uint8_t reg_NR11,
-		  uint8_t reg_NR12, // TODO: implement
-		  uint8_t reg_NR13,
-		  uint8_t reg_NR14) {
+struct sound1_generator {
+  int freq,
+    samples_sound_length,
+    samples_per_wave,
+    samples_per_sweep_time;
 
-  uint8_t sweep_shift_num = reg_NR10 & 3;
-  uint8_t is_sweep_decrease = (reg_NR10 >> 3) & 1;
-  uint8_t sweep_time_ts = (reg_NR10 >> 4) & 7;
+  uint8_t wave_duty_cycle,
+    sweep_time_ts,
+    sweep_counter,
+    sweep_shift_num,
+    is_sweep_decrease;
+};
 
-  printf("info: sweep_time_ts: %d\n", sweep_time_ts);
+static struct sound1_generator create_sound1_generator(uint8_t reg_NR10,
+						       uint8_t reg_NR11,
+						       uint8_t reg_NR12,
+						       uint8_t reg_NR13,
+						       uint8_t reg_NR14) {
+  struct sound1_generator gen = {0};
+
+  gen.sweep_shift_num =  reg_NR10 & 3;
+  gen.is_sweep_decrease = (reg_NR10 >> 3) & 1;
+  gen.sweep_time_ts = (reg_NR10 >> 4) & 7;
+  // TODO: handle continuous sound
+  gen.samples_sound_length = (ss.rate * (64-(reg_NR11 & 0x4F))) >> 8;
 
   int freq_X = ((reg_NR14 & 7) << 8) + reg_NR13;
-  int freq = (4194304 >> 5) / (2048 - freq_X);
+  gen.freq = (4194304 >> 5) / (2048 - freq_X);
+  gen.samples_per_sweep_time = gen.sweep_time_ts ? (ss.rate / gen.freq) * gen.sweep_time_ts : 0;
+  gen.samples_per_wave = ss.rate / gen.freq;
+  gen.wave_duty_cycle = reg_NR11 >> 6;
 
-  // TODO: handle continuous sound
-  int sound_length_samples = (ss.rate * (64-(reg_NR11 & 0x4F))) >> 8;
-  //  int sound_length_samples = 44100*2; // two seconds
-  int sweep_time_samples = sweep_time_ts ? (ss.rate / freq) * sweep_time_ts : 0;
+  return gen;
+}
 
 
-  printf("info: ss.rate: %d, freq_X: %d, freq: %d, sweep_time_samples: %d, sound_length_samples: %d\n",
-	 ss.rate, freq_X, freq, sweep_time_samples, sound_length_samples);
-
-  int16_t data[sound_length_samples];
-  int error = 0;
-
-  int d = 0;
-  int samples_per_wave = ss.rate / freq;
-  int waveform_duty_cycle = reg_NR11 >> 6;
-  int sweep_count = 0;
-
-  printf("info: samples_per_wave: %d, waveform_duty_cycle: %d\n", samples_per_wave, waveform_duty_cycle);
-  while (d < sound_length_samples) {
+void generate_samples(struct sound1_generator* gen, int16_t *samples_buf, int buflen) {
+  int s = 0;
+  while (s < buflen) {
     // each square wave can be split into 8 time slices of high/low
     uint8_t is_high = 0;
-    int samples_per_wave_slice = samples_per_wave / 8;
-    int current_wave_slice = (d * 8 / samples_per_wave) % 8; // TODO: simplify with above
-    switch (waveform_duty_cycle) {
+    int samples_per_wave_slice = gen->samples_per_wave / 8;
+    int current_wave_slice = (s * 8 / gen->samples_per_wave) % 8;
+    switch (gen->wave_duty_cycle) {
     case 0: // 12.5%
       is_high = current_wave_slice == 1 ? 1 : 0;
       break;
@@ -79,33 +83,53 @@ int write_sound_1(pa_simple *s,
       is_high = current_wave_slice >= 2 ? 1 : 0;
       break;
     }
-    for (int ts = 0; ts < samples_per_wave_slice && d < sound_length_samples; ts++) {
-      data[d++] = is_high ? 0x4000 : 0;
+    for (int ts = 0; ts < samples_per_wave_slice && s < gen->samples_sound_length; ts++) {
+      samples_buf[s++] = is_high ? 0x4000 : 0;
     }
-    if (sweep_time_ts && (d / sweep_time_samples > sweep_count) && sweep_shift_num)  {
-      sweep_count++;
-      int diff = freq >> (1 << sweep_shift_num);
-      if (is_sweep_decrease) {
+    if (gen->sweep_time_ts && (s / gen->samples_per_sweep_time > gen->sweep_counter) && gen->sweep_shift_num)  {
+      gen->sweep_counter++;
+      int diff = gen->freq >> (1 << gen->sweep_shift_num);
+      if (gen->is_sweep_decrease) {
 	if (diff > 0) {
-	  freq = freq - diff;
+	  gen->freq -= diff;
 	}
       } else {
-	freq = freq + diff;
+	gen->freq += diff;
       }
       // TODO: check if the result frequency is greater than 11 bits and stop
-      printf("info: new freq: %d\n", freq);
-      if (freq > (1 << 10)) {
-	printf("warn: should stop here @ freq: %d\n", freq);
+      printf("info: new freq: %d\n", gen->freq);
+      if (gen->freq > (1 << 10)) {
+	printf("warn: should stop here @ freq: %d\n", gen->freq);
       }
-      samples_per_wave = ss.rate / freq; // redefine samples per wave
+      gen->samples_per_wave = ss.rate / gen->freq; // redefine samples per wave
     }
   }
+}
 
-  /*for (int d = 0; d < sound_length_samples; d++) {
+
+int test_sound_1(pa_simple *s,
+		  uint8_t reg_NR10,
+		  uint8_t reg_NR11,
+		  uint8_t reg_NR12, // TODO: implement
+		  uint8_t reg_NR13,
+		  uint8_t reg_NR14) {
+
+  struct sound1_generator gen = create_sound1_generator(reg_NR10, reg_NR11, reg_NR12, reg_NR13, reg_NR14);
+
+  printf("info: sweep_time_ts: %d\n", gen.sweep_time_ts);
+  printf("info: ss.rate: %d, freq: %d, sweep_time_samples: %d, sound_length_samples: %d\n",
+	 ss.rate, gen.freq, gen.samples_per_sweep_time, gen.samples_sound_length);
+
+  int16_t data[gen.samples_sound_length];
+
+  generate_samples(&gen, data, gen.samples_sound_length);
+
+  for (int d = 0; d < gen.samples_sound_length; d++) {
     printf("debug: gnu plot %d\t%d\n", d, data[d]);
-    }*/
+  }
 
-  pa_simple_write(s, data, sizeof(data), NULL);
+  int error = 0;
+  pa_simple_write(s, data, sizeof(data), &error);
   return error;
 }
 
@@ -134,7 +158,7 @@ int main() {
   printf("pa_frame_size: %ld\n", pa_frame_size(&ss));
   printf("pa_bytes_per_second: %ld\n", pa_bytes_per_second(&ss));
 
-  error = write_sound_1(s, 0 , 0, 8, 0, 128);
+  error = test_sound_1(s, 0 , 0, 8, 0, 128);
   //error = write_sound_1(s, 0x79 , 0x00, 0x08, 0x00, 0x04);
 
   if (error) {
