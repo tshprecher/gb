@@ -4,7 +4,7 @@
 
 pa_simple *s;
 pa_sample_spec ss;
-
+int num_channels = 2;
 
 int write_squarewave(pa_simple *s, int freq, int seconds) {
   uint8_t data[ss.rate*seconds];
@@ -54,8 +54,12 @@ static struct sound1_generator create_sound1_generator(uint8_t reg_NR10,
 
   int freq_X = ((reg_NR14 & 7) << 8) + reg_NR13;
   gen.freq = (4194304 >> 5) / (2048 - freq_X);
+
+  // TODO: should samples_per_sweep_time need to be in the struct or repeatedly computed?
   gen.samples_per_sweep_time = gen.sweep_time_ts ? (ss.rate / gen.freq) * gen.sweep_time_ts : 0;
+  // TODO: should samples_per_wave need to be in the struct or repeatedly computed?
   gen.samples_per_wave = ss.rate / gen.freq;
+
   gen.wave_duty_cycle = reg_NR11 >> 6;
 
   return gen;
@@ -84,7 +88,8 @@ void generate_samples(struct sound1_generator* gen, int16_t *samples_buf, int bu
       break;
     }
     for (int ts = 0; ts < samples_per_wave_slice && s < gen->samples_sound_length; ts++) {
-      samples_buf[s++] = is_high ? 0x4000 : 0;
+      samples_buf[s] = is_high ? 0x4000 : 0;
+      s+=2;
     }
     if (gen->sweep_time_ts && (s / gen->samples_per_sweep_time > gen->sweep_counter) && gen->sweep_shift_num)  {
       gen->sweep_counter++;
@@ -120,7 +125,7 @@ int test_sound_1(pa_simple *s,
   printf("info: ss.rate: %d, freq: %d, sweep_time_samples: %d, sound_length_samples: %d\n",
 	 ss.rate, gen.freq, gen.samples_per_sweep_time, gen.samples_sound_length);
 
-  int16_t data[gen.samples_sound_length];
+  int16_t data[gen.samples_sound_length*num_channels];
 
   generate_samples(&gen, data, gen.samples_sound_length);
 
@@ -136,9 +141,8 @@ int test_sound_1(pa_simple *s,
 
 int main() {
   ss.format = PA_SAMPLE_S16NE;
-  ss.channels = 1;
+  ss.channels = num_channels;
   ss.rate = 44100;
-  //ss.rate = 440*10;
   int error = 0;
 
   s = pa_simple_new(NULL,               // Use the default server.
@@ -158,13 +162,13 @@ int main() {
   printf("pa_frame_size: %ld\n", pa_frame_size(&ss));
   printf("pa_bytes_per_second: %ld\n", pa_bytes_per_second(&ss));
 
-  error = test_sound_1(s, 0 , 0, 8, 0, 128);
-  //error = write_sound_1(s, 0x79 , 0x00, 0x08, 0x00, 0x04);
+  //error = test_sound_1(s, 0 , 0, 8, 0, 128);
+  error = test_sound_1(s, 0x79 , 0x00, 0x08, 0x00, 0x04);
 
   if (error) {
     printf("error code: %d\n", error);
-    //printf("error str: %s\n", pa_strerror(error));
+    printf("error str: %s\n", pa_strerror(error));
   }
-
-  return 0;
+  pa_simple_free(s);
+  return error;
 }
