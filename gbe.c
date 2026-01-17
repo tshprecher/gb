@@ -46,6 +46,7 @@ struct gb
   struct lcd_controller *lcd;
   struct timing_controller *tc;
   struct port_controller *pc;
+  struct sound_controller *sc;
 };
 
 ssize_t gb_dump(struct gb *gb) {
@@ -127,7 +128,8 @@ void gb_run(struct gb *gb)
     lcd_tick(gb->lcd);
     port_tick(gb->pc);
     timing_tick(gb->tc);
-    if (t_cycles % 1024 == 0)
+    audio_tick(gb->sc);
+    if (t_cycles % 1024 == 0) // TODO: put this behind another tick(), and does this need to be polled so often?
       gb_poll_buttons(gb);
 
     if (t_cycles % ((1<<16) + 1) == 0) {
@@ -144,9 +146,7 @@ void gb_run(struct gb *gb)
       int sleep_time_ns = 15625000 > cur_period_time_ns ? (15625000 - cur_period_time_ns) : 0;
       sleep_ns(sleep_time_ns);
     }
-
   }
-  printf("ran %d clock cycles\n", t_cycles);
 }
 
 
@@ -214,6 +214,7 @@ int main(int argc, char *argv[])
     gb.lcd = &lcd;
     gb.tc = &tc;
     gb.pc = &pc;
+    gb.sc = &sc;
 
     load_rom(gb.mc, argv[1]);
     gb_run(&gb);

@@ -26,9 +26,12 @@ struct sound_controller {
     NR50,
     NR51,
     NR52;
+
+  uint32_t t_cycles;
 };
 
 void init_audio();
+void audio_tick(struct sound_controller*);
 
 void sc_write_NR10(struct sound_controller*, uint8_t);
 void sc_write_NR11(struct sound_controller*, uint8_t);
