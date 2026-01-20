@@ -17,7 +17,6 @@ struct sound {
 struct sound sound_cache[256];
 int sound_cache_len = 0;
 
-
 static uint64_t create_sound_uuid(
 				  uint8_t r1,
 				  uint8_t r2,

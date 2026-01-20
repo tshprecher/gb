@@ -3,6 +3,25 @@
 
 #include <stdint.h>
 
+struct sound {
+  // unique id based on creation parameters
+  uint64_t id;
+
+  uint8_t is_continuous;
+
+  // points to the series of samples to output sound card
+  uint16_t *samples;
+
+  // number of samples in the series
+  int length;
+};
+
+struct playback {
+  int current_sample;
+  struct sound *sound;
+};
+
+
 struct sound_controller {
   // registers
   uint8_t NR10,
@@ -27,6 +46,8 @@ struct sound_controller {
     NR51,
     NR52;
 
+  // at most four types of sounds playing concurrently
+  struct playback playing[4];
   uint32_t t_cycles;
 };
 
