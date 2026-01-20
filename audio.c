@@ -74,12 +74,12 @@ static struct sound * create_sound_1(struct sound_controller *sc) {
   printf("info: ss.rate: %d, freq_X: %d, freq: %d, sweep_time_samples: %d, sound_length_samples: %d\n",
 	 ss.rate, freq_X, freq, sweep_time_samples, sound_length_samples);
 
-  uint16_t *data = malloc(sound_length_samples*sizeof(uint16_t));
-  int d = 0;
   int samples_per_wave = ss.rate / freq;
   int waveform_duty_cycle = sc->NR11 >> 6;
   int sweep_count = 0;
 
+  uint16_t *data = malloc(sound_length_samples*sizeof(uint16_t));
+  int d = 0;
   printf("info: samples_per_wave: %d, waveform_duty_cycle: %d\n", samples_per_wave, waveform_duty_cycle);
   while (d < sound_length_samples) {
     // each square wave can be split into 8 time slices of high/low
@@ -101,8 +101,10 @@ static struct sound * create_sound_1(struct sound_controller *sc) {
       break;
     }
     for (int ts = 0; ts < samples_per_wave_slice && d < sound_length_samples; ts++) {
-      data[d++] = is_high ? 0x4000 : 0;
+      data[d++] = is_high ? 0x444 : 0;
     }
+
+    // handle sweep
     if (sweep_time_ts && (d / sweep_time_samples > sweep_count) && sweep_shift_num)  {
       sweep_count++;
       int diff = freq >> (1 << sweep_shift_num);
@@ -120,6 +122,26 @@ static struct sound * create_sound_1(struct sound_controller *sc) {
       }
       samples_per_wave = ss.rate / freq; // redefine samples per wave
     }
+  }
+
+
+  // possibly pass through the samples to implement the envelope
+  uint8_t env_steps = sc->NR12 & 7;
+  uint8_t env_value = sc->NR12 >> 4;
+  printf("debug: env_value factor: %d\n", env_value);
+  uint8_t is_env_decrease = !((sc->NR12 >> 3) & 1);
+  int env_steps_samples = ss.rate / 64 * env_steps;
+
+  d = 0;
+  while (d < sound_length_samples) {
+    if (d && env_steps_samples && d % env_steps_samples == 0) {
+      if (is_env_decrease && env_value > 0)
+	env_value--;
+      if (!is_env_decrease && env_value < 15)
+	env_value++;
+    }
+    //printf("debug: multiplying env_value factor: %d\n", env_value);
+    data[d++] *= env_value;
   }
 
   struct sound r = {
@@ -142,8 +164,8 @@ void audio_tick(struct sound_controller *sc) {
 
   sc->t_cycles++;
   // TODO: consider bundling more than one sample at a time
-  while (sc->t_cycles >= 95) { // TpODO: compute this on init
-    printf("debug: NR50: 0x%02X\n", sc->NR50);
+  while (sc->t_cycles >= 1500) { // TODO: compute this on init
+    /*printf("debug: NR50: 0x%02X\n", sc->NR50);
     printf("debug: NR51: 0x%02X\n", sc->NR51);
     printf("debug: NR52: 0x%02X\n", sc->NR52);
 
@@ -151,54 +173,60 @@ void audio_tick(struct sound_controller *sc) {
     printf("debug: NR11: 0x%02X\n", sc->NR11);
     printf("debug: NR12: 0x%02X\n", sc->NR12);
     printf("debug: NR13: 0x%02X\n", sc->NR13);
-    printf("debug: NR14: 0x%02X\n", sc->NR14);
+    printf("debug: NR14: 0x%02X\n", sc->NR14);*/
 
     // iterate through all the playbacks and write a sample
-    uint16_t samples[1];
-    for (int s = 0; s < 1; s++) {
+    uint16_t samples[16];
+    for (int s = 0; s < 16; s++) {
       samples[s] = 0;
     }
     // TODO gate on audio on
-    for (int s = 0; s < 4; s++) {
+    for (int s = 0; s < 1; s++) {
       struct playback *pb = &sc->playing[s];
       if (!pb->sound || (!pb->sound->is_continuous && !(sc->NR52 & (1<<s))))
 	continue;
-      for (int i = 0; i < 1; i++) {
+      for (int i = 0; i < 16; i++) {
 	samples[i] += pb->sound->samples[pb->current_sample++];
-	if (pb->sound->is_continuous) {
-	  pb->current_sample %= pb->sound->length;
-	}
 	if (pb->current_sample == pb->sound->length) {
-	  sc->NR52 &= ~(1<<s); // done, turn the sound off
+	  if (pb->sound->is_continuous) {
+	    pb->current_sample %= pb->sound->length;
+	  } else {
+	    sc->NR52 &= ~(1<<s); // done, turn the sound off
+	    break;
+	  }
 	}
       }
     }
     int error;
-    printf("debug: sample: %d\n", samples[0]);
-    pa_simple_write(s, samples, 1*sizeof(uint16_t), &error);
+    //printf("debug: sample: %d\n", samples[0]);
+    pa_simple_write(s, samples, 16*sizeof(uint16_t), &error);
     if (error) {
       printf("debug: error code: %d\n", error);
       printf("debug: error str: %s\n", pa_strerror(error));
     }
-    sc->t_cycles -= 95;
+    sc->t_cycles -= 1500;
   }
-
 }
 
 void sc_write_NR10(struct sound_controller* sc, uint8_t byte) { sc->NR10 = byte; }
 void sc_write_NR11(struct sound_controller* sc, uint8_t byte) { sc->NR11 = byte; }
 void sc_write_NR12(struct sound_controller* sc, uint8_t byte) { sc->NR12 = byte; }
 void sc_write_NR13(struct sound_controller* sc, uint8_t byte) { sc->NR13 = byte; }
+
+static int DEBUG_no_new_sounds = 0;
+
 void sc_write_NR14(struct sound_controller* sc, uint8_t byte) {
   sc->NR14 = byte;
-  if (sc->NR14 & 0x80) { // initialize bit on
+  if (sc->NR14 & 0x80 && !DEBUG_no_new_sounds) { // initialize bit on
     struct sound * sound = create_sound_1(sc);
-    printf("debug: NR10: 0x%02X\n", sc->NR10);
+    /*printf("debug: NR10: 0x%02X\n", sc->NR10);
     printf("debug: NR11: 0x%02X\n", sc->NR11);
     printf("debug: NR12: 0x%02X\n", sc->NR12);
     printf("debug: NR13: 0x%02X\n", sc->NR13);
     printf("debug: NR14: 0x%02X\n", sc->NR14);
-    printf("debug: NR14 assign\n");
+    printf("debug: NR14 assign\n");*/
+
+    //DEBUG_no_new_sounds = 1;
 
     sc->playing[0] = (struct playback) {
       .current_sample = 0,

@@ -17,8 +17,8 @@ struct sound {
 };
 
 struct playback {
-  int current_sample;
   struct sound *sound;
+  int current_sample;
 };
 
 
