@@ -197,7 +197,7 @@ void audio_tick(struct sound_controller *sc) {
 	}
       }
     }
-    int error;
+    int error = 0;
     //printf("debug: sample: %d\n", samples[0]);
     pa_simple_write(s, samples, 16*sizeof(uint16_t), &error);
     if (error) {
