@@ -30,19 +30,90 @@ void init_audio() {
 }
 
 // TODO: specify for each sound type just the bits that define the wave
-static uint64_t sound_id(
-				  uint8_t r1,
-				  uint8_t r2,
-				  uint8_t r3,
-				  uint8_t r4,
-				  uint8_t r5) {
-  uint64_t uuid = r1;
-  uuid <<= 32;
-  uuid |= (r2 << 24) | (r3 << 16) | (r4 << 8) | r5;
-  return uuid;
+static int64_t sound_id(uint8_t r1,
+			uint8_t r2,
+			uint8_t r3,
+			uint8_t r4,
+			uint8_t r5) {
+  int64_t id = r1;
+  id <<= 32;
+  return (id | (r2 << 24) | (r3 << 16) | (r4 << 8) | r5);
 }
 
-static void wrap_envelope(uint16_t *samples,
+
+
+struct sound * get_cached_sound(uint64_t id) {
+  for (int i = 0; i < cache_length; i++) {
+    if (cache[i].id == id) {
+      return &cache[i];
+    }
+  }
+  printf("debug: missed cached sound with id: %ldd\n", id);
+  return NULL;
+}
+
+static int generate_square_wave(int16_t **samples,
+				int frequency,
+				int8_t waveform_duty_cycle,
+				int8_t sweep_time,
+				int8_t sweep_shift,
+				int8_t is_sweep_decreasing,
+				int duration_micros) {
+
+  int sweep_time_samples = sweep_time ? (ss.rate * sweep_time / frequency) : 0;
+  int samples_per_wave = ss.rate / frequency;
+
+  int samples_length = ss.rate*duration_micros/1000000;
+  *samples = (int16_t*)malloc(samples_length*sizeof(int16_t));
+  int sweep_count = 0;
+  int s = 0;
+  while (s < samples_length) {
+    // each square wave can be split into 8 time slices of high/low
+    uint8_t is_high = 0;
+    int samples_per_wave_slice = samples_per_wave / 8;
+    int current_wave_slice = (s * 8 / samples_per_wave) % 8;
+    switch (waveform_duty_cycle) {
+    case 0: // 12.5%
+      is_high = current_wave_slice == 1 ? 1 : 0;
+      break;
+    case 1: // 25%
+      is_high = current_wave_slice < 2 ? 1 : 0;
+      break;
+    case 2: // 50%
+      is_high = current_wave_slice < 4 ? 1 : 0;
+      break;
+    case 3: // 75 %
+      is_high = current_wave_slice >= 2 ? 1 : 0;
+      break;
+    }
+    for (int ts = 0; ts < samples_per_wave_slice && s < samples_length; ts++) {
+      (*samples)[s++] = is_high ? 0x444 : 0;
+    }
+
+    // handle sweep
+    if (sweep_time && (s / sweep_time_samples > sweep_count) && sweep_shift)  {
+      sweep_count++;
+      int diff = frequency >> (1 << sweep_shift);
+      if (is_sweep_decreasing) {
+	if (diff > 0) {
+	  frequency -= diff;
+	}
+      } else {
+	frequency += diff;
+      }
+      // TODO: check if the result frequency is greater than 11 bits and stop
+      //      printf("info: new freq: %d\n", freq);
+      if (frequency > (1 << 10)) {
+	printf("warn: should stop here @ freq: %d\n", frequency);
+      }
+      samples_per_wave = ss.rate / frequency; // redefine samples per wave
+    }
+  }
+
+  return samples_length;
+}
+
+static void wrap_envelope(int16_t *samples,
 			  int length,
 			  uint8_t value,
 			  uint8_t steps,
@@ -62,17 +133,47 @@ static void wrap_envelope(uint16_t *samples,
 }
 
 
-struct sound * get_cached_sound(uint64_t id) {
-  for (int i = 0; i < cache_length; i++) {
-    if (cache[i].id == id) {
-      return &cache[i];
-    }
+static struct sound * create_sound_1(struct sound_controller *sc) {
+  int64_t id = sound_id(sc->NR10,sc->NR11,sc->NR12,sc->NR13,sc->NR14);
+  struct sound * cached;
+  if ((cached = get_cached_sound(id))) {
+    return cached;
   }
-  printf("debug: missed cached sound with id: %ldd\n", id);
-  return NULL;
+
+  int16_t *samples = NULL;
+
+  int freq_X = ((sc->NR14 & 7) << 8) + sc->NR13;
+  int freq = (4194304 >> 5) / (2048 - freq_X);
+
+  int samples_length = generate_square_wave(&samples,
+					    freq,
+					    sc->NR11 >> 6,
+					    (sc->NR10 >> 4) & 7,
+					    sc->NR10 & 3,
+					    (sc->NR10 >> 3) & 1,
+					    (64-(sc->NR11 & 0x4F)) * 1000000 / 256);
+
+  // do a pass over the samples for the envelope
+  wrap_envelope(samples,
+		samples_length,
+		sc->NR12 >> 4,
+		sc->NR12 & 7,
+		!(sc->NR12 & 8));
+
+
+  struct sound sound = {
+    .id = id,
+    .is_continuous = ((sc->NR14 & 0x40) == 0),
+    .samples = samples,
+    .length = samples_length,
+  };
+
+  cache[cache_length++] = sound;
+  return &cache[cache_length-1];
 }
 
-static struct sound * create_sound_1(struct sound_controller *sc) {
+
+static struct sound * OLD_create_sound_1(struct sound_controller *sc) {
   struct sound * cached;
   if ((cached = get_cached_sound(sound_id(sc->NR10,sc->NR11,sc->NR12,sc->NR13,sc->NR14)))) {
     return cached;
@@ -97,7 +198,7 @@ static struct sound * create_sound_1(struct sound_controller *sc) {
   int waveform_duty_cycle = sc->NR11 >> 6;
   int sweep_count = 0;
 
-  uint16_t *samples = malloc(samples_length*sizeof(uint16_t));
+  int16_t *samples = malloc(samples_length*sizeof(uint16_t));
   int s = 0;
   //  printf("info: samples_per_wave: %d, waveform_duty_cycle: %d\n", samples_per_wave, waveform_duty_cycle);
   while (s < samples_length) {

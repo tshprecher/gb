@@ -10,7 +10,7 @@ struct sound {
   uint8_t is_continuous;
 
   // points to the series of samples to output sound card
-  uint16_t *samples;
+  int16_t *samples;
 
   // number of samples in the series
   int length;
