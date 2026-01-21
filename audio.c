@@ -42,6 +42,26 @@ static uint64_t sound_id(
   return uuid;
 }
 
+static void wrap_envelope(uint16_t *samples,
+			  int length,
+			  uint8_t value,
+			  uint8_t steps,
+			  uint8_t is_decreasing) {
+
+  int samples_per_step = ss.rate / 64 * steps;
+
+  for (int s = 0; s < length; s++) {
+    if (s && samples_per_step && s % samples_per_step == 0) {
+      if (value > 0 && is_decreasing)
+	value--;
+      if (value < 15 && !is_decreasing)
+	value++;
+    }
+    samples[s] *= value;
+  }
+}
+
+
 struct sound * get_cached_sound(uint64_t id) {
   for (int i = 0; i < cache_length; i++) {
     if (cache[i].id == id) {
@@ -67,25 +87,24 @@ static struct sound * create_sound_1(struct sound_controller *sc) {
   int freq_X = ((sc->NR14 & 7) << 8) + sc->NR13;
   int freq = (4194304 >> 5) / (2048 - freq_X);
 
-  int sound_length_samples = (ss.rate * (64-(sc->NR11 & 0x4F))) >> 8;
+  int samples_length = (ss.rate * (64-(sc->NR11 & 0x4F))) >> 8;
   int sweep_time_samples = sweep_time_ts ? (ss.rate / freq) * sweep_time_ts : 0;
 
-
-  printf("info: ss.rate: %d, freq_X: %d, freq: %d, sweep_time_samples: %d, sound_length_samples: %d\n",
-	 ss.rate, freq_X, freq, sweep_time_samples, sound_length_samples);
+  /*printf("info: ss.rate: %d, freq_X: %d, freq: %d, sweep_time_samples: %d, sound_length_samples: %d\n",
+    ss.rate, freq_X, freq, sweep_time_samples, sound_length_samples);*/
 
   int samples_per_wave = ss.rate / freq;
   int waveform_duty_cycle = sc->NR11 >> 6;
   int sweep_count = 0;
 
-  uint16_t *data = malloc(sound_length_samples*sizeof(uint16_t));
-  int d = 0;
-  printf("info: samples_per_wave: %d, waveform_duty_cycle: %d\n", samples_per_wave, waveform_duty_cycle);
-  while (d < sound_length_samples) {
+  uint16_t *samples = malloc(samples_length*sizeof(uint16_t));
+  int s = 0;
+  //  printf("info: samples_per_wave: %d, waveform_duty_cycle: %d\n", samples_per_wave, waveform_duty_cycle);
+  while (s < samples_length) {
     // each square wave can be split into 8 time slices of high/low
     uint8_t is_high = 0;
     int samples_per_wave_slice = samples_per_wave / 8;
-    int current_wave_slice = (d * 8 / samples_per_wave) % 8;
+    int current_wave_slice = (s * 8 / samples_per_wave) % 8;
     switch (waveform_duty_cycle) {
     case 0: // 12.5%
       is_high = current_wave_slice == 1 ? 1 : 0;
@@ -100,12 +119,12 @@ static struct sound * create_sound_1(struct sound_controller *sc) {
       is_high = current_wave_slice >= 2 ? 1 : 0;
       break;
     }
-    for (int ts = 0; ts < samples_per_wave_slice && d < sound_length_samples; ts++) {
-      data[d++] = is_high ? 0x444 : 0;
+    for (int ts = 0; ts < samples_per_wave_slice && s < samples_length; ts++) {
+      samples[s++] = is_high ? 0x444 : 0;
     }
 
     // handle sweep
-    if (sweep_time_ts && (d / sweep_time_samples > sweep_count) && sweep_shift_num)  {
+    if (sweep_time_ts && (s / sweep_time_samples > sweep_count) && sweep_shift_num)  {
       sweep_count++;
       int diff = freq >> (1 << sweep_shift_num);
       if (is_sweep_decrease) {
@@ -124,37 +143,24 @@ static struct sound * create_sound_1(struct sound_controller *sc) {
     }
   }
 
+  wrap_envelope(samples,
+		samples_length,
+		sc->NR12 >> 4,
+		sc->NR12 & 7,
+		!(sc->NR12 & 8));
 
-  // possibly pass through the samples to implement the envelope
-  uint8_t env_steps = sc->NR12 & 7;
-  uint8_t env_value = sc->NR12 >> 4;
-  printf("debug: env_value factor: %d\n", env_value);
-  uint8_t is_env_decrease = !((sc->NR12 >> 3) & 1);
-  int env_steps_samples = ss.rate / 64 * env_steps;
-
-  d = 0;
-  while (d < sound_length_samples) {
-    if (d && env_steps_samples && d % env_steps_samples == 0) {
-      if (is_env_decrease && env_value > 0)
-	env_value--;
-      if (!is_env_decrease && env_value < 15)
-	env_value++;
-    }
-    //printf("debug: multiplying env_value factor: %d\n", env_value);
-    data[d++] *= env_value;
-  }
-
-  struct sound r = {
+  struct sound sound = {
     .id = sound_id(sc->NR10,
 		   sc->NR11,
 		   sc->NR12,
 		   sc->NR13,
 		   sc->NR14),
     .is_continuous = ((sc->NR14 & 0x40) == 0),
-    .samples = data,
-    .length = sound_length_samples,
+    .samples = samples,
+    .length = samples_length,
   };
-  cache[cache_length++] = r;
+
+  cache[cache_length++] = sound;
   return &cache[cache_length-1];
 }
 
