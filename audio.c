@@ -58,12 +58,13 @@ static int generate_square_wave(int16_t **samples,
 				int8_t sweep_time,
 				int8_t sweep_shift,
 				int8_t is_sweep_decreasing,
-				int duration_micros) {
+				int duration_ms) {
 
+  printf("debug: NEW waveform duty cycle: %d\n", waveform_duty_cycle);
   int sweep_time_samples = sweep_time ? (ss.rate * sweep_time / frequency) : 0;
   int samples_per_wave = ss.rate / frequency;
 
-  int samples_length = ss.rate*duration_micros/1000000;
+  int samples_length = ss.rate*duration_ms/1000;
   *samples = (int16_t*)malloc(samples_length*sizeof(int16_t));
   int sweep_count = 0;
   int s = 0;
@@ -151,7 +152,7 @@ static struct sound * create_sound_1(struct sound_controller *sc) {
 					    (sc->NR10 >> 4) & 7,
 					    sc->NR10 & 3,
 					    (sc->NR10 >> 3) & 1,
-					    (64-(sc->NR11 & 0x4F)) * 1000000 / 256);
+					    (64-(sc->NR11 & 0x4F)) * 1000 / 256);
 
   // do a pass over the samples for the envelope
   wrap_envelope(samples,
@@ -163,99 +164,6 @@ static struct sound * create_sound_1(struct sound_controller *sc) {
 
   struct sound sound = {
     .id = id,
-    .is_continuous = ((sc->NR14 & 0x40) == 0),
-    .samples = samples,
-    .length = samples_length,
-  };
-
-  cache[cache_length++] = sound;
-  return &cache[cache_length-1];
-}
-
-
-static struct sound * OLD_create_sound_1(struct sound_controller *sc) {
-  struct sound * cached;
-  if ((cached = get_cached_sound(sound_id(sc->NR10,sc->NR11,sc->NR12,sc->NR13,sc->NR14)))) {
-    return cached;
-  }
-
-  uint8_t sweep_shift_num = sc->NR10 & 3;
-  uint8_t is_sweep_decrease = (sc->NR10 >> 3) & 1;
-  uint8_t sweep_time_ts = (sc->NR10 >> 4) & 7;
-
-  printf("info: sweep_time_ts: %d, envelope reg: 0x%02X\n", sweep_time_ts, sc->NR12);
-
-  int freq_X = ((sc->NR14 & 7) << 8) + sc->NR13;
-  int freq = (4194304 >> 5) / (2048 - freq_X);
-
-  int samples_length = (ss.rate * (64-(sc->NR11 & 0x4F))) >> 8;
-  int sweep_time_samples = sweep_time_ts ? (ss.rate / freq) * sweep_time_ts : 0;
-
-  /*printf("info: ss.rate: %d, freq_X: %d, freq: %d, sweep_time_samples: %d, sound_length_samples: %d\n",
-    ss.rate, freq_X, freq, sweep_time_samples, sound_length_samples);*/
-
-  int samples_per_wave = ss.rate / freq;
-  int waveform_duty_cycle = sc->NR11 >> 6;
-  int sweep_count = 0;
-
-  int16_t *samples = malloc(samples_length*sizeof(uint16_t));
-  int s = 0;
-  //  printf("info: samples_per_wave: %d, waveform_duty_cycle: %d\n", samples_per_wave, waveform_duty_cycle);
-  while (s < samples_length) {
-    // each square wave can be split into 8 time slices of high/low
-    uint8_t is_high = 0;
-    int samples_per_wave_slice = samples_per_wave / 8;
-    int current_wave_slice = (s * 8 / samples_per_wave) % 8;
-    switch (waveform_duty_cycle) {
-    case 0: // 12.5%
-      is_high = current_wave_slice == 1 ? 1 : 0;
-      break;
-    case 1: // 25%
-      is_high = current_wave_slice < 2 ? 1 : 0;
-      break;
-    case 2: // 50%
-      is_high = current_wave_slice < 4 ? 1 : 0;
-      break;
-    case 3: // 75 %
-      is_high = current_wave_slice >= 2 ? 1 : 0;
-      break;
-    }
-    for (int ts = 0; ts < samples_per_wave_slice && s < samples_length; ts++) {
-      samples[s++] = is_high ? 0x444 : 0;
-    }
-
-    // handle sweep
-    if (sweep_time_ts && (s / sweep_time_samples > sweep_count) && sweep_shift_num)  {
-      sweep_count++;
-      int diff = freq >> (1 << sweep_shift_num);
-      if (is_sweep_decrease) {
-	if (diff > 0) {
-	  freq = freq - diff;
-	}
-      } else {
-	freq = freq + diff;
-      }
-      // TODO: check if the result frequency is greater than 11 bits and stop
-      printf("info: new freq: %d\n", freq);
-      if (freq > (1 << 10)) {
-	printf("warn: should stop here @ freq: %d\n", freq);
-      }
-      samples_per_wave = ss.rate / freq; // redefine samples per wave
-    }
-  }
-
-  wrap_envelope(samples,
-		samples_length,
-		sc->NR12 >> 4,
-		sc->NR12 & 7,
-		!(sc->NR12 & 8));
-
-  struct sound sound = {
-    .id = sound_id(sc->NR10,
-		   sc->NR11,
-		   sc->NR12,
-		   sc->NR13,
-		   sc->NR14),
     .is_continuous = ((sc->NR14 & 0x40) == 0),
     .samples = samples,
     .length = samples_length,
