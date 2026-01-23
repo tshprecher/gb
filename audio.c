@@ -13,19 +13,18 @@ static int cache_length = 0;
 
 void init_audio() {
   ss.format = PA_SAMPLE_S16NE;
-  ss.channels = 1;
+  ss.channels = 2;
   ss.rate = 44100;
-  int error = 0;
 
   s = pa_simple_new(NULL,               // Use the default server.
-		    "gsameboy",       // Our application's name.
+		    "gameboy",          // Our application's name.
 		    PA_STREAM_PLAYBACK,
 		    NULL,               // Use the default device.
-		    "test",          // Description of our stream.
+		    "test",             // Description of our stream.
 		    &ss,                // Our sample format.
 		    NULL,               // Use default channel map
 		    NULL,               // Use default buffering attributes.
-		    &error
+		    NULL
 		    );
 }
 
@@ -88,7 +87,7 @@ static int generate_square_wave(int16_t **samples,
       break;
     }
     for (int ts = 0; ts < samples_per_wave_slice && s < samples_length; ts++) {
-      (*samples)[s++] = is_high ? 0x444 : 0;
+      (*samples)[s++] = is_high ? 0x9C : 0;
     }
 
     // handle sweep
@@ -219,18 +218,30 @@ void audio_tick(struct sound_controller *sc) {
   // TODO: consider bundling more than one sample at a time
   while (sc->t_cycles >= 1500) { // TODO: compute this on init
     // iterate through all the playbacks and write a sample
-    uint16_t samples[16];
-    for (int s = 0; s < 16; s++) {
+    int16_t samples[32];
+    for (int s = 0; s < 32; s++) {
       samples[s] = 0;
     }
+
+    // TODO: set to proper value
+    int8_t volume_stereo_1 = sc->NR50 & 7;
+    int8_t volume_stereo_2 = (sc->NR50 >> 4) & 7;
+
     // TODO gate on audio on
     for (int s = 0; s < 4; s++) {
       struct playback *pb = &sc->playing[s];
       if (!pb->sound || (!pb->sound->is_continuous && !(sc->NR52 & (1<<s))))
 	continue;
-      printf("debug: adding sample of sound %d\n", s);
       for (int i = 0; i < 16; i++) {
-	samples[i] += pb->sound->samples[pb->current_sample++];
+	int sample = pb->sound->samples[pb->current_sample++];
+	int is_on_stereo_1 = sc->NR51 & (1 << s);
+	int is_on_stereo_2 = sc->NR51 & (1 << 4 << s);
+	if (is_on_stereo_1) {
+	  samples[i*2] += sample*volume_stereo_1;
+	}
+	if (is_on_stereo_2) {
+	  samples[i*2+1] += sample*volume_stereo_2;
+	}
 	if (pb->current_sample == pb->sound->length) {
 	  if (pb->sound->is_continuous) {
 	    pb->current_sample %= pb->sound->length;
@@ -242,8 +253,7 @@ void audio_tick(struct sound_controller *sc) {
       }
     }
     int error = 0;
-    //printf("debug: sample: %d\n", samples[0]);
-    pa_simple_write(s, samples, 16*sizeof(uint16_t), &error);
+    pa_simple_write(s, samples, 32*sizeof(int16_t), &error);
     if (error) {
       printf("debug: error code: %d\n", error);
       printf("debug: error str: %s\n", pa_strerror(error));
