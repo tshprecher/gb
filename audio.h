@@ -60,6 +60,11 @@ void sc_write_NR12(struct sound_controller*, uint8_t);
 void sc_write_NR13(struct sound_controller*, uint8_t);
 void sc_write_NR14(struct sound_controller*, uint8_t);
 
+void sc_write_NR21(struct sound_controller*, uint8_t);
+void sc_write_NR22(struct sound_controller*, uint8_t);
+void sc_write_NR23(struct sound_controller*, uint8_t);
+void sc_write_NR24(struct sound_controller*, uint8_t);
+
 void sc_write_NR50(struct sound_controller*, uint8_t);
 void sc_write_NR51(struct sound_controller*, uint8_t);
 void sc_write_NR52(struct sound_controller*, uint8_t);

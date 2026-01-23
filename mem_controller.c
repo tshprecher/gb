@@ -335,16 +335,16 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
       sc_write_NR14(mc->sc, byte);
       break;
     case 0xFF16:
-      mc->sc->NR21 = byte;
+      sc_write_NR21(mc->sc, byte);
       break;
     case 0xFF17:
-      mc->sc->NR22 = byte;
+      sc_write_NR22(mc->sc, byte);
       break;
     case 0xFF18:
-      mc->sc->NR23 = byte;
+      sc_write_NR23(mc->sc, byte);
       break;
     case 0xFF19:
-      mc->sc->NR24 = byte;
+      sc_write_NR24(mc->sc, byte);
       break;
     case 0xFF1A:
       mc->sc->NR30 = byte;

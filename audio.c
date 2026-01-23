@@ -141,11 +141,10 @@ static struct sound * create_sound_1(struct sound_controller *sc) {
     return cached;
   }
 
-  int16_t *samples = NULL;
-
   int freq_X = ((sc->NR14 & 7) << 8) + sc->NR13;
   int freq = (4194304 >> 5) / (2048 - freq_X);
 
+  int16_t *samples = NULL;
   int samples_length = generate_square_wave(&samples,
 					    freq,
 					    sc->NR11 >> 6,
@@ -173,6 +172,45 @@ static struct sound * create_sound_1(struct sound_controller *sc) {
   return &cache[cache_length-1];
 }
 
+// TODO: perhaps consolidate with sound1 given the similarities
+static struct sound * create_sound_2(struct sound_controller *sc) {
+  int64_t id = sound_id(sc->NR21,sc->NR22,sc->NR23,sc->NR24, 0);
+  struct sound * cached;
+  if ((cached = get_cached_sound(id))) {
+    return cached;
+  }
+
+  int freq_X = ((sc->NR24 & 7) << 8) + sc->NR23;
+  int freq = (4194304 >> 5) / (2048 - freq_X);
+
+  int16_t *samples = NULL;
+  int samples_length = generate_square_wave(&samples,
+					    freq,
+					    sc->NR21 >> 6,
+					    0, // sweep off
+					    0,
+					    0,
+					    (64-(sc->NR21 & 0x4F)) * 1000 / 256);
+
+  // do a pass over the samples for the envelope
+  wrap_envelope(samples,
+		samples_length,
+		sc->NR22 >> 4,
+		sc->NR22 & 7,
+		!(sc->NR22 & 8));
+
+
+  struct sound sound = {
+    .id = id,
+    .is_continuous = ((sc->NR24 & 0x40) == 0),
+    .samples = samples,
+    .length = samples_length,
+  };
+
+  cache[cache_length++] = sound;
+  return &cache[cache_length-1];
+}
+
 void audio_tick(struct sound_controller *sc) {
   if (!(sc->NR52 & 0x80))
     return;
@@ -180,26 +218,17 @@ void audio_tick(struct sound_controller *sc) {
   sc->t_cycles++;
   // TODO: consider bundling more than one sample at a time
   while (sc->t_cycles >= 1500) { // TODO: compute this on init
-    /*printf("debug: NR50: 0x%02X\n", sc->NR50);
-    printf("debug: NR51: 0x%02X\n", sc->NR51);
-    printf("debug: NR52: 0x%02X\n", sc->NR52);
-
-    printf("debug: NR10: 0x%02X\n", sc->NR10);
-    printf("debug: NR11: 0x%02X\n", sc->NR11);
-    printf("debug: NR12: 0x%02X\n", sc->NR12);
-    printf("debug: NR13: 0x%02X\n", sc->NR13);
-    printf("debug: NR14: 0x%02X\n", sc->NR14);*/
-
     // iterate through all the playbacks and write a sample
     uint16_t samples[16];
     for (int s = 0; s < 16; s++) {
       samples[s] = 0;
     }
     // TODO gate on audio on
-    for (int s = 0; s < 1; s++) {
+    for (int s = 0; s < 4; s++) {
       struct playback *pb = &sc->playing[s];
       if (!pb->sound || (!pb->sound->is_continuous && !(sc->NR52 & (1<<s))))
 	continue;
+      printf("debug: adding sample of sound %d\n", s);
       for (int i = 0; i < 16; i++) {
 	samples[i] += pb->sound->samples[pb->current_sample++];
 	if (pb->current_sample == pb->sound->length) {
@@ -227,23 +256,27 @@ void sc_write_NR10(struct sound_controller* sc, uint8_t byte) { sc->NR10 = byte;
 void sc_write_NR11(struct sound_controller* sc, uint8_t byte) { sc->NR11 = byte; }
 void sc_write_NR12(struct sound_controller* sc, uint8_t byte) { sc->NR12 = byte; }
 void sc_write_NR13(struct sound_controller* sc, uint8_t byte) { sc->NR13 = byte; }
-
-static int DEBUG_no_new_sounds = 0;
-
 void sc_write_NR14(struct sound_controller* sc, uint8_t byte) {
   sc->NR14 = byte;
-  if (sc->NR14 & 0x80 && !DEBUG_no_new_sounds) { // initialize bit on
+  if (sc->NR14 & 0x80) { // initialize bit on
     struct sound * sound = create_sound_1(sc);
-    /*printf("debug: NR10: 0x%02X\n", sc->NR10);
-    printf("debug: NR11: 0x%02X\n", sc->NR11);
-    printf("debug: NR12: 0x%02X\n", sc->NR12);
-    printf("debug: NR13: 0x%02X\n", sc->NR13);
-    printf("debug: NR14: 0x%02X\n", sc->NR14);
-    printf("debug: NR14 assign\n");*/
-
-    //DEBUG_no_new_sounds = 1;
-
+    printf("debug: creating sound 1\n");
     sc->playing[0] = (struct playback) {
+      .current_sample = 0,
+      .sound = sound,
+    };
+  }
+}
+
+void sc_write_NR21(struct sound_controller* sc, uint8_t byte) { sc->NR21 = byte; }
+void sc_write_NR22(struct sound_controller* sc, uint8_t byte) { sc->NR22 = byte; }
+void sc_write_NR23(struct sound_controller* sc, uint8_t byte) { sc->NR23 = byte; }
+void sc_write_NR24(struct sound_controller* sc, uint8_t byte) {
+  sc->NR24 = byte;
+  if (sc->NR24 & 0x80) { // initialize bit on
+    printf("debug: creating sound 2\n");
+    struct sound * sound = create_sound_2(sc);
+    sc->playing[1] = (struct playback) {
       .current_sample = 0,
       .sound = sound,
     };
