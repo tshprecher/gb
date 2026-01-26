@@ -209,6 +209,8 @@ int main(int argc, char *argv[])
     cpu.mc = &mc;
     cpu.ic = &ic;
 
+    sc.mc = &mc;
+
     gb.cpu = &cpu;
     gb.mc = &mc;
     gb.lcd = &lcd;

@@ -2,6 +2,7 @@
 #define AUDIO_H
 
 #include <stdint.h>
+#include "mem_controller.h"
 
 struct sound {
   // unique id based on creation parameters
@@ -46,6 +47,8 @@ struct sound_controller {
     NR51,
     NR52;
 
+  struct mem_controller *mc;
+
   // at most four types of sounds playing concurrently
   struct playback playing[4];
   uint32_t t_cycles;
@@ -54,6 +57,8 @@ struct sound_controller {
 void init_audio();
 void audio_tick(struct sound_controller*);
 
+// TODO: I hate these write functions, maybe one of the worse
+// things i've ever done in software, even for an alpha version
 void sc_write_NR10(struct sound_controller*, uint8_t);
 void sc_write_NR11(struct sound_controller*, uint8_t);
 void sc_write_NR12(struct sound_controller*, uint8_t);
@@ -64,6 +69,12 @@ void sc_write_NR21(struct sound_controller*, uint8_t);
 void sc_write_NR22(struct sound_controller*, uint8_t);
 void sc_write_NR23(struct sound_controller*, uint8_t);
 void sc_write_NR24(struct sound_controller*, uint8_t);
+
+void sc_write_NR30(struct sound_controller*, uint8_t);
+void sc_write_NR31(struct sound_controller*, uint8_t);
+void sc_write_NR32(struct sound_controller*, uint8_t);
+void sc_write_NR33(struct sound_controller*, uint8_t);
+void sc_write_NR34(struct sound_controller*, uint8_t);
 
 void sc_write_NR50(struct sound_controller*, uint8_t);
 void sc_write_NR51(struct sound_controller*, uint8_t);

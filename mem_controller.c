@@ -347,19 +347,19 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
       sc_write_NR24(mc->sc, byte);
       break;
     case 0xFF1A:
-      mc->sc->NR30 = byte;
+      sc_write_NR30(mc->sc, byte);
       break;
     case 0xFF1B:
-      mc->sc->NR31 = byte;
+      sc_write_NR31(mc->sc, byte);
       break;
     case 0xFF1C:
-      mc->sc->NR32 = byte;
+      sc_write_NR32(mc->sc, byte);
       break;
     case 0xFF1D:
-      mc->sc->NR33 = byte;
+      sc_write_NR33(mc->sc, byte);
       break;
     case 0xFF1E:
-      mc->sc->NR34 = byte;
+      sc_write_NR34(mc->sc, byte);
       break;
     case 0xFF20:
       mc->sc->NR41 = byte;

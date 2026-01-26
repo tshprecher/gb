@@ -5,8 +5,17 @@
 #include <stdlib.h>
 #include "audio.h"
 
+#define SAMPLING_RATE 44100
+
 pa_simple *s;
 pa_sample_spec ss;
+
+// Do not cache sound3 samples, compute them on each create
+// and store the samples here. The sound cannot exceed 1 second,
+// so SAMPLING_RATE suffices for size.
+int16_t sound3_samples[SAMPLING_RATE];
+struct sound sound3 = {0};
+int8_t sound3_recompute = 0;
 
 static struct sound cache[256];
 static int cache_length = 0;
@@ -14,7 +23,7 @@ static int cache_length = 0;
 void init_audio() {
   ss.format = PA_SAMPLE_S16NE;
   ss.channels = 2;
-  ss.rate = 44100;
+  ss.rate = SAMPLING_RATE;
 
   s = pa_simple_new(NULL,               // Use the default server.
 		    "gameboy",          // Our application's name.
@@ -87,7 +96,7 @@ static int generate_square_wave(int16_t **samples,
       break;
     }
     for (int ts = 0; ts < samples_per_wave_slice && s < samples_length; ts++) {
-      (*samples)[s++] = is_high ? 0x9C : 0;
+      (*samples)[s++] = is_high ? 0xA5 : 0;
     }
 
     // handle sweep
@@ -140,6 +149,8 @@ static struct sound * create_sound_1(struct sound_controller *sc) {
     return cached;
   }
 
+  printf("debug: NEW sound1\n");
+
   int freq_X = ((sc->NR14 & 7) << 8) + sc->NR13;
   int freq = (4194304 >> 5) / (2048 - freq_X);
 
@@ -179,6 +190,8 @@ static struct sound * create_sound_2(struct sound_controller *sc) {
     return cached;
   }
 
+  printf("debug: NEW sound2\n");
+
   int freq_X = ((sc->NR24 & 7) << 8) + sc->NR23;
   int freq = (4194304 >> 5) / (2048 - freq_X);
 
@@ -210,6 +223,59 @@ static struct sound * create_sound_2(struct sound_controller *sc) {
   return &cache[cache_length-1];
 }
 
+static struct sound * create_sound_3(struct sound_controller *sc,
+				     uint8_t *waveform_def) {
+  int freq_X = ((sc->NR34 & 7) << 8) + sc->NR33;
+  int freq = (4194304 >> 5) / (2048 - freq_X);
+
+  int samples_per_wave = ss.rate / freq;
+  int samples_per_step = (samples_per_wave-1) / 31;
+  int samples_length = (256-(sc->NR31)) * ss.rate / 256;
+
+  printf("SOUND3: samples_length = %d\n", samples_length);
+
+  // create the first wave, then repeat it
+  printf("\n\nSOUND 3 >>> BEGIN\n");
+  printf("debug: samples_per_wave -> %d, samples_per_step -> %d\n", samples_per_wave, samples_per_step);
+  for (int step = 0; step < 31; step+=2) {
+    uint8_t byte = waveform_def[step/2];
+    printf("SOUND 3: byte -> 0x%02X\n", byte);
+    printf("SOUND 3: step %d -> 0x%02X, step %d -> 0x%02X\n", step, (byte >> 4) & 0x0F, step+1, byte & 0x0F);
+    sound3_samples[step * samples_per_step] = ((byte >> 4) & 0x0F) * 50; // TODO: tune this factor
+    sound3_samples[(step+1) * samples_per_step] = (byte & 0x0F) * 50;
+  }
+
+  // fill in the wave with a square function for now. TODO: make it linear interpolation
+  for (int step = 0; step < 32; step++) {
+    int16_t fill = sound3_samples[step*samples_per_step];
+    for (int s = step*samples_per_step; s < (step+1)*samples_per_step; s++) {
+      sound3_samples[s] = fill;
+    }
+  }
+  // fill the end
+  for (int s = 31*samples_per_step; s < samples_per_wave; s++) {
+    sound3_samples[s] = sound3_samples[31*samples_per_step];
+  }
+  // repeat for all samples
+  for (int s = samples_per_wave; s < samples_length; s++) {
+    sound3_samples[s] = sound3_samples[s%samples_per_wave];
+  }
+
+  for (int s = 0; s < samples_length; s++) {
+    printf("%d\t%d\n", s, sound3_samples[s]);
+  }
+  printf("SOUND 3 >>> END\n");
+
+  sound3 = (struct sound) {
+    .id = 0,
+    .is_continuous = (sc->NR34 & 0x40),
+    .samples = sound3_samples,
+    .length = samples_length
+  };
+
+  return &sound3;
+}
+
 void audio_tick(struct sound_controller *sc) {
   if (!(sc->NR52 & 0x80))
     return;
@@ -223,15 +289,24 @@ void audio_tick(struct sound_controller *sc) {
       samples[s] = 0;
     }
 
-    // TODO: set to proper value
     int8_t volume_stereo_1 = sc->NR50 & 7;
     int8_t volume_stereo_2 = (sc->NR50 >> 4) & 7;
 
     // TODO gate on audio on
     for (int s = 0; s < 4; s++) {
+      if (s!=2)
+      	continue;
       struct playback *pb = &sc->playing[s];
-      if (!pb->sound || (!pb->sound->is_continuous && !(sc->NR52 & (1<<s))))
+      if (!pb->sound)
 	continue;
+      if (s == 2 && !(sc->NR30 & 0x80))
+	continue;
+      printf("DEBUG: sound3 found: address: %d\n", pb->sound);
+      if (pb->sound)
+	printf("DEBUG: sound3 found: continuous -> %d, NR52 -> 0x%02X\n", pb->sound->is_continuous, sc->NR52);
+      if (!(sc->NR52 & 0x80) && (!pb->sound->is_continuous && !(sc->NR52 & (1<<s))))
+	continue;
+      printf("DEBUG: sound3 playing\n");
       for (int i = 0; i < 16; i++) {
 	int sample = pb->sound->samples[pb->current_sample++];
 	int is_on_stereo_1 = sc->NR51 & (1 << s);
@@ -270,7 +345,7 @@ void sc_write_NR14(struct sound_controller* sc, uint8_t byte) {
   sc->NR14 = byte;
   if (sc->NR14 & 0x80) { // initialize bit on
     struct sound * sound = create_sound_1(sc);
-    printf("debug: creating sound 1\n");
+    printf("debug: initializing sound 1\n");
     sc->playing[0] = (struct playback) {
       .current_sample = 0,
       .sound = sound,
@@ -284,13 +359,53 @@ void sc_write_NR23(struct sound_controller* sc, uint8_t byte) { sc->NR23 = byte;
 void sc_write_NR24(struct sound_controller* sc, uint8_t byte) {
   sc->NR24 = byte;
   if (sc->NR24 & 0x80) { // initialize bit on
-    printf("debug: creating sound 2\n");
+    printf("debug: initializing sound 2\n");
     struct sound * sound = create_sound_2(sc);
     sc->playing[1] = (struct playback) {
       .current_sample = 0,
       .sound = sound,
     };
   }
+}
+
+static void compute_sound3(struct sound_controller *sc) {
+  struct sound * sound = create_sound_3(sc, &sc->mc->ram[0xFF30]);
+  sc->playing[2] = (struct playback) {
+    .current_sample = 0,
+    .sound = sound,
+  };
+}
+
+void sc_write_NR30(struct sound_controller* sc, uint8_t byte) {
+  sc->NR30 = byte;
+  if (sc->NR30 & 0x80) {
+    sc->playing[2].current_sample = 0;
+  }
+}
+
+void sc_write_NR31(struct sound_controller* sc, uint8_t byte) {
+  sc->NR31 = byte;
+  //  compute_sound3(sc);
+}
+
+void sc_write_NR32(struct sound_controller* sc, uint8_t byte) {
+  sc->NR32 = byte;
+  //  compute_sound3(sc);
+}
+
+void sc_write_NR33(struct sound_controller* sc, uint8_t byte) {
+  sc->NR33 = byte;
+  //  compute_sound3(sc);
+}
+
+void sc_write_NR34(struct sound_controller* sc, uint8_t byte) {
+  sc->NR34 = byte;
+  compute_sound3(sc);
+  /*
+    if (sc->NR34 & 0x80) { // initialize bit on
+    printf("debug: initializing sound 3\n");
+     compute_sound3(sc);
+  }*/
 }
 
 void sc_write_NR50(struct sound_controller* sc, uint8_t byte) { sc->NR50 = byte; }
