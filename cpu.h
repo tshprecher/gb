@@ -30,7 +30,7 @@ void interrupt(struct interrupt_controller *, enum Interrupt);
 
 
 struct timing_controller {
-  uint16_t div_t_cycles;
+  uint32_t div_t_cycles;
 
   // timer registers
   uint8_t TIMA, TMA, TAC;

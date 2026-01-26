@@ -240,9 +240,9 @@ static struct sound * create_sound_3(struct sound_controller *sc,
   for (int step = 0; step < 31; step+=2) {
     uint8_t byte = waveform_def[step/2];
     printf("SOUND 3: byte -> 0x%02X\n", byte);
-    printf("SOUND 3: step %d -> 0x%02X, step %d -> 0x%02X\n", step, (byte >> 4) & 0x0F, step+1, byte & 0x0F);
+    printf("%d\t%d\n%d\t%d\n", step, (byte >> 4) & 0x0F, step+1, byte & 0x0F);
     sound3_samples[step * samples_per_step] = ((byte >> 4) & 0x0F) * 50; // TODO: tune this factor
-    sound3_samples[(step+1) * samples_per_step] = (byte & 0x0F) * 50;
+    sound3_samples[(step+1) * samples_per_step] = (byte & 0x0F) * 10;
   }
 
   // fill in the wave with a square function for now. TODO: make it linear interpolation
@@ -256,6 +256,7 @@ static struct sound * create_sound_3(struct sound_controller *sc,
   for (int s = 31*samples_per_step; s < samples_per_wave; s++) {
     sound3_samples[s] = sound3_samples[31*samples_per_step];
   }
+
   // repeat for all samples
   for (int s = samples_per_wave; s < samples_length; s++) {
     sound3_samples[s] = sound3_samples[s%samples_per_wave];
@@ -385,27 +386,28 @@ void sc_write_NR30(struct sound_controller* sc, uint8_t byte) {
 
 void sc_write_NR31(struct sound_controller* sc, uint8_t byte) {
   sc->NR31 = byte;
-  //  compute_sound3(sc);
+  compute_sound3(sc);
 }
 
 void sc_write_NR32(struct sound_controller* sc, uint8_t byte) {
   sc->NR32 = byte;
-  //  compute_sound3(sc);
+  compute_sound3(sc);
 }
 
 void sc_write_NR33(struct sound_controller* sc, uint8_t byte) {
   sc->NR33 = byte;
-  //  compute_sound3(sc);
+  compute_sound3(sc);
 }
+
+int DEBUG_sound3_exists = 0;
 
 void sc_write_NR34(struct sound_controller* sc, uint8_t byte) {
   sc->NR34 = byte;
-  compute_sound3(sc);
-  /*
-    if (sc->NR34 & 0x80) { // initialize bit on
+  if (sc->NR34 & 0x80 && DEBUG_sound3_exists < 1) { // initialize bit on
     printf("debug: initializing sound 3\n");
-     compute_sound3(sc);
-  }*/
+    compute_sound3(sc);
+    DEBUG_sound3_exists++;
+  }
 }
 
 void sc_write_NR50(struct sound_controller* sc, uint8_t byte) { sc->NR50 = byte; }

@@ -155,7 +155,8 @@ uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
     printf("DEBUG: reading timer register @ 0x%04X\n", addr);
     switch (addr - 0xFF04) {
     case 0:
-      return (uint8_t) ((mc->tc->div_t_cycles >> 8) & 0xFF);
+      printf("DEBUG: read DIV -> 0x%02X\n", (uint8_t) ((mc->tc->div_t_cycles >> 9) & 0xFF));
+      return (uint8_t) ((mc->tc->div_t_cycles >> 9) & 0xFF);
     case 1:
       return mc->tc->TIMA;
     case 2:
