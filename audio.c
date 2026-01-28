@@ -10,15 +10,18 @@
 pa_simple *s;
 pa_sample_spec ss;
 
+static struct sound cache[256];
+static int cache_length = 0;
+
+
 // Do not cache sound3 samples, compute them on each create
 // and store the samples here. The sound cannot exceed 1 second,
 // so SAMPLING_RATE suffices for size.
-int16_t sound3_samples[SAMPLING_RATE];
-struct sound sound3 = {0};
-int8_t sound3_recompute = 0;
-
-static struct sound cache[256];
-static int cache_length = 0;
+int16_t sound3_wave[32];
+int sound3_wave_length;
+int sound3_sample_index;
+float sound3_samples_per_step;
+int sound3_length;
 
 void init_audio() {
   ss.format = PA_SAMPLE_S16NE;
@@ -47,7 +50,6 @@ static int64_t sound_id(uint8_t r1,
   id <<= 32;
   return (id | (r2 << 24) | (r3 << 16) | (r4 << 8) | r5);
 }
-
 
 
 struct sound * get_cached_sound(uint64_t id) {
@@ -223,58 +225,14 @@ static struct sound * create_sound_2(struct sound_controller *sc) {
   return &cache[cache_length-1];
 }
 
-static struct sound * create_sound_3(struct sound_controller *sc,
-				     uint8_t *waveform_def) {
-  int freq_X = ((sc->NR34 & 7) << 8) + sc->NR33;
-  int freq = (4194304 >> 5) / (2048 - freq_X);
-
-  int samples_per_wave = ss.rate / freq;
-  int samples_per_step = (samples_per_wave-1) / 31;
-  int samples_length = (256-(sc->NR31)) * ss.rate / 256;
-
-  printf("SOUND3: samples_length = %d\n", samples_length);
-
-  // create the first wave, then repeat it
-  printf("\n\nSOUND 3 >>> BEGIN\n");
-  printf("debug: samples_per_wave -> %d, samples_per_step -> %d\n", samples_per_wave, samples_per_step);
-  for (int step = 0; step < 31; step+=2) {
-    uint8_t byte = waveform_def[step/2];
-    printf("SOUND 3: byte -> 0x%02X\n", byte);
-    printf("%d\t%d\n%d\t%d\n", step, (byte >> 4) & 0x0F, step+1, byte & 0x0F);
-    sound3_samples[step * samples_per_step] = ((byte >> 4) & 0x0F) * 50; // TODO: tune this factor
-    sound3_samples[(step+1) * samples_per_step] = (byte & 0x0F) * 10;
+void get_sound3_samples(int16_t *buf, int count) {
+  // TODO: do linear interpolation?
+  for (int b = 0; b < count; b++) {
+    int current_step = sound3_sample_index / sound3_samples_per_step;
+    buf[b] = sound3_wave[current_step]*200;
+    sound3_sample_index++;
+    sound3_sample_index %= sound3_wave_length;
   }
-
-  // fill in the wave with a square function for now. TODO: make it linear interpolation
-  for (int step = 0; step < 32; step++) {
-    int16_t fill = sound3_samples[step*samples_per_step];
-    for (int s = step*samples_per_step; s < (step+1)*samples_per_step; s++) {
-      sound3_samples[s] = fill;
-    }
-  }
-  // fill the end
-  for (int s = 31*samples_per_step; s < samples_per_wave; s++) {
-    sound3_samples[s] = sound3_samples[31*samples_per_step];
-  }
-
-  // repeat for all samples
-  for (int s = samples_per_wave; s < samples_length; s++) {
-    sound3_samples[s] = sound3_samples[s%samples_per_wave];
-  }
-
-  for (int s = 0; s < samples_length; s++) {
-    printf("%d\t%d\n", s, sound3_samples[s]);
-  }
-  printf("SOUND 3 >>> END\n");
-
-  sound3 = (struct sound) {
-    .id = 0,
-    .is_continuous = (sc->NR34 & 0x40),
-    .samples = sound3_samples,
-    .length = samples_length
-  };
-
-  return &sound3;
 }
 
 void audio_tick(struct sound_controller *sc) {
@@ -294,28 +252,21 @@ void audio_tick(struct sound_controller *sc) {
     int8_t volume_stereo_2 = (sc->NR50 >> 4) & 7;
 
     // TODO gate on audio on
-    for (int s = 0; s < 4; s++) {
-      if (s!=2)
-      	continue;
+    for (int s = 0; s < 3; s++) {
       struct playback *pb = &sc->playing[s];
-      if (!pb->sound)
+      if (!pb->sound || (!pb->sound->is_continuous && !(sc->NR52 & (1<<s))))
 	continue;
-      if (s == 2 && !(sc->NR30 & 0x80))
-	continue;
-      printf("DEBUG: sound3 found: address: %d\n", pb->sound);
-      if (pb->sound)
-	printf("DEBUG: sound3 found: continuous -> %d, NR52 -> 0x%02X\n", pb->sound->is_continuous, sc->NR52);
-      if (!(sc->NR52 & 0x80) && (!pb->sound->is_continuous && !(sc->NR52 & (1<<s))))
-	continue;
-      printf("DEBUG: sound3 playing\n");
       for (int i = 0; i < 16; i++) {
 	int sample = pb->sound->samples[pb->current_sample++];
+	printf("debug: inside A\n");
 	int is_on_stereo_1 = sc->NR51 & (1 << s);
 	int is_on_stereo_2 = sc->NR51 & (1 << 4 << s);
 	if (is_on_stereo_1) {
+	  printf("debug: inside B\n");
 	  samples[i*2] += sample*volume_stereo_1;
 	}
 	if (is_on_stereo_2) {
+	  printf("debug: inside C\n");
 	  samples[i*2+1] += sample*volume_stereo_2;
 	}
 	if (pb->current_sample == pb->sound->length) {
@@ -369,14 +320,6 @@ void sc_write_NR24(struct sound_controller* sc, uint8_t byte) {
   }
 }
 
-static void compute_sound3(struct sound_controller *sc) {
-  struct sound * sound = create_sound_3(sc, &sc->mc->ram[0xFF30]);
-  sc->playing[2] = (struct playback) {
-    .current_sample = 0,
-    .sound = sound,
-  };
-}
-
 void sc_write_NR30(struct sound_controller* sc, uint8_t byte) {
   sc->NR30 = byte;
   if (sc->NR30 & 0x80) {
@@ -386,27 +329,50 @@ void sc_write_NR30(struct sound_controller* sc, uint8_t byte) {
 
 void sc_write_NR31(struct sound_controller* sc, uint8_t byte) {
   sc->NR31 = byte;
-  compute_sound3(sc);
+  printf("debug: SOUND 3 length reg -> %d\n", byte);
 }
 
 void sc_write_NR32(struct sound_controller* sc, uint8_t byte) {
   sc->NR32 = byte;
-  compute_sound3(sc);
 }
 
 void sc_write_NR33(struct sound_controller* sc, uint8_t byte) {
   sc->NR33 = byte;
-  compute_sound3(sc);
-}
+  int freq_X = ((sc->NR34 & 7) << 8) + sc->NR33;
+  int freq = (4194304 >> 5) / (2048 - freq_X);
 
-int DEBUG_sound3_exists = 0;
+  sound3_wave_length = ss.rate / freq;
+  printf("debug: A SOUND 3 sound3_wave_length -> %d, freq -> %d\n", sound3_wave_length, freq);
+  sound3_samples_per_step = sound3_wave_length / 32;
+  sound3_sample_index = 0;
+}
 
 void sc_write_NR34(struct sound_controller* sc, uint8_t byte) {
   sc->NR34 = byte;
-  if (sc->NR34 & 0x80 && DEBUG_sound3_exists < 1) { // initialize bit on
-    printf("debug: initializing sound 3\n");
-    compute_sound3(sc);
-    DEBUG_sound3_exists++;
+
+  int freq_X = ((sc->NR34 & 7) << 8) + sc->NR33;
+  int freq = (4194304 >> 5) / (2048 - freq_X);
+
+  sound3_wave_length = ss.rate / freq;
+  printf("debug: B SOUND 3 sound3_wave_length -> %d, freq -> %d, is_counter -> %d\n", sound3_wave_length, freq, byte & (1<< 6));
+  sound3_samples_per_step = (float)sound3_wave_length / 32;
+  sound3_sample_index = 0;
+
+  if (sc->NR34 & 0x80) { // initialize bit on
+    printf("debug: SOUND 3 initializing sound 3\n");
+    // set the waveform
+    uint8_t *wave = &sc->mc->ram[0xFF30];
+    for (int step = 0; step < 31; step+=2) {
+      uint8_t byte = wave[step/2];
+      printf("SOUND 3: byte -> 0x%02X\n", byte);
+      sound3_wave[step] = (byte >> 4) & 0x0F;
+      sound3_wave[step+1] = byte & 0x0F;
+    }
+
+    // DEBUG: print the waveform
+    for (int step = 0; step < 32; step++) {
+      printf("%d\t%d\n", step, sound3_wave[step]);
+    }
   }
 }
 
