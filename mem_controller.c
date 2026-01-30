@@ -5,6 +5,14 @@
 #include "lcd.h"
 #include "audio.h"
 
+enum sound_reg map_index_to_sound_reg[] = {
+  rNR10, rNR11, rNR12, rNR13, rNR14,
+  rNR21, rNR22, rNR23, rNR24,
+  rNR30, rNR31, rNR32, rNR33, rNR34,
+  rNR41, rNR42, rNR43, rNR44,
+  rNR50, rNR51, rNR52
+};
+
 // TODO: handle interrupt
 void port_tick(struct port_controller *pc) {
   if (pc->t_cycles_to_read)
@@ -152,10 +160,10 @@ uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
     port_read_P1(mc->pc, &ports);
     return ports;
   } else if (addr >= 0xFF04 && addr <= 0xFF07) {
-    printf("DEBUG: reading timer register @ 0x%04X\n", addr);
+    //    printf("DEBUG: reading timer register @ 0x%04X\n", addr);
     switch (addr - 0xFF04) {
     case 0:
-      printf("DEBUG: read DIV -> 0x%02X\n", (uint8_t) ((mc->tc->div_t_cycles >> 9) & 0xFF));
+      //printf("DEBUG: read DIV -> 0x%02X\n", (uint8_t) ((mc->tc->div_t_cycles >> 9) & 0xFF));
       return (uint8_t) ((mc->tc->div_t_cycles >> 9) & 0xFF);
     case 1:
       return mc->tc->TIMA;
@@ -165,13 +173,13 @@ uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
       return mc->tc->TAC;
     };
   }else if (addr == 0xFF0F) {
-    printf("DEBUG: reading interrupt register IF\n");
+    //printf("DEBUG: reading interrupt register IF\n");
     return mc->ic->IF;
   } else if (addr == 0xFFFF) {
-    printf("DEBUG: reading interrupt register IE\n");
+    //printf("DEBUG: reading interrupt register IE\n");
     return mc->ic->IE;
   } else if (addr >= 0xFF40 && addr <= 0xFF4B) {
-    printf("DEBUG: reading lcd register @ 0x%04X\n", addr);
+    //printf("DEBUG: reading lcd register @ 0x%04X\n", addr);
     switch (addr-0xFF40) {
     case 0:
       return mc->lcd->LCDC;
@@ -200,51 +208,15 @@ uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
     };
   } else if (addr >= 0xFF10 && addr <= 0xFF26 &&
 	     addr != 0xFF15 && addr != 0xFF1F) {
-    printf("DEBUG: reading sound register @ 0x%04X\n", addr);
-    switch (addr) {
-    case 0xFF10:
-      return mc->sc->NR10;
-    case 0xFF11:
-      return mc->sc->NR11;
-    case 0xFF12:
-      return mc->sc->NR12;
-    case 0xFF13:
-      return mc->sc->NR13;
-    case 0xFF14:
-      return mc->sc->NR14;
-    case 0xFF16:
-      return mc->sc->NR21;
-    case 0xFF17:
-      return mc->sc->NR22;
-    case 0xFF18:
-      return mc->sc->NR23;
-    case 0xFF19:
-      return mc->sc->NR24;
-    case 0xFF1A:
-      return mc->sc->NR30;
-    case 0xFF1B:
-      return mc->sc->NR31;
-    case 0xFF1C:
-      return mc->sc->NR32;
-    case 0xFF1D:
-      return mc->sc->NR33;
-    case 0xFF1E:
-      return mc->sc->NR34;
-    case 0xFF20:
-      return mc->sc->NR41;
-    case 0xFF21:
-      return mc->sc->NR42;
-    case 0xFF22:
-      return mc->sc->NR43;
-    case 0xFF23:
-      return mc->sc->NR44;
-    case 0xFF24:
-      return mc->sc->NR50;
-    case 0xFF25:
-      return mc->sc->NR51;
-    case 0xFF26:
-      return mc->sc->NR52;
+    int reg_index = addr - 0xFF10;
+    if (addr > 0xFF15) { // first gap
+      reg_index--;
     }
+    if (addr > 0xFF1F) { // second gap
+      reg_index--;
+    }
+    //printf("DEBUG: reading sound register @ 0x%04X\n", addr);
+    return audio_read_reg(mc->sc,  map_index_to_sound_reg[reg_index]);
   }
   return mc->ram[addr];
 }
@@ -255,7 +227,7 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
   } else if (addr == 0xFF00) { // P1 register
     port_write_P1(mc->pc, byte);
   } else if (addr >= 0xFF04 && addr <= 0xFF07) {
-    printf("DEBUG: writing 0x%02X to timer register @ 0x%04X\n", byte, addr);
+    //printf("DEBUG: writing 0x%02X to timer register @ 0x%04X\n", byte, addr);
     switch (addr - 0xFF04) {
     case 0:
       // TODO: delegate to underlying controller is better
@@ -265,17 +237,17 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
     case 2:
       mc->tc->TMA = byte;
     case 3:
-      printf("DEBUG: writing TAC: 0x%02X\n", byte);
+      //printf("DEBUG: writing TAC: 0x%02X\n", byte);
       mc->tc->TAC = byte;
     };
   } else if (addr == 0xFF0F) {
-    printf("DEBUG: writing 0x%02X to interrupt register IF\n", byte);
+    //printf("DEBUG: writing 0x%02X to interrupt register IF\n", byte);
     mc->ic->IF = byte;
   } else if (addr == 0xFFFF) {
-    printf("DEBUG: writing 0x%02X to interrupt register IE\n", byte);
+    //printf("DEBUG: writing 0x%02X to interrupt register IE\n", byte);
     mc->ic->IE = byte;
   } else if (addr >= 0xFF40 && addr <= 0xFF4B) {
-    printf("DEBUG: writing 0x%02X to lcd register @ 0x%04X\n", byte, addr);
+    //printf("DEBUG: writing 0x%02X to lcd register @ 0x%04X\n", byte, addr);
     // TODO: handle the permissioning here so no improper writes occur
     switch (addr-0xFF40) {
     case 0:
@@ -297,7 +269,7 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
       for (int b = 0; b <= 0x9F; b++) {
 	mem_write(mc, 0xFE00 + b, mem_read(mc, (byte<<8)+b));
       }
-      printf("DEBUG: executed DMA transfer from 0x%02X00\n", byte);
+      //printf("DEBUG: executed DMA transfer from 0x%02X00\n", byte);
       mc->lcd->DMA = byte;
       break;
     case 7:
@@ -318,72 +290,15 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
     };
   } else if (addr >= 0xFF10 && addr <= 0xFF26 &&
 	     addr != 0xFF15 && addr != 0xFF1F) {
-    printf("DEBUG: writing 0x%02X to sound register 0x%04X\n", byte, addr);
-    switch (addr) {
-    case 0xFF10:
-      sc_write_NR10(mc->sc, byte);
-      break;
-    case 0xFF11:
-      sc_write_NR11(mc->sc, byte);
-      break;
-    case 0xFF12:
-      sc_write_NR12(mc->sc, byte);
-      break;
-    case 0xFF13:
-      sc_write_NR13(mc->sc, byte);
-      break;
-    case 0xFF14:
-      sc_write_NR14(mc->sc, byte);
-      break;
-    case 0xFF16:
-      sc_write_NR21(mc->sc, byte);
-      break;
-    case 0xFF17:
-      sc_write_NR22(mc->sc, byte);
-      break;
-    case 0xFF18:
-      sc_write_NR23(mc->sc, byte);
-      break;
-    case 0xFF19:
-      sc_write_NR24(mc->sc, byte);
-      break;
-    case 0xFF1A:
-      sc_write_NR30(mc->sc, byte);
-      break;
-    case 0xFF1B:
-      sc_write_NR31(mc->sc, byte);
-      break;
-    case 0xFF1C:
-      sc_write_NR32(mc->sc, byte);
-      break;
-    case 0xFF1D:
-      sc_write_NR33(mc->sc, byte);
-      break;
-    case 0xFF1E:
-      sc_write_NR34(mc->sc, byte);
-      break;
-    case 0xFF20:
-      mc->sc->NR41 = byte;
-      break;
-    case 0xFF21:
-      mc->sc->NR42 = byte;
-      break;
-    case 0xFF22:
-      mc->sc->NR43 = byte;
-      break;
-    case 0xFF23:
-      mc->sc->NR44 = byte;
-      break;
-    case 0xFF24:
-      mc->sc->NR50 = byte;
-      break;
-    case 0xFF25:
-      mc->sc->NR51 = byte;
-      break;
-    case 0xFF26:
-      mc->sc->NR52 = byte;
-      break;
+    int reg_index = addr - 0xFF10;
+    if (addr > 0xFF15) { // first gap
+      reg_index--;
     }
+    if (addr > 0xFF1F) { // second gap
+      reg_index--;
+    }
+    //printf("DEBUG: writing 0x%02X to sound register 0x%04X, reg_index -> %d\n", byte, addr, reg_index);
+    audio_write_reg(mc->sc,  map_index_to_sound_reg[reg_index], byte);
   } else {
     mc->ram[addr] = byte;
   }

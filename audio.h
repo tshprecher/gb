@@ -4,83 +4,46 @@
 #include <stdint.h>
 #include "mem_controller.h"
 
+enum sound_reg {
+  rNR10 = 0,  rNR11,  rNR12,  rNR13,  rNR14,
+  rNR21, rNR22, rNR23, rNR24,
+  rNR30, rNR31, rNR32, rNR33, rNR34,
+  rNR41, rNR42, rNR43, rNR44,
+  rNR50, rNR51, rNR52
+};
+
 struct sound {
-  // unique id based on creation parameters
-  uint64_t id;
+  uint8_t type; // [1,2,3,4]
 
-  uint8_t is_continuous;
-
-  // points to the series of samples to output sound card
-  int16_t *samples;
-
-  // number of samples in the series
-  int length;
-};
-
-struct playback {
-  struct sound *sound;
+  // common fields
   int current_sample;
-};
+  int duration_samples;
+  uint8_t is_continuous;
+  int frequency;
 
+  // sound 1
+  int samples_per_wave;
+  int8_t waveform_duty_cycle;
+  int8_t sweep_time_samples;
+  int8_t sweep_shift;
+  int8_t is_sweep_decreasing;
+};
 
 struct sound_controller {
   // registers
-  uint8_t NR10,
-    NR11,
-    NR12,
-    NR13,
-    NR14,
-    NR21,
-    NR22,
-    NR23,
-    NR24,
-    NR30,
-    NR31,
-    NR32,
-    NR33,
-    NR34,
-    NR41,
-    NR42,
-    NR43,
-    NR44,
-    NR50,
-    NR51,
-    NR52;
+  uint8_t regs[21];
 
   struct mem_controller *mc;
 
   // at most four types of sounds playing concurrently
-  struct playback playing[4];
+  struct sound sounds[4];
   uint32_t t_cycles;
 };
 
 void init_audio();
 void audio_tick(struct sound_controller*);
-
-// TODO: I hate these write functions, maybe one of the worse
-// things i've ever done in software, even for an alpha version
-void sc_write_NR10(struct sound_controller*, uint8_t);
-void sc_write_NR11(struct sound_controller*, uint8_t);
-void sc_write_NR12(struct sound_controller*, uint8_t);
-void sc_write_NR13(struct sound_controller*, uint8_t);
-void sc_write_NR14(struct sound_controller*, uint8_t);
-
-void sc_write_NR21(struct sound_controller*, uint8_t);
-void sc_write_NR22(struct sound_controller*, uint8_t);
-void sc_write_NR23(struct sound_controller*, uint8_t);
-void sc_write_NR24(struct sound_controller*, uint8_t);
-
-void sc_write_NR30(struct sound_controller*, uint8_t);
-void sc_write_NR31(struct sound_controller*, uint8_t);
-void sc_write_NR32(struct sound_controller*, uint8_t);
-void sc_write_NR33(struct sound_controller*, uint8_t);
-void sc_write_NR34(struct sound_controller*, uint8_t);
-
-void sc_write_NR50(struct sound_controller*, uint8_t);
-void sc_write_NR51(struct sound_controller*, uint8_t);
-void sc_write_NR52(struct sound_controller*, uint8_t);
-
-
+void audio_write_reg(struct sound_controller*, enum sound_reg, uint8_t);
+uint8_t audio_read_reg(struct sound_controller*, enum sound_reg);
 
 
 #endif

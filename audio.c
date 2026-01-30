@@ -10,19 +10,6 @@
 pa_simple *s;
 pa_sample_spec ss;
 
-static struct sound cache[256];
-static int cache_length = 0;
-
-
-// Do not cache sound3 samples, compute them on each create
-// and store the samples here. The sound cannot exceed 1 second,
-// so SAMPLING_RATE suffices for size.
-int16_t sound3_wave[32];
-int sound3_wave_length;
-int sound3_sample_index;
-float sound3_samples_per_step;
-int sound3_length;
-
 void init_audio() {
   ss.format = PA_SAMPLE_S16NE;
   ss.channels = 2;
@@ -40,28 +27,56 @@ void init_audio() {
 		    );
 }
 
-// TODO: specify for each sound type just the bits that define the wave
-static int64_t sound_id(uint8_t r1,
-			uint8_t r2,
-			uint8_t r3,
-			uint8_t r4,
-			uint8_t r5) {
-  int64_t id = r1;
-  id <<= 32;
-  return (id | (r2 << 24) | (r3 << 16) | (r4 << 8) | r5);
+static int initialize_on(uint8_t r) {
+  return (r & 0x80) > 0;
 }
 
-
-struct sound * get_cached_sound(uint64_t id) {
-  for (int i = 0; i < cache_length; i++) {
-    if (cache[i].id == id) {
-      return &cache[i];
-    }
-  }
-  printf("debug: missed cached sound with id: %ldd\n", id);
-  return NULL;
+static inline int stereo_vol_left(struct sound_controller *sc) {
+  return sc->regs[rNR50] & 7;
 }
 
+static inline int stereo_vol_right(struct sound_controller *sc) {
+  return (sc->regs[rNR50] >> 4) & 7;
+}
+
+static inline int is_on_stereo_left(struct sound_controller *sc,
+				    uint8_t sound_type) {
+  return sc->regs[rNR51] & (1 << (sound_type-1));
+}
+
+static inline int is_on_stereo_right(struct sound_controller *sc,
+				     uint8_t sound_type) {
+  return (sc->regs[rNR51] & (1 << (sound_type+3)));
+}
+
+static inline int is_all_enabled(struct sound_controller *sc) {
+  return (sc->regs[rNR52] & 0x80) > 0;
+}
+
+static inline int is_all_disabled(struct sound_controller *sc) {
+  return !is_all_enabled(sc);
+}
+
+static inline int is_sound_type_enabled(struct sound_controller *sc,
+					uint8_t sound_type) {
+  return (sc->regs[rNR52] & (1 << (sound_type-1))) > 0;
+}
+
+static inline int is_completed(struct sound *sound) {
+  printf("debug: SOUND is_completed: is_continuous: %d, current sample: %d, duration_samples: %d\n",
+	 sound->is_continuous,
+	 sound->current_sample,
+	 sound->duration_samples);
+  return (!sound->is_continuous &&
+	  sound->current_sample == sound->duration_samples);
+}
+
+static inline int calculate_frequency(uint8_t freq_high, uint8_t freq_low) {
+  int freq_X = ((freq_high & 7) << 8) + freq_low;
+  return (4194304 >> 5) / (2048 - freq_X);
+}
+
+/*
 static int generate_square_wave(int16_t **samples,
 				int frequency,
 				int8_t waveform_duty_cycle,
@@ -145,14 +160,6 @@ static void wrap_envelope(int16_t *samples,
 
 
 static struct sound * create_sound_1(struct sound_controller *sc) {
-  int64_t id = sound_id(sc->NR10,sc->NR11,sc->NR12,sc->NR13,sc->NR14);
-  struct sound * cached;
-  if ((cached = get_cached_sound(id))) {
-    return cached;
-  }
-
-  printf("debug: NEW sound1\n");
-
   int freq_X = ((sc->NR14 & 7) << 8) + sc->NR13;
   int freq = (4194304 >> 5) / (2048 - freq_X);
 
@@ -183,104 +190,94 @@ static struct sound * create_sound_1(struct sound_controller *sc) {
   cache[cache_length++] = sound;
   return &cache[cache_length-1];
 }
+*/
 
-// TODO: perhaps consolidate with sound1 given the similarities
-static struct sound * create_sound_2(struct sound_controller *sc) {
-  int64_t id = sound_id(sc->NR21,sc->NR22,sc->NR23,sc->NR24, 0);
-  struct sound * cached;
-  if ((cached = get_cached_sound(id))) {
-    return cached;
+static int sound1_generate_samples(struct sound *sound, int16_t *buf, int len) {
+  printf("debug: SOUND inside sound1_generate_samples()\n");
+
+  // each square wave can be split into 8 time slices of high/low
+  float samples_per_wave_slice = (float)sound->samples_per_wave / 8;
+  int s = 0;
+  while (s < len && !is_completed(sound)) {
+    uint8_t is_high = 0;
+
+    // where in the waveslice are we?
+    int current_wave_position = sound->current_sample % sound->samples_per_wave;
+    switch (sound->waveform_duty_cycle) {
+    case 0: // 12.5%
+      is_high = current_wave_position >= samples_per_wave_slice &&
+	current_wave_position < 2*samples_per_wave_slice ? 1 : 0;
+      break;
+    case 1: // 25%
+      is_high = current_wave_position < 2 * samples_per_wave_slice ? 1 : 0;
+      break;
+    case 2: // 50%
+      is_high = current_wave_position < 4 * samples_per_wave_slice ? 1 : 0;
+      break;
+    case 3: // 75 %
+      is_high = current_wave_position >= 2 * samples_per_wave_slice ? 1 : 0;
+      break;
+    }
+    buf[s++] = is_high ? 0xA5 : 0;
+    sound->current_sample++;
+    if (sound->is_continuous && sound->current_sample > sound->duration_samples) {
+      sound->current_sample = 0;
+    }
   }
-
-  printf("debug: NEW sound2\n");
-
-  int freq_X = ((sc->NR24 & 7) << 8) + sc->NR23;
-  int freq = (4194304 >> 5) / (2048 - freq_X);
-
-  int16_t *samples = NULL;
-  int samples_length = generate_square_wave(&samples,
-					    freq,
-					    sc->NR21 >> 6,
-					    0, // sweep off
-					    0,
-					    0,
-					    (64-(sc->NR21 & 0x4F)) * 1000 / 256);
-
-  // do a pass over the samples for the envelope
-  wrap_envelope(samples,
-		samples_length,
-		sc->NR22 >> 4,
-		sc->NR22 & 7,
-		!(sc->NR22 & 8));
-
-
-  struct sound sound = {
-    .id = id,
-    .is_continuous = ((sc->NR24 & 0x40) == 0),
-    .samples = samples,
-    .length = samples_length,
-  };
-
-  cache[cache_length++] = sound;
-  return &cache[cache_length-1];
+  return s;
 }
 
-void get_sound3_samples(int16_t *buf, int count) {
-  // TODO: do linear interpolation?
-  for (int b = 0; b < count; b++) {
-    int current_step = sound3_sample_index / sound3_samples_per_step;
-    buf[b] = sound3_wave[current_step]*200;
-    sound3_sample_index++;
-    sound3_sample_index %= sound3_wave_length;
+int sound_generate_samples(struct sound *sound, int16_t *buf, int len) {
+  switch (sound->type) {
+  case 1:
+    return sound1_generate_samples(sound, buf, len);
+    break;
+  default:
+    return 0;
   }
 }
 
 void audio_tick(struct sound_controller *sc) {
-  if (!(sc->NR52 & 0x80))
+  printf("debug: inside audio tick\n");
+  if (is_all_disabled(sc))
     return;
 
   sc->t_cycles++;
   // TODO: consider bundling more than one sample at a time
   while (sc->t_cycles >= 1500) { // TODO: compute this on init
-    // iterate through all the playbacks and write a sample
-    int16_t samples[32];
+    int16_t accumulated_samples[32];
     for (int s = 0; s < 32; s++) {
-      samples[s] = 0;
+      accumulated_samples[s] = 0;
     }
 
-    int8_t volume_stereo_1 = sc->NR50 & 7;
-    int8_t volume_stereo_2 = (sc->NR50 >> 4) & 7;
+    int8_t volume_left = stereo_vol_left(sc);
+    int8_t volume_right = stereo_vol_right(sc);
 
-    // TODO gate on audio on
-    for (int s = 0; s < 3; s++) {
-      struct playback *pb = &sc->playing[s];
-      if (!pb->sound || (!pb->sound->is_continuous && !(sc->NR52 & (1<<s))))
+    int16_t sbuf[16];
+    for (int s = 0; s < 1; s++) {
+      struct sound *sound = &sc->sounds[s];
+      /*if (!is_sound_type_enabled(sc, sound->type)) {
 	continue;
-      for (int i = 0; i < 16; i++) {
-	int sample = pb->sound->samples[pb->current_sample++];
-	printf("debug: inside A\n");
-	int is_on_stereo_1 = sc->NR51 & (1 << s);
-	int is_on_stereo_2 = sc->NR51 & (1 << 4 << s);
-	if (is_on_stereo_1) {
-	  printf("debug: inside B\n");
-	  samples[i*2] += sample*volume_stereo_1;
+	}*/
+      if (is_completed(sound)) {
+	printf("debug: SOUND completed\n");
+	sc->regs[rNR52] &= ~(1<<s); // done, turn sound off
+	continue;
+      }
+      int generated = sound_generate_samples(sound, sbuf, 16);
+      printf("debug: SOUND samples generated: %d\n", generated);
+      for (int s = 0; s < generated; s++) {
+	printf("debug: SOUND samples: %d\n", sbuf[s]);
+	if (is_on_stereo_left(sc, sound->type)) {
+	  accumulated_samples[s*2] += sbuf[s]*volume_left;
 	}
-	if (is_on_stereo_2) {
-	  printf("debug: inside C\n");
-	  samples[i*2+1] += sample*volume_stereo_2;
-	}
-	if (pb->current_sample == pb->sound->length) {
-	  if (pb->sound->is_continuous) {
-	    pb->current_sample %= pb->sound->length;
-	  } else {
-	    sc->NR52 &= ~(1<<s); // done, turn the sound off
-	    break;
-	  }
+	if (is_on_stereo_right(sc, sound->type)) {
+	  accumulated_samples[s*2+1] += sbuf[s]*volume_right;
 	}
       }
     }
     int error = 0;
-    pa_simple_write(s, samples, 32*sizeof(int16_t), &error);
+    pa_simple_write(s, accumulated_samples, 32*sizeof(int16_t), &error);
     if (error) {
       printf("debug: error code: %d\n", error);
       printf("debug: error str: %s\n", pa_strerror(error));
@@ -289,93 +286,44 @@ void audio_tick(struct sound_controller *sc) {
   }
 }
 
-void sc_write_NR10(struct sound_controller* sc, uint8_t byte) { sc->NR10 = byte; }
-void sc_write_NR11(struct sound_controller* sc, uint8_t byte) { sc->NR11 = byte; }
-void sc_write_NR12(struct sound_controller* sc, uint8_t byte) { sc->NR12 = byte; }
-void sc_write_NR13(struct sound_controller* sc, uint8_t byte) { sc->NR13 = byte; }
-void sc_write_NR14(struct sound_controller* sc, uint8_t byte) {
-  sc->NR14 = byte;
-  if (sc->NR14 & 0x80) { // initialize bit on
-    struct sound * sound = create_sound_1(sc);
-    printf("debug: initializing sound 1\n");
-    sc->playing[0] = (struct playback) {
-      .current_sample = 0,
-      .sound = sound,
-    };
-  }
-}
 
-void sc_write_NR21(struct sound_controller* sc, uint8_t byte) { sc->NR21 = byte; }
-void sc_write_NR22(struct sound_controller* sc, uint8_t byte) { sc->NR22 = byte; }
-void sc_write_NR23(struct sound_controller* sc, uint8_t byte) { sc->NR23 = byte; }
-void sc_write_NR24(struct sound_controller* sc, uint8_t byte) {
-  sc->NR24 = byte;
-  if (sc->NR24 & 0x80) { // initialize bit on
-    printf("debug: initializing sound 2\n");
-    struct sound * sound = create_sound_2(sc);
-    sc->playing[1] = (struct playback) {
-      .current_sample = 0,
-      .sound = sound,
-    };
-  }
-}
+void audio_write_reg(struct sound_controller *sc, enum sound_reg reg, uint8_t byte) {
+  sc->regs[reg] = byte;
+  switch (reg) {
+  case rNR14:
+    if (initialize_on(sc->regs[rNR14])) {
+      int frequency = calculate_frequency(sc->regs[rNR14], sc->regs[rNR13]);
+      int sweep_time = ((sc->regs[rNR10] >> 4) & 7);
+      int duration_ms = (64-(sc->regs[rNR11] & 0x4F)) * 1000 / 256;
 
-void sc_write_NR30(struct sound_controller* sc, uint8_t byte) {
-  sc->NR30 = byte;
-  if (sc->NR30 & 0x80) {
-    sc->playing[2].current_sample = 0;
-  }
-}
+      printf("debug: initializing sound 1: freq -> %d, sweep_time -> %d, duration_ms -> %d\n", frequency, sweep_time, duration_ms);
 
-void sc_write_NR31(struct sound_controller* sc, uint8_t byte) {
-  sc->NR31 = byte;
-  printf("debug: SOUND 3 length reg -> %d\n", byte);
-}
+      // define sound 1 wave
+      sc->sounds[0] = (struct sound) {
+	.type = 1,
+	.current_sample = 0,
+	.duration_samples = ss.rate*duration_ms/1000, // TODO: properly set
+	.is_continuous = (sc->regs[rNR14] & 0x40) == 0,
 
-void sc_write_NR32(struct sound_controller* sc, uint8_t byte) {
-  sc->NR32 = byte;
-}
+	// initial wave parameters
+	.waveform_duty_cycle = (sc->regs[rNR11] >> 6),
+	.frequency = frequency,
+	.samples_per_wave = ss.rate / frequency,
 
-void sc_write_NR33(struct sound_controller* sc, uint8_t byte) {
-  sc->NR33 = byte;
-  int freq_X = ((sc->NR34 & 7) << 8) + sc->NR33;
-  int freq = (4194304 >> 5) / (2048 - freq_X);
+	// sweep parameters
+	.sweep_time_samples = (sweep_time ? (ss.rate * sweep_time / frequency) : 0),
+	.sweep_shift = (sc->regs[rNR10] & 3),
+	.is_sweep_decreasing = ((sc->regs[rNR10] >> 3) & 1),
 
-  sound3_wave_length = ss.rate / freq;
-  printf("debug: A SOUND 3 sound3_wave_length -> %d, freq -> %d\n", sound3_wave_length, freq);
-  sound3_samples_per_step = sound3_wave_length / 32;
-  sound3_sample_index = 0;
-}
-
-void sc_write_NR34(struct sound_controller* sc, uint8_t byte) {
-  sc->NR34 = byte;
-
-  int freq_X = ((sc->NR34 & 7) << 8) + sc->NR33;
-  int freq = (4194304 >> 5) / (2048 - freq_X);
-
-  sound3_wave_length = ss.rate / freq;
-  printf("debug: B SOUND 3 sound3_wave_length -> %d, freq -> %d, is_counter -> %d\n", sound3_wave_length, freq, byte & (1<< 6));
-  sound3_samples_per_step = (float)sound3_wave_length / 32;
-  sound3_sample_index = 0;
-
-  if (sc->NR34 & 0x80) { // initialize bit on
-    printf("debug: SOUND 3 initializing sound 3\n");
-    // set the waveform
-    uint8_t *wave = &sc->mc->ram[0xFF30];
-    for (int step = 0; step < 31; step+=2) {
-      uint8_t byte = wave[step/2];
-      printf("SOUND 3: byte -> 0x%02X\n", byte);
-      sound3_wave[step] = (byte >> 4) & 0x0F;
-      sound3_wave[step+1] = byte & 0x0F;
+	// TODO: envelope parameters
+      };
     }
-
-    // DEBUG: print the waveform
-    for (int step = 0; step < 32; step++) {
-      printf("%d\t%d\n", step, sound3_wave[step]);
-    }
-  }
+    break;
+  default:
+    break;
+  };
 }
 
-void sc_write_NR50(struct sound_controller* sc, uint8_t byte) { sc->NR50 = byte; }
-void sc_write_NR51(struct sound_controller* sc, uint8_t byte) { sc->NR51 = byte; }
-void sc_write_NR52(struct sound_controller* sc, uint8_t byte) { sc->NR52 = byte; }
+uint8_t audio_read_reg(struct sound_controller* sc, enum sound_reg reg) {
+  return sc->regs[reg];
+}
