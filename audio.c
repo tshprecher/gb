@@ -49,17 +49,22 @@ static inline int is_on_stereo_right(struct sound_controller *sc,
   return (sc->regs[rNR51] & (1 << (sound_type+3)));
 }
 
-static inline int is_all_enabled(struct sound_controller *sc) {
-  return (sc->regs[rNR52] & 0x80) > 0;
+static inline int enable_all(struct sound_controller *sc) {
+  //  return (sc->regs[rNR52] & 0x80) > 0;
 }
 
-static inline int is_all_disabled(struct sound_controller *sc) {
-  return !is_all_enabled(sc);
+static inline int disable_all(struct sound_controller *sc) {
+  //  return !is_all_enabled(sc);
 }
 
 static inline int is_sound_type_enabled(struct sound_controller *sc,
 					uint8_t sound_type) {
+  //  printf("debug: SOUND is sound_type_enabled NR52 0x%02X\n", sc->regs[rNR52]);
   return (sc->regs[rNR52] & (1 << (sound_type-1))) > 0;
+}
+
+static inline int is_sound_enabled(struct sound_controller *sc, struct sound *sound) {
+  return sound->is_continuous || is_sound_type_enabled(sc, sound->type);
 }
 
 static inline int is_completed(struct sound *sound) {
@@ -238,7 +243,6 @@ int sound_generate_samples(struct sound *sound, int16_t *buf, int len) {
 }
 
 void audio_tick(struct sound_controller *sc) {
-  printf("debug: inside audio tick\n");
   if (is_all_disabled(sc))
     return;
 
@@ -256,9 +260,9 @@ void audio_tick(struct sound_controller *sc) {
     int16_t sbuf[16];
     for (int s = 0; s < 1; s++) {
       struct sound *sound = &sc->sounds[s];
-      /*if (!is_sound_type_enabled(sc, sound->type)) {
+      if (!is_sound_enabled(sc, sound)) {
 	continue;
-	}*/
+      }
       if (is_completed(sound)) {
 	printf("debug: SOUND completed\n");
 	sc->regs[rNR52] &= ~(1<<s); // done, turn sound off
@@ -317,6 +321,11 @@ void audio_write_reg(struct sound_controller *sc, enum sound_reg reg, uint8_t by
 
 	// TODO: envelope parameters
       };
+      printf("debug: SOUND 1 initialized NR14 -> 0x%02X, NR52 -> 0x%02X, is_continuous -> %d\n", sc->regs[rNR14], sc->regs[rNR52], sc->sounds[0].is_continuous);
+      if (!sc->sounds[0].is_continuous) {
+	sc->regs[rNR52] |= 1;
+      }
+
     }
     break;
   default:
