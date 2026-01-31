@@ -27,6 +27,10 @@ struct sound {
   int8_t sweep_time_samples;
   int8_t sweep_shift;
   int8_t is_sweep_decreasing;
+
+  int samples_per_env_step;
+  uint8_t env_value;
+  int8_t is_env_decreasing;
 };
 
 struct sound_controller {
