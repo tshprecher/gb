@@ -20,17 +20,20 @@ struct sound {
   int duration_samples;
   uint8_t is_continuous;
   int frequency;
-
-  // sound 1
   int samples_per_wave;
-  int8_t waveform_duty_cycle;
+
+  // for sound 1
+
   int8_t sweep_time_samples;
   int8_t sweep_shift;
   int8_t is_sweep_decreasing;
 
+  // for sounds 1, 2
+  int8_t waveform_duty_cycle;
   int samples_per_env_step;
   uint8_t env_value;
   int8_t is_env_decreasing;
+
 };
 
 struct sound_controller {

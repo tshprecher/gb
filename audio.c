@@ -146,8 +146,8 @@ static int generate_square_wave(int16_t **samples,
 
 */
 
-static int sound1_generate_samples(struct sound *sound, int16_t *buf, int len) {
-  printf("debug: SOUND inside sound1_generate_samples()\n");
+static int generate_square_wave_samples(struct sound *sound, int16_t *buf, int len) {
+  printf("debug: SOUND inside generate_square_wave_samples()\n");
 
   // each square wave can be split into 8 time slices of high/low
   float samples_per_wave_slice = (float)sound->samples_per_wave / 8;
@@ -218,7 +218,8 @@ static int sound1_generate_samples(struct sound *sound, int16_t *buf, int len) {
 int sound_generate_samples(struct sound *sound, int16_t *buf, int len) {
   switch (sound->type) {
   case 1:
-    return sound1_generate_samples(sound, buf, len);
+  case 2:
+    return generate_square_wave_samples(sound, buf, len);
     break;
   default:
     return 0;
@@ -241,7 +242,7 @@ void audio_tick(struct sound_controller *sc) {
     int8_t volume_right = stereo_vol_right(sc);
 
     int16_t sbuf[16];
-    for (int s = 0; s < 1; s++) {
+    for (int s = 0; s < 2; s++) {
       struct sound *sound = &sc->sounds[s];
       if (sound->type < 1 || sound->type > 4) { // type not valid: sound not yet set
 	continue;
@@ -254,6 +255,7 @@ void audio_tick(struct sound_controller *sc) {
 	sc->regs[rNR52] &= ~(1<<s); // done, turn sound off
 	continue;
       }
+      printf("debug: generating SOUND %d samples\n", sound->type);
       int generated = sound_generate_samples(sound, sbuf, 16);
       printf("debug: SOUND samples generated: %d\n", generated);
       for (int s = 0; s < generated; s++) {
@@ -292,8 +294,8 @@ void audio_write_reg(struct sound_controller *sc, enum sound_reg reg, uint8_t by
       // define sound 1 wave
       sc->sounds[0] = (struct sound) {
 	.type = 1,
-	.current_sample = 0,
-	.duration_samples = ss.rate*duration_ms/1000, // TODO: properly set
+	.current_sample = 0, // restart sound on initialize
+	.duration_samples = ss.rate*duration_ms/1000,
 	.is_continuous = (sc->regs[rNR14] & 0x40) == 0,
 
 	// initial wave parameters
@@ -317,6 +319,42 @@ void audio_write_reg(struct sound_controller *sc, enum sound_reg reg, uint8_t by
 	sc->regs[rNR52] |= 1;
       }
 
+    }
+    break;
+  case rNR24:
+    if (initialize_on(sc->regs[rNR24])) {
+      int frequency = calculate_frequency(sc->regs[rNR24], sc->regs[rNR23]);
+      int duration_ms = (64-(sc->regs[rNR21] & 0x4F)) * 1000 / 256;
+
+      printf("debug: initializing sound 2: freq -> %d, duration_ms -> %d\n", frequency, duration_ms);
+
+      // define sound 2 wave (sound 1 but sweep off)
+      sc->sounds[1] = (struct sound) {
+	.type = 2,
+	.current_sample = 0, // restart sound on initialize
+	.duration_samples = ss.rate*duration_ms/1000,
+	.is_continuous = (sc->regs[rNR24] & 0x40) == 0,
+
+	// initial wave parameters
+	.waveform_duty_cycle = (sc->regs[rNR21] >> 6),
+	.frequency = frequency,
+	.samples_per_wave = ss.rate / frequency,
+
+	// sweep parameters off
+	.sweep_time_samples = 0,
+	.sweep_shift = 0,
+	.is_sweep_decreasing = 0,
+
+	// envelope parameters
+	.samples_per_env_step = ss.rate * (sc->regs[rNR22] & 7) / 64,
+	.env_value = sc->regs[rNR22] >> 4,
+	.is_env_decreasing = !(sc->regs[rNR22] & 8),
+      };
+
+      printf("debug: SOUND 2 initialized NR24 -> 0x%02X, NR52 -> 0x%02X, is_continuous -> %d\n", sc->regs[rNR24], sc->regs[rNR52], sc->sounds[1].is_continuous);
+      if (!sc->sounds[1].is_continuous) {
+	sc->regs[rNR52] |= 2;
+      }
     }
     break;
   default:
