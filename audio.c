@@ -27,7 +27,7 @@ void init_audio() {
 		    );
 }
 
-static int initialize_on(uint8_t r) {
+static inline int initialize_on(uint8_t r) {
   return (r & 0x80) > 0;
 }
 
@@ -81,71 +81,6 @@ static inline int calculate_frequency(uint8_t freq_high, uint8_t freq_low) {
   return (4194304 >> 5) / (2048 - freq_X);
 }
 
-/*
-static int generate_square_wave(int16_t **samples,
-				int frequency,
-				int8_t waveform_duty_cycle,
-				int8_t sweep_time,
-				int8_t sweep_shift,
-				int8_t is_sweep_decreasing,
-				int duration_ms) {
-
-  printf("debug: NEW waveform duty cycle: %d\n", waveform_duty_cycle);
-  int sweep_time_samples = sweep_time ? (ss.rate * sweep_time / frequency) : 0;
-  int samples_per_wave = ss.rate / frequency;
-
-  int samples_length = ss.rate*duration_ms/1000;
-  *samples = (int16_t*)malloc(samples_length*sizeof(int16_t));
-  int sweep_count = 0;
-  int s = 0;
-  while (s < samples_length) {
-    // each square wave can be split into 8 time slices of high/low
-    uint8_t is_high = 0;
-    int samples_per_wave_slice = samples_per_wave / 8;
-    int current_wave_slice = (s * 8 / samples_per_wave) % 8;
-    switch (waveform_duty_cycle) {
-    case 0: // 12.5%
-      is_high = current_wave_slice == 1 ? 1 : 0;
-      break;
-    case 1: // 25%
-      is_high = current_wave_slice < 2 ? 1 : 0;
-      break;
-    case 2: // 50%
-      is_high = current_wave_slice < 4 ? 1 : 0;
-      break;
-    case 3: // 75 %
-      is_high = current_wave_slice >= 2 ? 1 : 0;
-      break;
-    }
-    for (int ts = 0; ts < samples_per_wave_slice && s < samples_length; ts++) {
-      (*samples)[s++] = is_high ? 0xA5 : 0;
-    }
-
-    // handle sweep
-    if (sweep_time && (s / sweep_time_samples > sweep_count) && sweep_shift)  {
-      sweep_count++;
-      int diff = frequency >> (1 << sweep_shift);
-      if (is_sweep_decreasing) {
-	if (diff > 0) {
-	  frequency -= diff;
-	}
-      } else {
-	frequency += diff;
-      }
-      // TODO: check if the result frequency is greater than 11 bits and stop
-      //      printf("info: new freq: %d\n", freq);
-      if (frequency > (1 << 10)) {
-	printf("warn: should stop here @ freq: %d\n", frequency);
-      }
-      samples_per_wave = ss.rate / frequency; // redefine samples per wave
-    }
-  }
-
-  return samples_length;
-}
-
-*/
-
 static int generate_square_wave_samples(struct sound *sound, int16_t *buf, int len) {
   printf("debug: SOUND inside generate_square_wave_samples()\n");
 
@@ -177,7 +112,7 @@ static int generate_square_wave_samples(struct sound *sound, int16_t *buf, int l
 
     // handle sweep
     if (sound->sweep_shift && sound->sweep_time_samples &&
-	(sound->current_sample / sound->sweep_time_samples > current_sweep))  {
+	((sound->current_sample / sound->sweep_time_samples) > current_sweep))  {
       current_sweep++;
       int freq_step = sound->frequency >> (1 << sound->sweep_shift);
       if (sound->is_sweep_decreasing) {
@@ -208,7 +143,29 @@ static int generate_square_wave_samples(struct sound *sound, int16_t *buf, int l
     buf[s] *= sound->env_value;
     s++;
     sound->current_sample++;
-    if (sound->is_continuous && sound->current_sample > sound->duration_samples) {
+    if (sound->is_continuous && sound->current_sample >= sound->duration_samples) {
+      sound->current_sample = 0;
+    }
+  }
+  return s;
+}
+
+static int generate_defined_wave_samples(struct sound *sound, int16_t *buf, int len) {
+  printf("debug: SOUND inside generate_defined_wave_samples()\n");
+  float samples_per_step = (float)sound->samples_per_wave / 32;
+  printf("debug: samples_per_step -> %f\n", samples_per_step);
+  int s = 0;
+  while (s < len && !is_completed(sound)) {
+    int current_step = (int)(sound->current_sample / samples_per_step) % 32;
+    if (sound->output_level) {
+      buf[s] = sound->waveform[current_step] * (0x2C >> (sound->output_level-1));
+    } else {
+      buf[s] = 0;
+    }
+
+    s++;
+    sound->current_sample++;
+    if (sound->is_continuous && sound->current_sample >= sound->duration_samples) {
       sound->current_sample = 0;
     }
   }
@@ -220,7 +177,8 @@ int sound_generate_samples(struct sound *sound, int16_t *buf, int len) {
   case 1:
   case 2:
     return generate_square_wave_samples(sound, buf, len);
-    break;
+  case 3:
+    return generate_defined_wave_samples(sound, buf, len);
   default:
     return 0;
   }
@@ -242,7 +200,9 @@ void audio_tick(struct sound_controller *sc) {
     int8_t volume_right = stereo_vol_right(sc);
 
     int16_t sbuf[16];
-    for (int s = 0; s < 2; s++) {
+    for (int s = 0; s < 3; s++) {
+      //if (s != 2)
+      //      	continue;
       struct sound *sound = &sc->sounds[s];
       if (sound->type < 1 || sound->type > 4) { // type not valid: sound not yet set
 	continue;
@@ -356,6 +316,61 @@ void audio_write_reg(struct sound_controller *sc, enum sound_reg reg, uint8_t by
 	sc->regs[rNR52] |= 2;
       }
     }
+    break;
+  case rNR30:
+    printf("debug: writing SOUND 3 rNR30 -> 0x%02X \n", byte);
+    if (sc->regs[rNR30] & 0x80) {
+      // TODO: restart sound
+    } else {
+      // TODO: stop sound
+    }
+    break;
+  case rNR31:
+    printf("debug: writing SOUND 3 rNR31 -> 0x%02X\n", byte);
+    break;
+  case rNR32:
+    printf("debug: writing SOUND 3 rNR32 -> 0x%02X\n", byte);
+    break;
+  case rNR33:
+    printf("debug: writing SOUND 3 rNR33 -> 0x%02X\n", byte);
+    break;
+  case rNR34:
+    if (initialize_on(sc->regs[rNR34])) {
+      int frequency = calculate_frequency(sc->regs[rNR34], sc->regs[rNR33]);
+      int duration_ms = (256-(sc->regs[rNR31])) * 1000 / 256;
+
+      printf("debug: initializing SOUND 3: freq -> %d, duration_ms -> %d\n", frequency, duration_ms);
+
+      // define sound 3 wave
+      // TODO: output level
+      struct sound sound3 = {
+	.type = 3,
+	.current_sample = 0, // restart sound on initialize
+	.frequency = frequency,
+	.duration_samples = ss.rate*duration_ms/1000,
+	.samples_per_wave = ss.rate / frequency,
+	.is_continuous = (sc->regs[rNR34] & 0x40) == 0,
+	.output_level = (sc->regs[rNR32] >> 5) & 0x3,
+      };
+
+      uint8_t *waveform = &sc->mc->ram[0xFF30];
+      for (int step = 0; step < 32; step+=2) {
+	uint8_t byte = waveform[step/2];
+	sound3.waveform[step] = (byte >> 4) & 0x0F;
+	sound3.waveform[step+1] = byte & 0x0F;
+      }
+
+      sc->sounds[2] = sound3;
+
+      printf("debug: SOUND 3 initialized NR34 -> 0x%02X, NR52 -> 0x%02X, is_continuous -> %d\n", sc->regs[rNR34], sc->regs[rNR52], sc->sounds[1].is_continuous);
+
+      if (!sc->sounds[2].is_continuous) {
+	sc->regs[rNR52] |= 4;
+      }
+    }
+    break;
+  case rNR44:
+    printf("debug: TODO implement SOUND 4: NR44 -> 0x%02X\n", sc->regs[rNR44]);
     break;
   default:
     break;

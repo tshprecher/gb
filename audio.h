@@ -34,6 +34,10 @@ struct sound {
   uint8_t env_value;
   int8_t is_env_decreasing;
 
+  // for sound 3
+  uint8_t waveform[32];
+  uint8_t output_level; //[0, 1, 2, 4]
+
 };
 
 struct sound_controller {
