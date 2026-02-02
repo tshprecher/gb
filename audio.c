@@ -64,7 +64,13 @@ static inline int is_sound_type_enabled(struct sound_controller *sc,
 }
 
 static inline int is_sound_enabled(struct sound_controller *sc, struct sound *sound) {
-  return sound->is_continuous || is_sound_type_enabled(sc, sound->type);
+  int is_continuous_or_incomplete = sound->is_continuous ||
+    is_sound_type_enabled(sc, sound->type);
+
+  if (sound->type == 3) {
+    return is_continuous_or_incomplete && ((sc->regs[rNR30] & 0x80) != 0);
+  }
+  return is_continuous_or_incomplete;
 }
 
 static inline int is_completed(struct sound *sound) {
@@ -123,7 +129,7 @@ static int generate_square_wave_samples(struct sound *sound, int16_t *buf, int l
       printf("debug: new freq -> %d\n", sound->frequency);
       // TODO: check if the result frequency is greater than 11 bits and stop
       //      printf("info: new freq: %d\n", freq);
-      if (sound->frequency > (1 << 10)) {
+      if (sound->frequency >= (1 << 11)) {
 	printf("warn: should stop here @ freq: %d\n", sound->frequency);
       }
       // redefine samples per wave from new frequency

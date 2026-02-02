@@ -101,11 +101,7 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
       uint16_t chr_code = mem_read(lcd->mc, oam_addr+2);
       uint16_t attributes = mem_read(lcd->mc, oam_addr+3);
 
-      // TOOD: handle priority
-      /*      if (is_bit_set(attributes, 7)) {
-	continue;
-	}*/
-
+      // TOOD: handle OBJ priority
       uint8_t palette = is_bit_set(attributes, 4) ? lcd->OBP1 : lcd->OBP0;
 
       for (int c = 0; c < 16; c++) {
@@ -118,7 +114,8 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
   }
 
   // third: window
-  /*  if (is_bit_set(lcd->LCDC, 1)) {
+  if (is_bit_set(lcd->LCDC, 5)) {
+    printf("debug: LCD window set\n");
     int win_code_select_addr = is_bit_set(lcd->LCDC, 6) ? 0x9C00 : 0x9800;
     int win_char_select_addr = is_bit_set(lcd->LCDC, 4) ? 0x8000 : 0x8800;
 
@@ -137,7 +134,7 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
       frame_put_chr(frame, blockX*8, blockY*8, chr, palette);
       tile_idx++;
     }
-    }*/
+  }
 
   for (int y = 0; y < 256; y++) {
     for (int x = 0; x < 256; x++) {
