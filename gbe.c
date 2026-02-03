@@ -21,9 +21,7 @@ static void sleep_ns(int64_t ns) {
   const struct timespec ts = {tv_nsec: ns};
   struct timespec rem;
   int res;
-  printf("DEBUG: ns -> %ld\n", ns);
   if ((res = nanosleep(&ts, &rem))) { // TODO: change to clock_nanosleep
-    printf("DEBUG: res -> %d\n", res);
     perror("nanosleep() failed");
     exit(1);
   }
@@ -35,7 +33,6 @@ static int64_t get_time_ns() {
     perror("clock_gettime() failed");
     exit(1);
   }
-  printf("DEBUG: returning get_time_ns -> %ld\n", ts.tv_nsec);
   return ts.tv_nsec;
 }
 
@@ -57,7 +54,6 @@ ssize_t gb_dump(struct gb *gb) {
 
   }
   size_t result = fwrite(gb->mc->ram, 1, 0x10000, dump);
-  printf("DEBUG: dumped total %ld bytes\n", result);
   fclose(dump);
   return result;
 }
@@ -142,14 +138,12 @@ void gb_run(struct gb *gb)
 	cur_period_time_ns = 999999999 - last_cycle_time_ns + cur_cycle_time_ns;
       }
 
-      printf("DEBUG: period in ns for 65K clock cycles: %ld\n", cur_period_time_ns);
       last_cycle_time_ns = cur_cycle_time_ns;
       int sleep_time_ns = 15625000 > cur_period_time_ns ? (15625000 - cur_period_time_ns) : 0;
       sleep_ns(sleep_time_ns);
     }
   }
 }
-
 
 // TODO: make this a method of memory controller
 void load_rom(struct mem_controller *mc, char *filename)
@@ -199,7 +193,7 @@ int main(int argc, char *argv[])
 
     lcd.mc = &mc;
     lcd.ic = &ic;
-    lcd.LCDC = 0x83; // TODO: put in an init?
+    lcd.regs[rLCDC] = 0x83; // TODO: put in an init?
 
     mc.ic = &ic;
     mc.lcd = &lcd;

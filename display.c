@@ -61,9 +61,9 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
   uint8_t frame[256][256];
 
   // first: background
-  if (is_bit_set(lcd->LCDC, 0)) {
-    int bg_code_select_addr = is_bit_set(lcd->LCDC, 3) ? 0x9C00 : 0x9800;
-    int bg_char_select_addr = is_bit_set(lcd->LCDC, 4) ? 0x8000 : 0x8800;
+  if (is_bit_set(lcd->regs[rLCDC], 0)) {
+    int bg_code_select_addr = is_bit_set(lcd->regs[rLCDC], 3) ? 0x9C00 : 0x9800;
+    int bg_char_select_addr = is_bit_set(lcd->regs[rLCDC], 4) ? 0x8000 : 0x8800;
 
     // TODO: do the modes properly
     int tile_idx = 0;
@@ -77,7 +77,7 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
 
       int blockX = tile_addr % 32;
       int blockY = tile_addr / 32 - 1216;
-      uint8_t palette = lcd->BGP;
+      uint8_t palette = lcd->regs[rBGP];
 
       frame_put_chr(frame, blockX*8, blockY*8, chr, palette);
       tile_idx++;
@@ -88,8 +88,8 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
   }
 
   // second: objects
-  if (is_bit_set(lcd->LCDC, 1)) {
-    int obj_8_by_8 = is_bit_set(lcd->LCDC, 3) ? 0 : 1;
+  if (is_bit_set(lcd->regs[rLCDC], 1)) {
+    int obj_8_by_8 = is_bit_set(lcd->regs[rLCDC], 3) ? 0 : 1;
     if (!obj_8_by_8) {
       printf("DEBUG: unimplemented: 8 x 16 objects\n");
       exit(1);
@@ -102,7 +102,7 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
       uint16_t attributes = mem_read(lcd->mc, oam_addr+3);
 
       // TOOD: handle OBJ priority
-      uint8_t palette = is_bit_set(attributes, 4) ? lcd->OBP1 : lcd->OBP0;
+      uint8_t palette = is_bit_set(attributes, 4) ? lcd->regs[rOBP1] : lcd->regs[rOBP0];
 
       for (int c = 0; c < 16; c++) {
 	chr[c] = mem_read(lcd->mc, 0x8000 + (chr_code<<4) + c);
@@ -114,10 +114,10 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
   }
 
   // third: window
-  if (is_bit_set(lcd->LCDC, 5)) {
+  if (is_bit_set(lcd->regs[rLCDC], 5)) {
     printf("debug: LCD window set\n");
-    int win_code_select_addr = is_bit_set(lcd->LCDC, 6) ? 0x9C00 : 0x9800;
-    int win_char_select_addr = is_bit_set(lcd->LCDC, 4) ? 0x8000 : 0x8800;
+    int win_code_select_addr = is_bit_set(lcd->regs[rLCDC], 6) ? 0x9C00 : 0x9800;
+    int win_char_select_addr = is_bit_set(lcd->regs[rLCDC], 4) ? 0x8000 : 0x8800;
 
     int tile_idx = 0;
     while (tile_idx < 1024) {
@@ -129,7 +129,7 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
 
       int blockX = tile_addr % 32;
       int blockY = tile_addr / 32 - 1216;
-      uint8_t palette = lcd->BGP;
+      uint8_t palette = lcd->regs[rBGP];
 
       frame_put_chr(frame, blockX*8, blockY*8, chr, palette);
       tile_idx++;
@@ -146,74 +146,6 @@ static void lcd_refresh_frame(struct lcd_controller *lcd) {
   XFlush(display);
 }
 
-
-void lcd_LCDC_write(struct lcd_controller *lcd, uint8_t value) {
-  // TODO: detect the changes and act accordinglingly
-  if (is_bit_set(lcd->LCDC,0) != is_bit_set(value, 0)) {
-    if (is_bit_set(value, 0))
-      printf("DEBUG: LCDC change -> BG display turning on\n");
-    else
-      printf("DEBUG: LCDC change -> BG display turning off\n");
-  }
-
-  if (is_bit_set(lcd->LCDC,1) != is_bit_set(value, 1)) {
-    if (is_bit_set(value, 1))
-      printf("DEBUG: LCDC change -> OBJ turning on\n");
-    else
-      printf("DEBUG: LCDC change -> OBJ turning off\n");
-  }
-  if (is_bit_set(lcd->LCDC,2) != is_bit_set(value, 2)) {
-    if (is_bit_set(value, 2))
-      printf("DEBUG: LCDC change -> OBJ block selection turning on\n");
-    else
-      printf("DEBUG: LCDC change -> OBJ block selection turning off\n");
-  }
-  if (is_bit_set(lcd->LCDC,3) != is_bit_set(value, 3)) {
-    if (is_bit_set(value, 3))
-      printf("DEBUG: LCDC change -> BG code selection turning on\n");
-    else
-      printf("DEBUG: LCDC change -> BG code selection selection turning off\n");
-  }
-
-  if (is_bit_set(lcd->LCDC,4) != is_bit_set(value, 4)) {
-    if (is_bit_set(value, 4))
-      printf("DEBUG: LCDC change -> BG char selection turning on\n");
-    else
-      printf("DEBUG: LCDC change -> BG char selection selection turning off\n");
-  }
-
-  if (is_bit_set(lcd->LCDC,5) != is_bit_set(value, 5)) {
-    if (is_bit_set(value, 5))
-      printf("DEBUG: LCDC change -> windowing turning on\n");
-    else
-      printf("DEBUG: LCDC change -> windowing turning off\n");
-  }
-
-  if (is_bit_set(lcd->LCDC,6) != is_bit_set(value, 6)) {
-    if (is_bit_set(value, 6))
-      printf("DEBUG: LCDC change -> window code area turning on\n");
-    else
-      printf("DEBUG: LCDC change -> window code area turning off\n");
-  }
-
-  if (is_bit_set(lcd->LCDC,7) != is_bit_set(value, 7)) {
-    if (is_bit_set(value, 7)) {
-      printf("DEBUG: LCDC change -> LCD turning on\n");
-    } else {
-      printf("DEBUG: LCDC change -> LCD turning off\n");
-      lcd->LY = 0;
-      lcd->t_cycles = 0;
-
-      XSetForeground(display, gc, 0x222222);
-      XFillRectangle(display, window, gc, 0, 0, 1280, 1280);
-      XFlush(display);
-    }
-
-  }
-  lcd->LCDC = value;
-}
-
-
 void lcd_tick(struct lcd_controller *lcd) {
   /* DEBUG: dev notes
      - cpu clock is 4.1943MHz
@@ -228,20 +160,53 @@ void lcd_tick(struct lcd_controller *lcd) {
   */
 
   // skip if off
-  if (!is_bit_set(lcd->LCDC, 7))
+  if (!is_bit_set(lcd->regs[rLCDC], 7))
     return;
 
 
   lcd->t_cycles++;
-  lcd->LY = lcd->t_cycles / 457;
+  lcd->regs[rLY] = lcd->t_cycles / 457;
 
-  if (lcd->LY == 154) {
-    lcd->LY = 0;
+  if (lcd->regs[rLY] == 154) {
+    lcd->regs[rLY] = 0;
     lcd->t_cycles = 0;
-  } else if (lcd->LY == 144 && lcd->t_cycles % 457 == 0) { // TODO: this whole function is hacky
+  } else if (lcd->regs[rLY] == 144 && lcd->t_cycles % 457 == 0) { // TODO: this whole function is hacky
     // entered vblank period, so refresh and trigger interrupt
-    printf("DEBUG: refreshing frame with LCDC ->  0x%02X\n", lcd->LCDC);
+    printf("DEBUG: refreshing frame with LCDC ->  0x%02X\n", lcd->regs[rLCDC]);
     lcd_refresh_frame(lcd);
     interrupt(lcd->ic, VBLANK);
+  }
+}
+
+uint8_t lcd_reg_read(struct lcd_controller* lcd, enum lcd_reg reg) {
+  return lcd->regs[reg];
+}
+
+void lcd_reg_write(struct lcd_controller* lcd, enum lcd_reg reg, uint8_t byte) {// TODO: rename to 'value'?
+  uint8_t original_value = lcd->regs[reg];
+  lcd->regs[reg] = byte;
+  switch (reg) {
+  case rLCDC:
+    if (is_bit_set(original_value,7) != is_bit_set(byte, 7)) {
+      if (is_bit_set(byte, 7)) {
+	printf("DEBUG: LCDC change -> LCD turning on\n");
+      } else {
+	printf("DEBUG: LCDC change -> LCD turning off\n");
+	lcd->regs[rLY] = 0;
+	lcd->t_cycles = 0;
+
+	XSetForeground(display, gc, 0x222222);
+	XFillRectangle(display, window, gc, 0, 0, 1280, 1280);
+	XFlush(display);
+      }
+    }
+    break;
+  case rDMA:
+    for (int b = 0; b <= 0x9F; b++) {
+      mem_write(lcd->mc, 0xFE00 + b, mem_read(lcd->mc, (byte<<8)+b));
+    }
+    break;
+  default:
+    break;
   }
 }

@@ -8,30 +8,26 @@
 
 #define is_bit_set(v, b) ((v >> b) & 1)
 
+enum lcd_reg {
+  rLCDC = 0, rSTAT, rSCY, rSCX, rLY, rLYC, rDMA,
+  rBGP, rOBP0, rOBP1, rWY, rWX
+};
+
 struct lcd_controller {
-  uint8_t LCDC,
-    STAT,
-    SCY,
-    SCX,
-    LY,
-    LYC,
-    DMA,
-    BGP,
-    OBP0,
-    OBP1,
-    WY,
-    WX;
+  // registers
+  uint8_t regs[12];
 
   // cycle since last vertical line refresh
   uint32_t t_cycles;
 
-  struct mem_controller *mc;
+  struct mem_controller *mc; // TODO: do we need this?
   struct interrupt_controller *ic;
 };
 
 void init_lcd();
 void lcd_tick(struct lcd_controller *);
-void lcd_LCDC_write(struct lcd_controller *, uint8_t);
 
+uint8_t lcd_reg_read(struct lcd_controller*, enum lcd_reg);
+void lcd_reg_write(struct lcd_controller*, enum lcd_reg, uint8_t);
 
 #endif

@@ -5,12 +5,17 @@
 #include "display.h"
 #include "sound.h"
 
-enum sound_reg map_index_to_sound_reg[] = {
+static enum sound_reg map_index_to_sound_reg[] = {
   rNR10, rNR11, rNR12, rNR13, rNR14,
   rNR21, rNR22, rNR23, rNR24,
   rNR30, rNR31, rNR32, rNR33, rNR34,
   rNR41, rNR42, rNR43, rNR44,
   rNR50, rNR51, rNR52
+};
+
+static enum lcd_reg map_index_to_lcd_reg[] = {
+  rLCDC, rSTAT, rSCY, rSCX, rLY, rLYC, rDMA, rBGP,
+  rOBP0, rOBP1, rWY, rWX
 };
 
 // TODO: handle interrupt
@@ -177,33 +182,7 @@ uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
     //printf("DEBUG: reading interrupt register IE\n");
     return mc->ic->IE;
   } else if (addr >= 0xFF40 && addr <= 0xFF4B) {
-    //printf("DEBUG: reading lcd register @ 0x%04X\n", addr);
-    switch (addr-0xFF40) {
-    case 0:
-      return mc->lcd->LCDC;
-    case 1:
-      return mc->lcd->STAT;
-    case 2:
-      return mc->lcd->SCY;
-    case 3:
-      return mc->lcd->SCX;
-    case 4:
-      return mc->lcd->LY;
-    case 5:
-      return mc->lcd->LYC;
-    case 6:
-      return mc->lcd->DMA;
-    case 7:
-      return mc->lcd->BGP;
-    case 8:
-      return mc->lcd->OBP0;
-    case 9:
-      return mc->lcd->OBP1;
-    case 0xA:
-      return mc->lcd->WY;
-    case 0xB:
-      return mc->lcd->WX;
-    };
+    return lcd_reg_read(mc->lcd, map_index_to_lcd_reg[addr-0xFF40]);
   } else if (addr >= 0xFF10 && addr <= 0xFF26 &&
 	     addr != 0xFF15 && addr != 0xFF1F) {
     int reg_index = addr - 0xFF10;
@@ -247,45 +226,7 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
   } else if (addr >= 0xFF40 && addr <= 0xFF4B) {
     //printf("DEBUG: writing 0x%02X to lcd register @ 0x%04X\n", byte, addr);
     // TODO: handle the permissioning here so no improper writes occur
-    switch (addr-0xFF40) {
-    case 0:
-      lcd_LCDC_write(mc->lcd, byte);
-      break;
-    case 1:
-      mc->lcd->STAT = byte;
-      break;
-    case 2:
-      mc->lcd->SCY = byte;
-      break;
-    case 3:
-      mc->lcd->SCX = byte;
-      break;
-    case 5:
-      mc->lcd->LYC = byte;
-      break;
-    case 6:
-      for (int b = 0; b <= 0x9F; b++) {
-	mem_write(mc, 0xFE00 + b, mem_read(mc, (byte<<8)+b));
-      }
-      //printf("DEBUG: executed DMA transfer from 0x%02X00\n", byte);
-      mc->lcd->DMA = byte;
-      break;
-    case 7:
-      mc->lcd->BGP = byte;
-      break;
-    case 8:
-      mc->lcd->OBP0 = byte;
-      break;
-    case 9:
-      mc->lcd->OBP1 = byte;
-      break;
-    case 0xA:
-      mc->lcd->WY = byte;
-      break;
-    case 0xB:
-      mc->lcd->WX = byte;
-      break;
-    };
+    lcd_reg_write(mc->lcd, map_index_to_lcd_reg[addr-0xFF40], byte);
   } else if (addr >= 0xFF10 && addr <= 0xFF26 &&
 	     addr != 0xFF15 && addr != 0xFF1F) {
     int reg_index = addr - 0xFF10;
@@ -295,7 +236,6 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
     if (addr > 0xFF1F) { // second gap
       reg_index--;
     }
-    //printf("DEBUG: writing 0x%02X to sound register 0x%04X, reg_index -> %d\n", byte, addr, reg_index);
     sound_reg_write(mc->sc,  map_index_to_sound_reg[reg_index], byte);
   } else {
     mc->ram[addr] = byte;
