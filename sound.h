@@ -51,10 +51,10 @@ struct sound_controller {
   uint32_t t_cycles;
 };
 
-void init_audio();
-void audio_tick(struct sound_controller*);
-void audio_write_reg(struct sound_controller*, enum sound_reg, uint8_t);
-uint8_t audio_read_reg(struct sound_controller*, enum sound_reg);
+void init_sound();
+void sound_tick(struct sound_controller*);
 
+uint8_t sound_reg_read(struct sound_controller*, enum sound_reg);
+void sound_reg_write(struct sound_controller*, enum sound_reg, uint8_t);
 
 #endif

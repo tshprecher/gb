@@ -10,7 +10,7 @@
 pa_simple *s;
 pa_sample_spec ss;
 
-void init_audio() {
+void init_sound() {
   ss.format = PA_SAMPLE_S16NE;
   ss.channels = 2;
   ss.rate = SAMPLING_RATE;
@@ -59,7 +59,6 @@ static inline int is_all_disabled(struct sound_controller *sc) {
 
 static inline int is_sound_type_enabled(struct sound_controller *sc,
 					uint8_t sound_type) {
-  //  printf("debug: SOUND is sound_type_enabled NR52 0x%02X\n", sc->regs[rNR52]);
   return (sc->regs[rNR52] & (1 << (sound_type-1))) > 0;
 }
 
@@ -74,12 +73,8 @@ static inline int is_sound_enabled(struct sound_controller *sc, struct sound *so
 }
 
 static inline int is_completed(struct sound *sound) {
-  printf("debug: SOUND is_completed: is_continuous: %d, current sample: %d, duration_samples: %d\n",
-	 sound->is_continuous,
-	 sound->current_sample,
-	 sound->duration_samples);
-  return (!sound->is_continuous &&
-	  sound->current_sample == sound->duration_samples);
+  return !sound->is_continuous &&
+	  sound->current_sample == sound->duration_samples;
 }
 
 static inline int calculate_frequency(uint8_t freq_high, uint8_t freq_low) {
@@ -88,8 +83,6 @@ static inline int calculate_frequency(uint8_t freq_high, uint8_t freq_low) {
 }
 
 static int generate_square_wave_samples(struct sound *sound, int16_t *buf, int len) {
-  printf("debug: SOUND inside generate_square_wave_samples()\n");
-
   // each square wave can be split into 8 time slices of high/low
   float samples_per_wave_slice = (float)sound->samples_per_wave / 8;
   int s = 0;
@@ -184,7 +177,7 @@ int sound_generate_samples(struct sound *sound, int16_t *buf, int len) {
   }
 }
 
-void audio_tick(struct sound_controller *sc) {
+void sound_tick(struct sound_controller *sc) {
   if (is_all_disabled(sc))
     return;
 
@@ -201,8 +194,6 @@ void audio_tick(struct sound_controller *sc) {
 
     int16_t sbuf[16];
     for (int s = 0; s < 3; s++) {
-      //if (s != 2)
-      //      	continue;
       struct sound *sound = &sc->sounds[s];
       if (sound->type < 1 || sound->type > 4) { // type not valid: sound not yet set
 	continue;
@@ -236,7 +227,7 @@ void audio_tick(struct sound_controller *sc) {
 }
 
 
-void audio_write_reg(struct sound_controller *sc, enum sound_reg reg, uint8_t byte) {
+void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, uint8_t byte) {
   sc->regs[reg] = byte;
   switch (reg) {
   case rNR14:
@@ -351,6 +342,6 @@ void audio_write_reg(struct sound_controller *sc, enum sound_reg reg, uint8_t by
   };
 }
 
-uint8_t audio_read_reg(struct sound_controller* sc, enum sound_reg reg) {
+uint8_t sound_reg_read(struct sound_controller* sc, enum sound_reg reg) {
   return sc->regs[reg];
 }

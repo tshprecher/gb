@@ -61,8 +61,6 @@ int port_read_P1(struct port_controller *pc, uint8_t *result) {
 }
 
 
-// TODO: rename this whole module, perhaps to memory.c
-
 static char* mmapped_registers[] = {
   // 0xFE00
   "$OAM",
@@ -216,7 +214,7 @@ uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
       reg_index--;
     }
     //printf("DEBUG: reading sound register @ 0x%04X\n", addr);
-    return audio_read_reg(mc->sc,  map_index_to_sound_reg[reg_index]);
+    return sound_reg_read(mc->sc,  map_index_to_sound_reg[reg_index]);
   }
   return mc->ram[addr];
 }
@@ -298,7 +296,7 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
       reg_index--;
     }
     //printf("DEBUG: writing 0x%02X to sound register 0x%04X, reg_index -> %d\n", byte, addr, reg_index);
-    audio_write_reg(mc->sc,  map_index_to_sound_reg[reg_index], byte);
+    sound_reg_write(mc->sc,  map_index_to_sound_reg[reg_index], byte);
   } else {
     mc->ram[addr] = byte;
   }

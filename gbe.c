@@ -117,7 +117,7 @@ void gb_poll_buttons(struct gb *gb) {
 void gb_run(struct gb *gb)
 {
   init_lcd();
-  init_audio();
+  init_sound();
 
   int t_cycles = 0;
   int64_t last_cycle_time_ns = get_time_ns();
@@ -129,7 +129,7 @@ void gb_run(struct gb *gb)
     lcd_tick(gb->lcd);
     port_tick(gb->pc);
     timing_tick(gb->tc);
-    audio_tick(gb->sc);
+    sound_tick(gb->sc);
     if (t_cycles % 1024 == 0) // TODO: put this behind another tick(), and does this need to be polled so often?
       gb_poll_buttons(gb);
 
