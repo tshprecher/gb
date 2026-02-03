@@ -1,10 +1,10 @@
-#ifndef LCD_H
-#define LCD_H
+#ifndef DISPLAY_H
+#define DISPLAY_H
 
 #include <stdint.h>
 #include <X11/Xlib.h>
 #include "cpu.h"
-#include "mem_controller.h"
+#include "memory.h"
 
 #define is_bit_set(v, b) ((v >> b) & 1)
 

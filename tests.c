@@ -3,7 +3,7 @@
 #include <string.h>
 #include "inst.h"
 #include "cpu.h"
-#include "mem_controller.h"
+#include "memory.h"
 #include "testing.c"
 
 static int cpu_equals(struct cpu first, struct cpu second) {

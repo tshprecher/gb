@@ -1,9 +1,9 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include "mem_controller.h"
-#include "lcd.h"
-#include "audio.h"
+#include "memory.h"
+#include "display.h"
+#include "sound.h"
 
 enum sound_reg map_index_to_sound_reg[] = {
   rNR10, rNR11, rNR12, rNR13, rNR14,

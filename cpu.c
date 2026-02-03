@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "cpu.h"
-#include "mem_controller.h"
+#include "memory.h"
 #include "inst.h"
 
 #define upper_8(v) ((v >> 8) & 0xFF)

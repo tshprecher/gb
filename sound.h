@@ -1,8 +1,8 @@
-#ifndef AUDIO_H
-#define AUDIO_H
+#ifndef SOUND_H
+#define SOUND_H
 
 #include <stdint.h>
-#include "mem_controller.h"
+#include "memory.h"
 
 enum sound_reg {
   rNR10 = 0,  rNR11,  rNR12,  rNR13,  rNR14,

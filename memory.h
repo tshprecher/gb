@@ -1,8 +1,8 @@
-#ifndef MEM_CONTROLLER_H
-#define MEM_CONTROLLER_H
+#ifndef MEMORY_H
+#define MEMORY_H
 
 #include "inst.h"
-#include "lcd.h"
+#include "display.h"
 #include "cpu.h"
 
 char * mmapped_reg_to_str(uint16_t addr);

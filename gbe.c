@@ -7,10 +7,11 @@
 #include <unistd.h>
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
-#include "audio.h"
+
+#include "sound.h"
 #include "inst.h"
 #include "cpu.h"
-#include "mem_controller.h"
+#include "memory.h"
 
 #define CLOCK_FREQ 4194304
 

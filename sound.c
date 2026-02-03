@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "audio.h"
+#include "sound.h"
 
 #define SAMPLING_RATE 44100
 

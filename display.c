@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <X11/Xlib.h>
-#include "lcd.h"
+#include "display.h"
 
 
 // X11 variables

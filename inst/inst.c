@@ -4,7 +4,6 @@
 #include <string.h>
 #include <unistd.h>
 #include "../inst.h"
-#include "../mem_controller.h"
 
 static char *map_cond_to_str[4] = {"NZ", "Z", "NC", "C"};
 static char *map_reg_to_str[8] = {"B", "C", "D", "E", "H", "L", "_err_", "A"};
