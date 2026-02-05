@@ -3,6 +3,7 @@ a.out
 *~
 *.o
 *#
+*dSYM
 .#*
 *_test
 gbe

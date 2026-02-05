@@ -20,8 +20,8 @@ struct lcd_controller {
   // cycle since last vertical line refresh
   uint32_t t_cycles;
 
-  struct mem_controller *mc; // TODO: do we need this?
-  struct interrupt_controller *ic;
+  struct mem_controller *memory_c; // TODO: do we need this?
+  struct interrupt_controller *interrupt_c;
 };
 
 void init_lcd();

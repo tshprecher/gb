@@ -237,7 +237,7 @@ int test_cpu_exec() {
     struct test tst = tests[t];
     struct mem_controller mc = {0};
     memset(mc.ram, 0, sizeof(mc.ram));
-    tst.initial.mc = &mc;
+    tst.initial.memory_c = &mc;
 
     suite_test_start(&ts, tst.asm_command);
     init_inst_from_asm(&inst, tst.asm_command);
@@ -252,14 +252,14 @@ int test_cpu_exec() {
       suite_test_error(&ts, "\t\tfound cpu:\t%s\n\t\texpected type:\t%s\n", buf1, buf2);
     }
     if ((tst.modified_addrs[0] || tst.modified_addrs[1]) &&
-	((tst.initial.mc->ram[tst.modified_addrs[0]] != tst.modified_addr_values[0]) ||
-	 (tst.initial.mc->ram[tst.modified_addrs[1]] != tst.modified_addr_values[1]))
+	((tst.initial.memory_c->ram[tst.modified_addrs[0]] != tst.modified_addr_values[0]) ||
+	 (tst.initial.memory_c->ram[tst.modified_addrs[1]] != tst.modified_addr_values[1]))
 	) {
       suite_test_error(&ts, "\t\tfound ram values:\t{0x%04X : 0x%02X, 0x%04X : 0x%02X}\n\t\texpected ram values:\t{0x%04X : 0x%02X, 0x%04X : 0x%02X}\n",
 		  tst.modified_addrs[0],
-		  tst.initial.mc->ram[tst.modified_addrs[0]],
+		  tst.initial.memory_c->ram[tst.modified_addrs[0]],
 		  tst.modified_addrs[1],
-		  tst.initial.mc->ram[tst.modified_addrs[1]],
+		  tst.initial.memory_c->ram[tst.modified_addrs[1]],
 		  tst.modified_addrs[0],
 		  tst.modified_addr_values[0],
 		  tst.modified_addrs[1],

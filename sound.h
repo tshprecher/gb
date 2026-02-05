@@ -44,7 +44,7 @@ struct sound_controller {
   // registers
   uint8_t regs[21];
 
-  struct mem_controller *mc;
+  struct mem_controller *memory_c;
 
   // at most four types of sounds playing concurrently
   struct sound sounds[4];

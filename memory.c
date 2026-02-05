@@ -19,48 +19,48 @@ static enum lcd_reg map_index_to_lcd_reg[] = {
 };
 
 // TODO: handle interrupt
-void port_tick(struct port_controller *pc) {
+void input_tick(struct input_controller *pc) {
   if (pc->t_cycles_to_read)
     pc->t_cycles_to_read--;
 }
 
-void port_btn_press(struct port_controller *pc, enum btn btn) {
-  pc->btns_pressed |= (1 << btn);
+void input_btn_press(struct input_controller *ic, enum btn btn) {
+  ic->btns_pressed |= (1 << btn);
 }
 
-void port_btn_unpress(struct port_controller *pc, enum btn btn) {
-  pc->btns_pressed &= ~(1 << btn);
+void input_btn_release(struct input_controller *ic, enum btn btn) {
+  ic->btns_pressed &= ~(1 << btn);
 }
 
-void port_write_P1(struct port_controller *pc, uint8_t value) {
+void input_write_P1(struct input_controller *ic, uint8_t value) {
   switch (value) {
   case 0x10:
-    pc->status = value;
-    //    pc->t_cycles_to_read = 4;
+    ic->status = value;
+    //    ic->t_cycles_to_read = 4;
     break;
   case 0x20:
-    pc->status = value;
-    //    pc->t_cycles_to_read = 16;
+    ic->status = value;
+    //    ic->t_cycles_to_read = 16;
     break;
   case 0x30:
-    pc->status = value;
-    pc->t_cycles_to_read = 0;
+    ic->status = value;
+    ic->t_cycles_to_read = 0;
     break;
   default:
     fprintf(stderr, "error: no-op, writing value 0x%02x to reg $P1", value);
   }
 }
 
-int port_read_P1(struct port_controller *pc, uint8_t *result) {
-  if (pc->status == 0x30)
+int input_read_P1(struct input_controller *ic, uint8_t *result) {
+  if (ic->status == 0x30)
     return 0;
-  if (pc->t_cycles_to_read)
+  if (ic->t_cycles_to_read)
     return 0;
 
-  if (pc->status == 0x10) {
-    *result = (~pc->btns_pressed >> 4) & 0x0F;
-  } else if (pc->status == 0x20) {
-    *result = (~pc->btns_pressed) & 0x0F;
+  if (ic->status == 0x10) {
+    *result = (~ic->btns_pressed >> 4) & 0x0F;
+  } else if (ic->status == 0x20) {
+    *result = (~ic->btns_pressed) & 0x0F;
   }
   return 1;
 }
@@ -159,30 +159,30 @@ static uint8_t cached_bitmap[0x10000 >> 3];
 uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
   // TODO: this looks uglier than necessary. consolidate into one switch?
   if (addr == 0xFF00) {
-    uint8_t ports = 0;
-    port_read_P1(mc->pc, &ports);
-    return ports;
+    uint8_t inputs = 0;
+    input_read_P1(mc->input_c, &inputs);
+    return inputs;
   } else if (addr >= 0xFF04 && addr <= 0xFF07) {
     //    printf("DEBUG: reading timer register @ 0x%04X\n", addr);
     switch (addr - 0xFF04) {
     case 0:
       //printf("DEBUG: read DIV -> 0x%02X\n", (uint8_t) ((mc->tc->div_t_cycles >> 9) & 0xFF));
-      return (uint8_t) ((mc->tc->div_t_cycles >> 9) & 0xFF);
+      return (uint8_t) ((mc->timing_c->div_t_cycles >> 9) & 0xFF);
     case 1:
-      return mc->tc->TIMA;
+      return mc->timing_c->TIMA;
     case 2:
-      return mc->tc->TMA;
+      return mc->timing_c->TMA;
     case 3:
-      return mc->tc->TAC;
+      return mc->timing_c->TAC;
     };
   }else if (addr == 0xFF0F) {
     //printf("DEBUG: reading interrupt register IF\n");
-    return mc->ic->IF;
+    return mc->interrupt_c->IF;
   } else if (addr == 0xFFFF) {
     //printf("DEBUG: reading interrupt register IE\n");
-    return mc->ic->IE;
+    return mc->interrupt_c->IE;
   } else if (addr >= 0xFF40 && addr <= 0xFF4B) {
-    return lcd_reg_read(mc->lcd, map_index_to_lcd_reg[addr-0xFF40]);
+    return lcd_reg_read(mc->lcd_c, map_index_to_lcd_reg[addr-0xFF40]);
   } else if (addr >= 0xFF10 && addr <= 0xFF26 &&
 	     addr != 0xFF15 && addr != 0xFF1F) {
     int reg_index = addr - 0xFF10;
@@ -192,8 +192,7 @@ uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
     if (addr > 0xFF1F) { // second gap
       reg_index--;
     }
-    //printf("DEBUG: reading sound register @ 0x%04X\n", addr);
-    return sound_reg_read(mc->sc,  map_index_to_sound_reg[reg_index]);
+    return sound_reg_read(mc->sound_c,  map_index_to_sound_reg[reg_index]);
   }
   return mc->ram[addr];
 }
@@ -202,31 +201,31 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
   if (addr < 0x8000) {
     return;
   } else if (addr == 0xFF00) { // P1 register
-    port_write_P1(mc->pc, byte);
+    input_write_P1(mc->input_c, byte);
   } else if (addr >= 0xFF04 && addr <= 0xFF07) {
     //printf("DEBUG: writing 0x%02X to timer register @ 0x%04X\n", byte, addr);
     switch (addr - 0xFF04) {
     case 0:
       // TODO: delegate to underlying controller is better
-      mc->tc->div_t_cycles = 0;
+      mc->timing_c->div_t_cycles = 0;
     case 1:
-      mc->tc->TIMA = byte;
+      mc->timing_c->TIMA = byte;
     case 2:
-      mc->tc->TMA = byte;
+      mc->timing_c->TMA = byte;
     case 3:
       //printf("DEBUG: writing TAC: 0x%02X\n", byte);
-      mc->tc->TAC = byte;
+      mc->timing_c->TAC = byte;
     };
   } else if (addr == 0xFF0F) {
     //printf("DEBUG: writing 0x%02X to interrupt register IF\n", byte);
-    mc->ic->IF = byte;
+    mc->interrupt_c->IF = byte;
   } else if (addr == 0xFFFF) {
     //printf("DEBUG: writing 0x%02X to interrupt register IE\n", byte);
-    mc->ic->IE = byte;
+    mc->interrupt_c->IE = byte;
   } else if (addr >= 0xFF40 && addr <= 0xFF4B) {
     //printf("DEBUG: writing 0x%02X to lcd register @ 0x%04X\n", byte, addr);
     // TODO: handle the permissioning here so no improper writes occur
-    lcd_reg_write(mc->lcd, map_index_to_lcd_reg[addr-0xFF40], byte);
+    lcd_reg_write(mc->lcd_c, map_index_to_lcd_reg[addr-0xFF40], byte);
   } else if (addr >= 0xFF10 && addr <= 0xFF26 &&
 	     addr != 0xFF15 && addr != 0xFF1F) {
     int reg_index = addr - 0xFF10;
@@ -236,7 +235,7 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
     if (addr > 0xFF1F) { // second gap
       reg_index--;
     }
-    sound_reg_write(mc->sc,  map_index_to_sound_reg[reg_index], byte);
+    sound_reg_write(mc->sound_c,  map_index_to_sound_reg[reg_index], byte);
   } else {
     mc->ram[addr] = byte;
   }

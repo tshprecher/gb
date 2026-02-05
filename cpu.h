@@ -36,7 +36,7 @@ struct timing_controller {
   uint8_t TIMA, TMA, TAC;
 };
 
-void timing_tick(struct timing_controller *tc);
+void timing_tick(struct timing_controller *);
 
 
 struct cpu {
@@ -50,8 +50,8 @@ struct cpu {
   uint8_t IME;
 
   // controllers to interface with other hardware
-  struct mem_controller *mc;
-  struct interrupt_controller *ic;
+  struct mem_controller *memory_c;
+  struct interrupt_controller *interrupt_c;
 
   // the number of t_cycles since last instruction execution
   int8_t t_cycles;

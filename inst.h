@@ -3,12 +3,11 @@
 
 #include <stdint.h>
 
-
 // enum value for each cpu instruction in lexicographic order
 // NOTE: DO NOT REORDER! Tests rely on ADC being the first and XOR
 //   being the last.
 enum inst_type
-{
+  {
     ADC = 1,
     ADD,
     AND,

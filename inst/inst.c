@@ -3,9 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <memory.h>
+#include "../memory.h"
 #include "../inst.h"
-
 
 static char *map_cond_to_str[4] = {"NZ", "Z", "NC", "C"};
 static char *map_reg_to_str[8] = {"B", "C", "D", "E", "H", "L", "_err_", "A"};

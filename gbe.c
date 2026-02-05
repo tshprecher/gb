@@ -6,6 +6,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <X11/Xlib.h>
+#include <X11/Xutil.h>
 #include <X11/keysym.h>
 
 #include "sound.h"
@@ -39,12 +40,12 @@ static int64_t get_time_ns() {
 struct gb
 {
   struct cpu *cpu;
-  struct mem_controller *mc;
-  struct interrupt_controller *ic;
-  struct lcd_controller *lcd;
-  struct timing_controller *tc;
-  struct port_controller *pc;
-  struct sound_controller *sc;
+  struct mem_controller *memory_c;
+  struct interrupt_controller *interrupt_c;
+  struct lcd_controller *lcd_c;
+  struct timing_controller *timing_c;
+  struct input_controller *input_c;
+  struct sound_controller *sound_c;
 };
 
 ssize_t gb_dump(struct gb *gb) {
@@ -53,7 +54,7 @@ ssize_t gb_dump(struct gb *gb) {
     return 0;
 
   }
-  size_t result = fwrite(gb->mc->ram, 1, 0x10000, dump);
+  size_t result = fwrite(gb->memory_c->ram, 1, 0x10000, dump);
   fclose(dump);
   return result;
 }
@@ -98,9 +99,9 @@ void gb_poll_buttons(struct gb *gb) {
       }
 
       if (event.type == KeyPress) {
-	port_btn_press(gb->pc, btn);
+	input_btn_press(gb->input_c, btn);
       } else if (event.type == KeyRelease) {
-	port_btn_unpress(gb->pc, btn);
+	input_btn_release(gb->input_c, btn);
       }
 
       break;
@@ -122,10 +123,10 @@ void gb_run(struct gb *gb)
     t_cycles++;
 
     cpu_tick(gb->cpu);
-    lcd_tick(gb->lcd);
-    port_tick(gb->pc);
-    timing_tick(gb->tc);
-    sound_tick(gb->sc);
+    lcd_tick(gb->lcd_c);
+    input_tick(gb->input_c);
+    timing_tick(gb->timing_c);
+    sound_tick(gb->sound_c);
     if (t_cycles % 1024 == 0) // TODO: put this behind another tick(), and does this need to be polled so often?
       gb_poll_buttons(gb);
 
@@ -184,36 +185,36 @@ int main(int argc, char *argv[])
     init_cpu(&cpu);
 
     struct gb gb = {0};
-    struct mem_controller mc = {0};
-    struct port_controller pc = {0};
-    struct interrupt_controller ic = {0};
-    struct lcd_controller lcd = {0};
-    struct timing_controller tc = {0};
-    struct sound_controller sc = {0};
+    struct mem_controller memory_c = {0};
+    struct input_controller input_c = {0};
+    struct interrupt_controller interrupt_c = {0};
+    struct lcd_controller lcd_c = {0};
+    struct timing_controller timing_c = {0};
+    struct sound_controller sound_c = {0};
 
-    lcd.mc = &mc;
-    lcd.ic = &ic;
-    lcd.regs[rLCDC] = 0x83; // TODO: put in an init?
+    lcd_c.memory_c = &memory_c;
+    lcd_c.interrupt_c = &interrupt_c;
+    lcd_c.regs[rLCDC] = 0x83; // TODO: put in an init?
 
-    mc.ic = &ic;
-    mc.lcd = &lcd;
-    mc.tc = &tc;
-    mc.pc = &pc;
-    mc.sc = &sc;
+    memory_c.interrupt_c = &interrupt_c;
+    memory_c.lcd_c = &lcd_c;
+    memory_c.timing_c = &timing_c;
+    memory_c.input_c = &input_c;
+    memory_c.sound_c = &sound_c;
 
-    cpu.mc = &mc;
-    cpu.ic = &ic;
+    cpu.memory_c = &memory_c;
+    cpu.interrupt_c = &interrupt_c;
 
-    sc.mc = &mc;
+    sound_c.memory_c = &memory_c;
 
     gb.cpu = &cpu;
-    gb.mc = &mc;
-    gb.lcd = &lcd;
-    gb.tc = &tc;
-    gb.pc = &pc;
-    gb.sc = &sc;
+    gb.memory_c = &memory_c;
+    gb.lcd_c = &lcd_c;
+    gb.timing_c = &timing_c;
+    gb.input_c = &input_c;
+    gb.sound_c = &sound_c;
 
-    load_rom(gb.mc, argv[1]);
+    load_rom(gb.memory_c, argv[1]);
     gb_run(&gb);
   } else if (argc == 3) { // disassemble
     if (strcmp(argv[1], "-d") != 0) {
@@ -221,20 +222,20 @@ int main(int argc, char *argv[])
       return 1;
     }
 
-    struct mem_controller mc = {0};
-    load_rom(&mc, argv[2]);
+    struct mem_controller memory_c = {0};
+    load_rom(&memory_c, argv[2]);
 
     int addr = 0x0;
     struct inst *decoded;
     char buf[16];
     while (addr < 0x8000) {
-      decoded = mem_read_inst(&mc, addr);
+      decoded = mem_read_inst(&memory_c, addr);
       if (decoded) {
 	inst_to_str(buf, decoded);
 	printf("0x%02X\t%s\n", addr, buf);
 	addr+=decoded->bytelen;
       } else {
-	printf("0x%02X\tDB 0x%02X\n", addr, mc.ram[addr]);
+	printf("0x%02X\tDB 0x%02X\n", addr, memory_c.ram[addr]);
 	addr++;
       }
     }
