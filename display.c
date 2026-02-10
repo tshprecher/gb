@@ -24,7 +24,7 @@ void init_lcd() {
     }
 
     screen = DefaultScreen(display);
-    window = XCreateSimpleWindow(display, RootWindow(display, screen), 10, 10, 1500, 1500, 1,
+    window = XCreateSimpleWindow(display, RootWindow(display, screen), 10, 10, 770, 770, 1,
 				 BlackPixel(display, screen), WhitePixel(display, screen));
 
 
@@ -139,7 +139,7 @@ static void lcd_refresh_frame(struct lcd_controller *lcd_c) {
   for (int y = 0; y < 256; y++) {
     for (int x = 0; x < 256; x++) {
       XSetForeground(display, gc, colors[frame[y][x]]);
-      XFillRectangle(display, window, gc, x*5, y*5, 5, 5);
+      XFillRectangle(display, window, gc, x*3, y*3, 3, 3);
     }
   }
 
