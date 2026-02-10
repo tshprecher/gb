@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include "input.h"
 #include "memory.h"
 #include "display.h"
 #include "sound.h"
@@ -17,54 +18,6 @@ static enum lcd_reg map_index_to_lcd_reg[] = {
   rLCDC, rSTAT, rSCY, rSCX, rLY, rLYC, rDMA, rBGP,
   rOBP0, rOBP1, rWY, rWX
 };
-
-// TODO: handle interrupt
-void input_tick(struct input_controller *pc) {
-  if (pc->t_cycles_to_read)
-    pc->t_cycles_to_read--;
-}
-
-void input_btn_press(struct input_controller *ic, enum btn btn) {
-  ic->btns_pressed |= (1 << btn);
-}
-
-void input_btn_release(struct input_controller *ic, enum btn btn) {
-  ic->btns_pressed &= ~(1 << btn);
-}
-
-void input_write_P1(struct input_controller *ic, uint8_t value) {
-  switch (value) {
-  case 0x10:
-    ic->status = value;
-    //    ic->t_cycles_to_read = 4;
-    break;
-  case 0x20:
-    ic->status = value;
-    //    ic->t_cycles_to_read = 16;
-    break;
-  case 0x30:
-    ic->status = value;
-    ic->t_cycles_to_read = 0;
-    break;
-  default:
-    fprintf(stderr, "error: no-op, writing value 0x%02x to reg $P1", value);
-  }
-}
-
-int input_read_P1(struct input_controller *ic, uint8_t *result) {
-  if (ic->status == 0x30)
-    return 0;
-  if (ic->t_cycles_to_read)
-    return 0;
-
-  if (ic->status == 0x10) {
-    *result = (~ic->btns_pressed >> 4) & 0x0F;
-  } else if (ic->status == 0x20) {
-    *result = (~ic->btns_pressed) & 0x0F;
-  }
-  return 1;
-}
-
 
 static char* mmapped_registers[] = {
   // 0xFE00

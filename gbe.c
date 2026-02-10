@@ -5,18 +5,13 @@
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-#include <X11/keysym.h>
-
 #include "sound.h"
+#include "input.h"
 #include "inst.h"
 #include "cpu.h"
 #include "memory.h"
 
 #define CLOCK_FREQ 4194304
-
-extern Display *display; // for X window button events
 
 static void sleep_ns(int64_t ns) {
   const struct timespec ts = {tv_nsec: ns};
@@ -59,58 +54,6 @@ ssize_t gb_dump(struct gb *gb) {
   return result;
 }
 
-void gb_poll_buttons(struct gb *gb) {
-  // Check if there are any events pending
-  XEvent event;
-  KeySym ks;
-  char buf[1];
-
-  if (XPending(display)) {
-    XNextEvent(display, &event);
-
-    switch (event.type) {
-    case KeyPress:
-    case KeyRelease:
-      enum btn btn = BTN_START;
-      XLookupString(&event.xkey, buf, sizeof(buf), &ks, NULL);
-
-      switch (ks) {
-      case XK_Right:
-	btn = BTN_RIGHT;
-	break;
-      case XK_Left:
-	btn = BTN_LEFT;
-	break;
-      case XK_Up:
-	btn = BTN_UP;
-	break;
-      case XK_Down:
-	btn = BTN_DOWN;
-	break;
-      case XK_a:
-	btn = BTN_A;
-	break;
-      case XK_b:
-	btn = BTN_B;
-	break;
-      case XK_space:
-	btn = BTN_SELECT;
-	break;
-      }
-
-      if (event.type == KeyPress) {
-	input_btn_press(gb->input_c, btn);
-      } else if (event.type == KeyRelease) {
-	input_btn_release(gb->input_c, btn);
-      }
-
-      break;
-    default:
-      break;
-    }
-  }
-}
-
 void gb_run(struct gb *gb)
 {
   init_lcd();
@@ -127,9 +70,6 @@ void gb_run(struct gb *gb)
     input_tick(gb->input_c);
     timing_tick(gb->timing_c);
     sound_tick(gb->sound_c);
-    if (t_cycles % 1024 == 0) // TODO: put this behind another tick(), and does this need to be polled so often?
-      gb_poll_buttons(gb);
-
     if (t_cycles % ((1<<16) + 1) == 0) {
       int64_t cur_cycle_time_ns = get_time_ns();
       int64_t cur_period_time_ns;
