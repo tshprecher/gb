@@ -16,13 +16,13 @@ struct test_suite {
   char test_errors[MAX_TEST_ERRORS][256];
 };
 
-void print_red(char *str) {
+static void print_red(char *str) {
   printf(TERM_COLOR_RED);
   printf("%s", str);
   printf(TERM_COLOR_RESET);
 }
 
-void print_green(char *str) {
+static void print_green(char *str) {
   printf(TERM_COLOR_GREEN);
   printf("%s", str);
   printf(TERM_COLOR_RESET);

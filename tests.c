@@ -157,6 +157,11 @@ int test_cpu_exec() {
     {"SUB 0x0F", {.A = 0x3E}, 2, {.A = 0x2F, .F = 0x60, .PC = 0x0002}, {}, {}},
     {"SUB 0x40", {.A = 0x3E}, 2, {.A = 0xFE, .F = 0x50, .PC = 0x0002}, {}, {}},
 
+    {"SBC A, H", {.A = 0x3B, .H = 0x2A, .F = 0x10}, 1, {.A = 0x10, .H = 0x2A, .F = 0x40, .PC = 0x0001}, {}, {}},
+    {"SBC A, 0x3A", {.A = 0x3B, .H = 0x2A, .F = 0x10}, 2, {.A = 0, .H = 0x2A, .F = 0xC0, .PC = 0x0002}, {}, {}},
+    {"SBC A, 0x4F", {.A = 0x3B, .H = 0x2A, .F = 0x10}, 2, {.A = 0xEB, .H = 0x2A, .F = 0x70, .PC = 0x0002}, {}, {}},
+    {"SBC A, (HL)", {.A = 0x3B, .F = 0x10}, 2, {.A = 0x3A, .F = 0x40, .PC = 0x0001}, {}, {}},
+
     {"XOR A", {.A = 0xFF}, 1, {.F = 0x80, .PC = 0x0001}, {}, {}},
     {"XOR 0x0F", {.A = 0xFF}, 2, {.A = 0xF0, .PC = 0x0002}, {}, {}},
     {"XOR 0x8A", {.A = 0xFF}, 2, {.A = 0x75, .PC = 0x0002}, {}, {}},
@@ -240,11 +245,14 @@ int test_cpu_exec() {
     tst.initial.memory_c = &mc;
 
     suite_test_start(&ts, tst.asm_command);
-    init_inst_from_asm(&inst, tst.asm_command);
+    if (!init_inst_from_asm(&inst, tst.asm_command)) {
+      suite_test_error(&ts, "\t\tcould not parse asm '%s'\n", tst.asm_command);
+      suite_test_end(&ts);
+      continue;
+    }
     int cycles = cpu_exec_instruction(&tst.initial, &inst);
     if (cycles != tst.cycles) {
       suite_test_error(&ts, "\tfound cycles:\t%d\n\t\texpected:\t%d\n", cycles, tst.cycles);
-
     }
     if (!cpu_equals(tst.initial, tst.expected)) {
       cpu_to_str(buf1, &tst.initial);

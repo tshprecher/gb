@@ -160,10 +160,13 @@ static uint8_t alu_add(struct cpu *cpu, uint8_t op1, uint8_t op2, uint8_t in_car
   return result;
 }
 
-// handles SUB operations for addition, properly assigning the flags
-static uint8_t alu_sub(struct cpu *cpu, uint8_t op1, uint8_t op2) {
+// handles ALU operations for subtraction, properly assigning the flags
+static uint8_t alu_sub(struct cpu *cpu, uint8_t op1, uint8_t op2, uint8_t in_carry) {
+  if (in_carry) {
+    // subtract the carry bit recursively for proper flag assignment
+    op1 = alu_sub(cpu, op1, 1, 0);
+  }
   op2 = ~op2;
-
   uint8_t h_carry, cy_carry;
   uint8_t lower4 = alu_4bit_add(op1, op2, 1, &h_carry); // 2's complement means carry is 1 after bits flipped
   uint8_t upper4 = alu_4bit_add(op1 >> 4, op2 >> 4, h_carry, &cy_carry);
@@ -181,7 +184,6 @@ void init_cpu(struct cpu *cpu) {
   cpu->PC = 0x150;
   cpu->SP = 0xFFFE;
 }
-
 
 void cpu_tick(struct cpu *cpu) {
   if (cpu->t_cycles < 0) { // catch up for variably timed instructions
@@ -243,7 +245,6 @@ void cpu_tick(struct cpu *cpu) {
 
 }
 
-
 // cpu_exec_instruction takes a executes the instruction.
 // It returns the number of cycles run, -1 on error
 // TODO: could use a few more macros for clarity?
@@ -287,7 +288,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
 	alu_add(cpu, upper_8(cpu->SP), 0, flag_cy); // to set upper carry bits
       } else {
 	flag_cy = (lower_8(cpu->SP) < -e) ? 1 : 0;
-	alu_sub(cpu, upper_8(cpu->SP), flag_cy); // to set upper carry bits
+	alu_sub(cpu, upper_8(cpu->SP), flag_cy, 0); // to set upper carry bits
       }
       cpu_clear_flag(cpu, FLAG_Z);
       cpu_clear_flag(cpu, FLAG_N);
@@ -305,13 +306,26 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   case (SUB):
     switch (inst->subtype) {
     case 0:
-      cpu->A = alu_sub(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)));
+      cpu->A = alu_sub(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)), 0);
       break;
     case 1:
-      cpu->A = alu_sub(cpu, cpu->A, inst->args[0].value.byte);
+      cpu->A = alu_sub(cpu, cpu->A, inst->args[0].value.byte, 0);
       break;
     case 2:
-      cpu->A = alu_sub(cpu, cpu->A, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)));
+      cpu->A = alu_sub(cpu, cpu->A, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)), 0);
+      break;
+    }
+    break;
+  case (SBC):
+    switch (inst->subtype) {
+    case 0:
+      cpu->A = alu_sub(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)), cpu_flag(cpu, FLAG_CY));
+      break;
+    case 1:
+      cpu->A = alu_sub(cpu, cpu->A, inst->args[0].value.byte, cpu_flag(cpu, FLAG_CY));
+      break;
+    case 2:
+      cpu->A = alu_sub(cpu, cpu->A, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)), cpu_flag(cpu, FLAG_CY));
       break;
     }
     break;
@@ -338,7 +352,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     switch (inst->subtype) {
     case 0:
       flag_cy = cpu_flag(cpu, FLAG_CY);
-      *(reg(cpu, inst->args[0].value.byte)) = alu_sub(cpu, *(reg(cpu, inst->args[0].value.byte)), 1);
+      *(reg(cpu, inst->args[0].value.byte)) = alu_sub(cpu, *(reg(cpu, inst->args[0].value.byte)), 1, 0);
       flag_cy == 0 ? cpu_clear_flag(cpu, FLAG_CY) : cpu_set_flag(cpu, FLAG_CY);
       break;
     case 1:
@@ -348,7 +362,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     case 2:
       flag_cy = cpu_flag(cpu, FLAG_CY);
       mem_write(cpu->memory_c, regs_to_word(cpu, rH, rL),
-		alu_sub(cpu, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)), 1));
+		alu_sub(cpu, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)), 1, 0));
       flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
       break;
     }
@@ -407,13 +421,13 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   case (CP):
     switch (inst->subtype) {
     case 0:
-      alu_sub(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)));
+      alu_sub(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)), 0);
       break;
     case 1:
-      alu_sub(cpu, cpu->A, inst->args[0].value.byte);
+      alu_sub(cpu, cpu->A, inst->args[0].value.byte, 0);
       break;
     case 2:
-      alu_sub(cpu, cpu->A, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)));
+      alu_sub(cpu, cpu->A, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)), 0);
       break;
     }
     break;
