@@ -28,17 +28,6 @@ struct interrupt_controller {
 
 void interrupt(struct interrupt_controller *, enum Interrupt);
 
-
-struct timing_controller {
-  uint32_t div_t_cycles;
-
-  // timer registers
-  uint8_t TIMA, TMA, TAC;
-};
-
-void timing_tick(struct timing_controller *);
-
-
 struct cpu {
   // 8 bit registers
   uint8_t A, B, C, D, E, F /*flags register*/, H, L;

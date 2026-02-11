@@ -3,6 +3,7 @@
 #include "cpu.h"
 #include "memory.h"
 #include "inst.h"
+#include "timing.h"
 
 #define upper_8(v) ((v >> 8) & 0xFF)
 #define lower_8(v) (v & 0xFF)
@@ -15,16 +16,11 @@
 // hard coded interrupt handler addresses by interrupt priority
 static uint16_t interrupt_handlers[] = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060};
 
-void timing_tick(struct timing_controller *tc) {
-  tc->div_t_cycles++;
-}
-
 // TODO: should all enums be capital?
 void interrupt(struct interrupt_controller *ic, enum Interrupt interrupt) {
   printf("debug: interrupt %d\n", interrupt);
   ic->IF |= (1 << interrupt);
 }
-
 
 static uint8_t * reg(struct cpu *cpu, uint8_t reg) {
   if (reg == rA)

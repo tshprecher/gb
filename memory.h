@@ -1,9 +1,10 @@
 #ifndef MEMORY_H
 #define MEMORY_H
 
-#include "inst.h"
-#include "display.h"
 #include "cpu.h"
+#include "display.h"
+#include "inst.h"
+#include "timing.h"
 
 char * mmapped_reg_to_str(uint16_t);
 

@@ -19,6 +19,11 @@ static enum lcd_reg map_index_to_lcd_reg[] = {
   rOBP0, rOBP1, rWY, rWX
 };
 
+static enum timing_reg map_index_to_timing_reg[] = {
+  rDIV, rTIMA, rTMA, rTAC
+};
+
+// DO NOT CHANGE ORDER WITHOUT CHANGING mem_read() AND mem_write()
 static char* mmapped_registers[] = {
   // 0xFE00
   "$OAM",
@@ -110,29 +115,16 @@ static struct inst cached_insts[0x10000];
 static uint8_t cached_bitmap[0x10000 >> 3];
 
 uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
-  // TODO: this looks uglier than necessary. consolidate into one switch?
   if (addr == 0xFF00) {
     uint8_t inputs = 0;
     input_read_P1(mc->input_c, &inputs);
     return inputs;
   } else if (addr >= 0xFF04 && addr <= 0xFF07) {
-    //    printf("DEBUG: reading timer register @ 0x%04X\n", addr);
-    switch (addr - 0xFF04) {
-    case 0:
-      //printf("DEBUG: read DIV -> 0x%02X\n", (uint8_t) ((mc->tc->div_t_cycles >> 9) & 0xFF));
-      return (uint8_t) ((mc->timing_c->div_t_cycles >> 9) & 0xFF);
-    case 1:
-      return mc->timing_c->TIMA;
-    case 2:
-      return mc->timing_c->TMA;
-    case 3:
-      return mc->timing_c->TAC;
-    };
+    int reg_index = addr - 0xFF04;
+    return timing_reg_read(mc->timing_c, map_index_to_timing_reg[reg_index]);
   }else if (addr == 0xFF0F) {
-    //printf("DEBUG: reading interrupt register IF\n");
     return mc->interrupt_c->IF;
   } else if (addr == 0xFFFF) {
-    //printf("DEBUG: reading interrupt register IE\n");
     return mc->interrupt_c->IE;
   } else if (addr >= 0xFF40 && addr <= 0xFF4B) {
     return lcd_reg_read(mc->lcd_c, map_index_to_lcd_reg[addr-0xFF40]);
@@ -157,18 +149,8 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t byte) {
     input_write_P1(mc->input_c, byte);
   } else if (addr >= 0xFF04 && addr <= 0xFF07) {
     //printf("DEBUG: writing 0x%02X to timer register @ 0x%04X\n", byte, addr);
-    switch (addr - 0xFF04) {
-    case 0:
-      // TODO: delegate to underlying controller is better
-      mc->timing_c->div_t_cycles = 0;
-    case 1:
-      mc->timing_c->TIMA = byte;
-    case 2:
-      mc->timing_c->TMA = byte;
-    case 3:
-      //printf("DEBUG: writing TAC: 0x%02X\n", byte);
-      mc->timing_c->TAC = byte;
-    };
+    int reg_index = addr - 0xFF04;
+    timing_reg_write(mc->timing_c,  map_index_to_timing_reg[reg_index], byte);
   } else if (addr == 0xFF0F) {
     //printf("DEBUG: writing 0x%02X to interrupt register IF\n", byte);
     mc->interrupt_c->IF = byte;
