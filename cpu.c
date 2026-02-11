@@ -182,8 +182,8 @@ void init_cpu(struct cpu *cpu) {
 }
 
 void cpu_tick(struct cpu *cpu) {
-  if (cpu->t_cycles < 0) { // catch up for variably timed instructions
-      cpu->t_cycles++;
+  if (cpu->t_cycles_since_last_inst < 0) { // catch up for variably timed instructions
+      cpu->t_cycles_since_last_inst++;
       return;
   }
 
@@ -193,7 +193,7 @@ void cpu_tick(struct cpu *cpu) {
   }
 
   // check interrupt between completed instructions
-  if (cpu->t_cycles == 0 && cpu->IME && cpu->interrupt_c->IF) {
+  if (cpu->t_cycles_since_last_inst == 0 && cpu->IME && cpu->interrupt_c->IF) {
     printf("DEBUG: noticed interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
     for (int i = 0; i < 5; i++) {
       uint8_t mask = 1 << i;
@@ -208,19 +208,19 @@ void cpu_tick(struct cpu *cpu) {
 	  mem_write(cpu->memory_c,cpu->SP-2, lower_8(cpu->PC));
 	  cpu->SP -= 2;
 	  cpu->PC = interrupt_handlers[i];
-	  cpu->interrupt_t_cycles = 6 << 2;
+	  cpu->interrupt_t_cycles = 6 << 2; // TODO: is this correct for every interrupt type?
       }
     }
   }
 
-  if (!cpu->next_inst || cpu->t_cycles == 0) // TODO: put this in the init?
+  if (!cpu->next_inst || cpu->t_cycles_since_last_inst == 0) // TODO: put this in the init?
     cpu->next_inst = mem_read_inst(cpu->memory_c, cpu->PC);
 
-  // 4 clock cycles per machine cycle
+  // 4 clock "t" cycles per machine "m" cycle
   int8_t exec_cycle = (cpu->next_inst->cycles << 2);
-  cpu->t_cycles++;
-  char buf[32];
-  if (cpu->t_cycles == exec_cycle) {
+  cpu->t_cycles_since_last_inst++;
+  if (cpu->t_cycles_since_last_inst == exec_cycle) {
+    // char buf[32];
     //inst_to_str(buf, cpu->next_inst);
     //printf("0x%04X\t%s\n", cpu->PC, buf);
     int cycles = cpu_exec_instruction(cpu, cpu->next_inst);
@@ -232,10 +232,10 @@ void cpu_tick(struct cpu *cpu) {
       exit(1);
     }
 
-    if (exec_cycle > cpu->t_cycles) {
-      cpu->t_cycles -= exec_cycle; // go negative to catch up
+    if (exec_cycle > cpu->t_cycles_since_last_inst) {
+      cpu->t_cycles_since_last_inst -= exec_cycle; // go negative to catch up
     } else {
-      cpu->t_cycles = 0;
+      cpu->t_cycles_since_last_inst = 0;
     }
   }
 

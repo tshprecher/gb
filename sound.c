@@ -49,10 +49,6 @@ static inline int is_on_stereo_right(struct sound_controller *sc,
   return (sc->regs[rNR51] & (1 << (sound_type+3)));
 }
 
-static inline int is_all_enabled(struct sound_controller *sc) {
-  return (sc->regs[rNR52] & 0x80) > 0;
-}
-
 static inline int is_all_disabled(struct sound_controller *sc) {
   return (sc->regs[rNR52] & 0x80) == 0;
 }

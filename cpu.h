@@ -43,7 +43,7 @@ struct cpu {
   struct interrupt_controller *interrupt_c;
 
   // the number of t_cycles since last instruction execution
-  int8_t t_cycles;
+  int8_t t_cycles_since_last_inst;
 
   // the next instruction to execute
   struct inst *next_inst;
