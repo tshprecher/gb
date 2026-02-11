@@ -15,19 +15,19 @@ static inline void input_btn_release(struct input_controller *ic, enum btn btn) 
 }
 
 static inline void input_poll(struct input_controller *ic) {
-  // Check if there are any events pending
+  // check if there are any button events pending
   XEvent event;
   KeySym ks;
-  char buf[1];
+  char buf;
 
   if (XPending(display)) {
     XNextEvent(display, &event);
-
+    enum btn btn;
     switch (event.type) {
     case KeyPress:
     case KeyRelease:
-      enum btn btn = BTN_START;
-      XLookupString(&event.xkey, buf, sizeof(buf), &ks, NULL);
+      btn = BTN_START; // default is start
+      XLookupString(&event.xkey, &buf, 1, &ks, NULL);
 
       switch (ks) {
       case XK_Right:
@@ -58,7 +58,6 @@ static inline void input_poll(struct input_controller *ic) {
       } else if (event.type == KeyRelease) {
 	input_btn_release(ic, btn);
       }
-
       break;
     default:
       break;

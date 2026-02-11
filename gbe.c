@@ -14,10 +14,10 @@
 #define CLOCK_FREQ 4194304
 
 static void sleep_ns(int64_t ns) {
-  const struct timespec ts = {tv_nsec: ns};
+  const struct timespec ts = {.tv_nsec = ns};
   struct timespec rem;
   int res;
-  if ((res = nanosleep(&ts, &rem))) { // TODO: change to clock_nanosleep
+  if ((res = nanosleep(&ts, &rem))) {
     perror("nanosleep() failed");
     exit(1);
   }
