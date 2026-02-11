@@ -16,7 +16,6 @@ static uint64_t colors[4] = {0xFFFFFF, 0xa9a9a9, 0x545454, 0x000000};
 
 void init_lcd() {
   if (!display) {
-    printf("DEBUG: inside lcd init\n");
     display = XOpenDisplay(NULL);
     if (!display) {
       fprintf(stderr, "could not initialize display\n");
@@ -101,7 +100,7 @@ static void lcd_refresh_frame(struct lcd_controller *lcd_c) {
       uint16_t chr_code = mem_read(lcd_c->memory_c, oam_addr+2);
       uint16_t attributes = mem_read(lcd_c->memory_c, oam_addr+3);
 
-      // TOOD: handle OBJ priority
+      // TODO: handle OBJ priority
       uint8_t palette = is_bit_set(attributes, 4) ? lcd_c->regs[rOBP1] : lcd_c->regs[rOBP0];
 
       for (int c = 0; c < 16; c++) {
@@ -164,13 +163,13 @@ void lcd_tick(struct lcd_controller *lcd_c) {
     return;
 
 
-  lcd_c->t_cycles++;
-  lcd_c->regs[rLY] = lcd_c->t_cycles / 457;
+  lcd_c->t_cycles_since_last_line_refresh++;
+  lcd_c->regs[rLY] = lcd_c->t_cycles_since_last_line_refresh / 457;
 
   if (lcd_c->regs[rLY] == 154) {
     lcd_c->regs[rLY] = 0;
-    lcd_c->t_cycles = 0;
-  } else if (lcd_c->regs[rLY] == 144 && lcd_c->t_cycles % 457 == 0) { // TODO: this whole function is hacky
+    lcd_c->t_cycles_since_last_line_refresh = 0;
+  } else if (lcd_c->regs[rLY] == 144 && lcd_c->t_cycles_since_last_line_refresh % 457 == 0) { // TODO: this whole function is hacky
     // entered vblank period, so refresh and trigger interrupt
     printf("debug: refreshing frame with LCDC ->  0x%02X\n", lcd_c->regs[rLCDC]);
     lcd_refresh_frame(lcd_c);
@@ -193,7 +192,7 @@ void lcd_reg_write(struct lcd_controller* lcd_c, enum lcd_reg reg, uint8_t byte)
       } else {
 	printf("DEBUG: LCDC change -> LCD turning off\n");
 	lcd_c->regs[rLY] = 0;
-	lcd_c->t_cycles = 0;
+	lcd_c->t_cycles_since_last_line_refresh = 0;
 
 	XSetForeground(display, gc, 0x222222);
 	XFillRectangle(display, window, gc, 0, 0, 1280, 1280);

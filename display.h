@@ -18,9 +18,9 @@ struct lcd_controller {
   uint8_t regs[12];
 
   // cycle since last vertical line refresh
-  uint32_t t_cycles;
+  uint32_t t_cycles_since_last_line_refresh;
 
-  struct mem_controller *memory_c; // TODO: do we need this?
+  struct mem_controller *memory_c;
   struct interrupt_controller *interrupt_c;
 };
 
