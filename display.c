@@ -41,16 +41,33 @@ void init_lcd() {
   }
 }
 
-static void frame_put_chr(uint8_t frame[256][256], uint8_t x, uint8_t y, uint8_t *chr, uint8_t palette) {
+static void frame_put_chr(uint8_t frame[256][256],
+			  uint8_t x,
+			  uint8_t y,
+			  uint8_t *chr,
+			  uint8_t palette,
+			  uint8_t flip_horizontal,
+			  uint8_t flip_vertical,
+			  uint8_t override_priority) {
   for (int c = 0; c < 16; c+=2) {
     for (int b = 7; b >= 0; b--) {
-      int upper = (chr[c] & (1 << b)) != 0;
-      int lower = (chr[c+1] & (1 << b)) != 0;
-      int color = (upper << 1) + lower;
+      int upper_bit = (chr[c] & (1 << b)) != 0;
+      int lower_bit = (chr[c+1] & (1 << b)) != 0;
+      int color_index = (upper_bit << 1) + lower_bit;
 
       int row = c >> 1;
       int col = 7-b;
-      frame[y+row][x+col] = (palette >> (color<<1)) & 0x3;
+
+      if (flip_horizontal) {
+	col = 7-col;
+      }
+      if (flip_vertical) {
+	row = 7-row;
+      }
+      int color = (palette >> (color_index<<1)) & 0x3;
+      if (color || (!color && override_priority)) {
+	frame[y+row][x+col] = color;
+      }
     }
   }
 }
@@ -78,7 +95,7 @@ static void lcd_refresh_frame(struct lcd_controller *lcd_c) {
       int blockY = tile_addr / 32 - 1216;
       uint8_t palette = lcd_c->regs[rBGP];
 
-      frame_put_chr(frame, blockX*8, blockY*8, chr, palette);
+      frame_put_chr(frame, blockX*8, blockY*8, chr, palette, 0, 0, 1);
       tile_idx++;
     }
   } else {
@@ -90,25 +107,28 @@ static void lcd_refresh_frame(struct lcd_controller *lcd_c) {
   if (is_bit_set(lcd_c->regs[rLCDC], 1)) {
     int obj_8_by_8 = is_bit_set(lcd_c->regs[rLCDC], 3) ? 0 : 1;
     if (!obj_8_by_8) {
-      printf("warn: unimplemented: 8 x 16 objects\n");
-      exit(1);
+      // TODO: does 8x16 imply any different logic or was is just a hardware/software optimization?
+      //printf("warn: unimplemented: 8 x 16 objects\n");
     }
 
     for (int oam_addr = 0xFE00; oam_addr < 0xFEA0; oam_addr+=4) {
-      uint16_t y_pos = mem_read(lcd_c->memory_c, oam_addr);
-      uint16_t x_pos = mem_read(lcd_c->memory_c, oam_addr+1);
-      uint16_t chr_code = mem_read(lcd_c->memory_c, oam_addr+2);
-      uint16_t attributes = mem_read(lcd_c->memory_c, oam_addr+3);
+      uint8_t y_pos = mem_read(lcd_c->memory_c, oam_addr);
+      uint8_t x_pos = mem_read(lcd_c->memory_c, oam_addr+1);
+      uint8_t chr_code = mem_read(lcd_c->memory_c, oam_addr+2);
+      uint8_t attributes = mem_read(lcd_c->memory_c, oam_addr+3);
 
       // TODO: handle OBJ priority
       uint8_t palette = is_bit_set(attributes, 4) ? lcd_c->regs[rOBP1] : lcd_c->regs[rOBP0];
+      uint8_t flip_horizontal = is_bit_set(attributes, 5);
+      uint8_t flip_vertical = is_bit_set(attributes, 6);
+      uint8_t override_priority = !is_bit_set(attributes, 7);
 
       for (int c = 0; c < 16; c++) {
 	chr[c] = mem_read(lcd_c->memory_c, 0x8000 + (chr_code<<4) + c);
       }
 
       // NOTE: for some reason the (0,0) top left corner of the LCD is represented by (8, 16)
-      frame_put_chr(frame, x_pos-8, y_pos-16, chr, palette);
+      frame_put_chr(frame, x_pos-8, y_pos-16, chr, palette, flip_horizontal, flip_vertical, override_priority);
     }
   }
 
@@ -130,7 +150,7 @@ static void lcd_refresh_frame(struct lcd_controller *lcd_c) {
       int blockY = tile_addr / 32 - 1216;
       uint8_t palette = lcd_c->regs[rBGP];
 
-      frame_put_chr(frame, blockX*8, blockY*8, chr, palette);
+      frame_put_chr(frame, blockX*8, blockY*8, chr, palette, 0, 0, 1);
       tile_idx++;
     }
   }
