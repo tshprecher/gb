@@ -43,17 +43,6 @@ struct gb
   struct sound_controller *sound_c;
 };
 
-ssize_t gb_dump(struct gb *gb) {
-  FILE *dump;
-  if ((dump = fopen("dump.bin", "wb")) == NULL) {
-    return 0;
-
-  }
-  size_t result = fwrite(gb->memory_c->ram, 1, 0x10000, dump);
-  fclose(dump);
-  return result;
-}
-
 void gb_run(struct gb *gb)
 {
   init_lcd();
@@ -86,34 +75,6 @@ void gb_run(struct gb *gb)
   }
 }
 
-// TODO: make this a method of memory controller
-void load_rom(struct mem_controller *mc, char *filename)
-{
-    FILE *fin = fopen(filename, "rb");
-    if (NULL == fin)
-    {
-        fprintf(stderr, "error opening file: %s\n", filename);
-        exit(1);
-    }
-
-    char b;
-    int addr = 0;
-    while (addr < 0x8000)
-    {
-      size_t c = fread(&b, 1, 1, fin);
-      if (c == 0)
-	break;
-      mc->ram[addr++] = b;
-    }
-    if (addr != 0x8000)
-      {
-        fprintf(stderr, "error reading ROM: cannot read full 32K of ROM: %x\n", addr);
-        exit(1);
-      }
-    fclose(fin);
-}
-
-
 // TODO: use getopt
 int main(int argc, char *argv[])
 {
@@ -121,6 +82,8 @@ int main(int argc, char *argv[])
     fprintf(stderr, "error: missing arguments.\n");
     return 1;
   } else if (argc == 2) { // run game
+    struct rom rom = load_rom(argv[1]);
+
     struct cpu cpu = {0};
     init_cpu(&cpu);
 
@@ -136,6 +99,7 @@ int main(int argc, char *argv[])
     lcd_c.interrupt_c = &interrupt_c;
     lcd_c.regs[rLCDC] = 0x83; // TODO: put in an init?
 
+    memory_c.rom = &rom;
     memory_c.interrupt_c = &interrupt_c;
     memory_c.lcd_c = &lcd_c;
     memory_c.timing_c = &timing_c;
@@ -154,7 +118,6 @@ int main(int argc, char *argv[])
     gb.input_c = &input_c;
     gb.sound_c = &sound_c;
 
-    load_rom(gb.memory_c, argv[1]);
     gb_run(&gb);
   } else if (argc == 3) { // disassemble
     if (strcmp(argv[1], "-d") != 0) {
@@ -163,17 +126,17 @@ int main(int argc, char *argv[])
     }
 
     struct mem_controller memory_c = {0};
-    load_rom(&memory_c, argv[2]);
+    struct rom rom = load_rom(argv[2]);
 
     int addr = 0x0;
-    struct inst *decoded;
+    struct inst decoded;
     char buf[16];
     while (addr < 0x8000) {
-      decoded = mem_read_inst(&memory_c, addr);
-      if (decoded) {
-	inst_to_str(buf, decoded);
+      int ok = init_inst_from_bytes(&decoded, &rom.mem[addr]);
+      if (ok) {
+	inst_to_str(buf, &decoded);
 	printf("0x%02X\t%s\n", addr, buf);
-	addr+=decoded->bytelen;
+	addr+=decoded.bytelen;
       } else {
 	printf("0x%02X\tDB 0x%02X\n", addr, memory_c.ram[addr]);
 	addr++;

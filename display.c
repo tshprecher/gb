@@ -3,7 +3,6 @@
 #include <X11/Xlib.h>
 #include "display.h"
 
-
 // X11 variables
 // TODO: put these in the lcd struct later
 Display *display = NULL;
@@ -27,7 +26,7 @@ void init_lcd() {
 				 BlackPixel(display, screen), WhitePixel(display, screen));
 
 
-    /* 3. Select input events (we need Expose events to know when to draw) */
+    /* select input events */
     XSelectInput(display, window, KeyReleaseMask | KeyPressMask);
 
 
@@ -201,16 +200,16 @@ uint8_t lcd_reg_read(struct lcd_controller* lcd_c, enum lcd_reg reg) {
   return lcd_c->regs[reg];
 }
 
-void lcd_reg_write(struct lcd_controller* lcd_c, enum lcd_reg reg, uint8_t byte) {// TODO: rename to 'value'?
+void lcd_reg_write(struct lcd_controller* lcd_c, enum lcd_reg reg, uint8_t value) {
   uint8_t original_value = lcd_c->regs[reg];
-  lcd_c->regs[reg] = byte;
+  lcd_c->regs[reg] = value;
   switch (reg) {
   case rLCDC:
-    if (is_bit_set(original_value,7) != is_bit_set(byte, 7)) {
-      if (is_bit_set(byte, 7)) {
-	printf("DEBUG: LCDC change -> LCD turning on\n");
+    if (is_bit_set(original_value,7) != is_bit_set(value, 7)) {
+      if (is_bit_set(value, 7)) {
+	printf("debug: LCDC change -> LCD turning on\n");
       } else {
-	printf("DEBUG: LCDC change -> LCD turning off\n");
+	printf("debug: LCDC change -> LCD turning off\n");
 	lcd_c->regs[rLY] = 0;
 	lcd_c->t_cycles_since_last_line_refresh = 0;
 
@@ -222,7 +221,7 @@ void lcd_reg_write(struct lcd_controller* lcd_c, enum lcd_reg reg, uint8_t byte)
     break;
   case rDMA:
     for (int b = 0; b <= 0x9F; b++) {
-      mem_write(lcd_c->memory_c, 0xFE00 + b, mem_read(lcd_c->memory_c, (byte<<8)+b));
+      mem_write(lcd_c->memory_c, 0xFE00 + b, mem_read(lcd_c->memory_c, (value<<8)+b));
     }
     break;
   default:

@@ -236,14 +236,24 @@ int test_cpu_exec() {
 
   };
 
-
   for (int t = 0; t < sizeof(tests) / sizeof(struct test); t++) {
     struct inst inst = {0};
     struct test tst = tests[t];
     struct mem_controller mc = {0};
-    memset(mc.ram, 0, sizeof(mc.ram));
-    tst.initial.memory_c = &mc;
+    memset(mc.ram, 0, sizeof(mc.ram)); // TODO: remove this line?
 
+    struct rom rom = {0};
+
+    rom.num_banks = 1;
+    uint8_t rom_mem[0x8000] = {0};
+    struct inst rom_cached_insts[0x8000] = {0};
+    uint8_t rom_is_cached_bitmap[0x8000 >> 3] = {0};
+    rom.mem = rom_mem;
+    rom.cached_insts = rom_cached_insts;
+    rom.is_cached_bitmap = rom_is_cached_bitmap;
+
+    mc.rom = &rom;
+    tst.initial.memory_c = &mc;
     suite_test_start(&ts, tst.asm_command);
     if (!init_inst_from_asm(&inst, tst.asm_command)) {
       suite_test_error(&ts, "\t\tcould not parse asm '%s'\n", tst.asm_command);
@@ -260,19 +270,18 @@ int test_cpu_exec() {
       suite_test_error(&ts, "\t\tfound cpu:\t%s\n\t\texpected type:\t%s\n", buf1, buf2);
     }
     if ((tst.modified_addrs[0] || tst.modified_addrs[1]) &&
-	((tst.initial.memory_c->ram[tst.modified_addrs[0]] != tst.modified_addr_values[0]) ||
-	 (tst.initial.memory_c->ram[tst.modified_addrs[1]] != tst.modified_addr_values[1]))
+	((mem_read(tst.initial.memory_c, tst.modified_addrs[0]) != tst.modified_addr_values[0]) ||
+	 (mem_read(tst.initial.memory_c, tst.modified_addrs[1]) != tst.modified_addr_values[1]))
 	) {
       suite_test_error(&ts, "\t\tfound ram values:\t{0x%04X : 0x%02X, 0x%04X : 0x%02X}\n\t\texpected ram values:\t{0x%04X : 0x%02X, 0x%04X : 0x%02X}\n",
-		  tst.modified_addrs[0],
-		  tst.initial.memory_c->ram[tst.modified_addrs[0]],
-		  tst.modified_addrs[1],
-		  tst.initial.memory_c->ram[tst.modified_addrs[1]],
-		  tst.modified_addrs[0],
-		  tst.modified_addr_values[0],
-		  tst.modified_addrs[1],
-		  tst.modified_addr_values[1]);
-
+		       tst.modified_addrs[0],
+		       mem_read(tst.initial.memory_c, tst.modified_addrs[0]),
+		       tst.modified_addrs[1],
+		       mem_read(tst.initial.memory_c, tst.modified_addrs[1]),
+		       tst.modified_addrs[0],
+		       tst.modified_addr_values[0],
+		       tst.modified_addrs[1],
+		       tst.modified_addr_values[1]);
     }
     suite_test_end(&ts);
   }

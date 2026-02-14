@@ -223,8 +223,8 @@ void sound_tick(struct sound_controller *sc) {
 }
 
 
-void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, uint8_t byte) {
-  sc->regs[reg] = byte;
+void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, uint8_t value) {
+  sc->regs[reg] = value;
   switch (reg) {
   case rNR14:
     if (initialize_on(sc->regs[rNR14])) {
@@ -317,7 +317,7 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, uint8_t by
 	.output_level = (sc->regs[rNR32] >> 5) & 0x3,
       };
 
-      uint8_t *waveform = &sc->memory_c->ram[0xFF30];
+      uint8_t *waveform = mem_ptr(sc->memory_c, 0xFF30);
       for (int step = 0; step < 32; step+=2) {
 	uint8_t byte = waveform[step/2];
 	sound3.waveform[step] = (byte >> 4) & 0x0F;

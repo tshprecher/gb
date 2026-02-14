@@ -194,16 +194,16 @@ void cpu_tick(struct cpu *cpu) {
 
   // check interrupt between completed instructions
   if (cpu->t_cycles_since_last_inst == 0 && cpu->IME && cpu->interrupt_c->IF) {
-    printf("DEBUG: noticed interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
+    printf("debug: noticed interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
     for (int i = 0; i < 5; i++) {
       uint8_t mask = 1 << i;
       if ((cpu->interrupt_c->IF & mask) && (cpu->interrupt_c->IE & mask)) {
 	  cpu->interrupt_c->IF ^= mask;
 	  cpu->IME = 0;
-	  printf("DEBUG: handling interrupt #%d\n", i);
+	  printf("debug: handling interrupt #%d\n", i);
 
 	  // TODO: consolidate PUSH into one operation?
-	  printf("DEBUG: pushing interrupt return address: 0x%04X\n", cpu->PC);
+	  printf("debug: pushing interrupt return address: 0x%04X\n", cpu->PC);
 	  mem_write(cpu->memory_c,cpu->SP-1,  upper_8(cpu->PC));
 	  mem_write(cpu->memory_c,cpu->SP-2, lower_8(cpu->PC));
 	  cpu->SP -= 2;
@@ -220,9 +220,9 @@ void cpu_tick(struct cpu *cpu) {
   int8_t exec_cycle = (cpu->next_inst->cycles << 2);
   cpu->t_cycles_since_last_inst++;
   if (cpu->t_cycles_since_last_inst == exec_cycle) {
-    // char buf[32];
-    //inst_to_str(buf, cpu->next_inst);
-    //printf("0x%04X\t%s\n", cpu->PC, buf);
+    /*char buf[32];
+    inst_to_str(buf, cpu->next_inst);
+    printf("DEBUG: 0x%04X\t%s\n", cpu->PC, buf);*/
     int cycles = cpu_exec_instruction(cpu, cpu->next_inst);
     if (cycles < 0) {
       char buf[16];
@@ -444,7 +444,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       bytePtr = reg(cpu, inst->args[0].value.byte);
       break;
     case 1:
-      bytePtr = &cpu->memory_c->ram[regs_to_word(cpu, rH, rL)];
+      bytePtr = mem_ptr(cpu->memory_c, regs_to_word(cpu, rH, rL));
       break;
     }
     flag_cy = (*bytePtr & 0x80) != 0;
@@ -500,7 +500,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       bytePtr = reg(cpu, inst->args[0].value.byte);
       break;
     case 1:
-      bytePtr = &cpu->memory_c->ram[regs_to_word(cpu, rH, rL)];
+      bytePtr = mem_ptr(cpu->memory_c, regs_to_word(cpu, rH, rL));
       break;
     }
     flag_cy = *bytePtr & 1;
@@ -516,7 +516,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       bytePtr = reg(cpu, inst->args[0].value.byte);
       break;
     case 1:
-      bytePtr = &cpu->memory_c->ram[regs_to_word(cpu, rH, rL)];
+      bytePtr = mem_ptr(cpu->memory_c, regs_to_word(cpu, rH, rL));
       break;
     }
     flag_cy = *bytePtr & 1;
