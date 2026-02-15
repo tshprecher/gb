@@ -3,41 +3,65 @@
 #include <X11/Xlib.h>
 #include "display.h"
 
+#define PIXEL_SCALAR 3
+
 // X11 variables
-// TODO: put these in the lcd struct later
+// TODO: where possible  put these in the lcd struct later
 Display *display = NULL;
 static Window window;
-//static XEvent event;
+static Pixmap pixmap;
+static XImage *image;
+static char *framebuf;
+
 static GC gc;
 static int screen;
 
 static uint64_t colors[4] = {0xFFFFFF, 0xa9a9a9, 0x545454, 0x000000};
 
 void init_lcd() {
-  if (!display) {
-    display = XOpenDisplay(NULL);
     if (!display) {
-      fprintf(stderr, "could not initialize display\n");
-      exit(1);
+      display = XOpenDisplay(NULL);
+      if (!display) {
+	printf("error: could not initialize display\n");
+	exit(1);
+      }
+
+      screen = DefaultScreen(display);
+      window = XCreateSimpleWindow(display, RootWindow(display, screen), 10, 10, 770, 770, 1,
+				   BlackPixel(display, screen), WhitePixel(display, screen));
+
+      /* select input events */
+      XSelectInput(display, window, KeyReleaseMask | KeyPressMask);
+
+      // map to make visible
+      XMapWindow(display, window);
+
+      pixmap =  XCreatePixmap(display, window, 800, 800, 24);
+      framebuf = malloc(200 * 200 * 4);
+      printf("DEBUG: pixmap result -> %lu\n", pixmap);
+
+      image = XCreateImage(display, DefaultVisual(display, screen), DefaultDepth(display, screen),
+			   ZPixmap, 0, framebuf, 256*PIXEL_SCALAR, 256*PIXEL_SCALAR, 32, 0);
+
+
+      // create graphics context
+      gc = XCreateGC(display, pixmap, 0, NULL);
+      XFlush(display);
     }
+}
 
-    screen = DefaultScreen(display);
-    window = XCreateSimpleWindow(display, RootWindow(display, screen), 10, 10, 770, 770, 1,
-				 BlackPixel(display, screen), WhitePixel(display, screen));
-
-
-    /* select input events */
-    XSelectInput(display, window, KeyReleaseMask | KeyPressMask);
-
-
-    // create graphics context
-    gc = XCreateGC(display, window, 0, NULL);
-    XSetForeground(display, gc, BlackPixel(display, screen)); // Set foreground color for drawing
-
-    // map to make visible
-    XMapWindow(display, window);
-    XFlush(display);
+static void frame_to_X11_frame_buffer(struct lcd_controller *lcd) {
+  for (int y = 0; y < 256 * PIXEL_SCALAR; y++) {
+    for (int x = 0; x < 256 * PIXEL_SCALAR; x++) {
+      *(unsigned int *)(framebuf + ((y*256*PIXEL_SCALAR +x) * 4)) = colors[lcd->frame[y/PIXEL_SCALAR][x/PIXEL_SCALAR]];
+    }
   }
+}
+
+static void X11_refresh() {
+  XPutImage(display, pixmap, gc, image, 0, 0, 0, 0, 256*PIXEL_SCALAR, 256*PIXEL_SCALAR);
+  XCopyArea(display, pixmap, window, gc, 0, 0, 800, 800, 0, 0);
+  XFlush(display);
 }
 
 static void frame_put_chr(uint8_t frame[256][256],
@@ -73,7 +97,6 @@ static void frame_put_chr(uint8_t frame[256][256],
 
 static void lcd_refresh_frame(struct lcd_controller *lcd_c) {
   uint8_t chr[16];
-  uint8_t frame[256][256];
 
   // first: background
   if (is_bit_set(lcd_c->regs[rLCDC], 0)) {
@@ -94,21 +117,19 @@ static void lcd_refresh_frame(struct lcd_controller *lcd_c) {
       int blockY = tile_addr / 32 - 1216;
       uint8_t palette = lcd_c->regs[rBGP];
 
-      frame_put_chr(frame, blockX*8, blockY*8, chr, palette, 0, 0, 1);
+      frame_put_chr(lcd_c->frame, blockX*8, blockY*8, chr, palette, 0, 0, 1);
       tile_idx++;
     }
   } else {
-    XSetForeground(display, gc, 0xAAAAAA);
-    XFillRectangle(display, window, gc, 0, 0, 1280, 1280);
+    XSetForeground(display, gc, 0xFFFFFF);
+    XFillRectangle(display, pixmap, gc, 0, 0, 800, 800);
+    XFlush(display);
   }
 
   // second: objects
   if (is_bit_set(lcd_c->regs[rLCDC], 1)) {
-    int obj_8_by_8 = is_bit_set(lcd_c->regs[rLCDC], 3) ? 0 : 1;
-    if (!obj_8_by_8) {
-      // TODO: does 8x16 imply any different logic or was is just a hardware/software optimization?
-      //printf("warn: unimplemented: 8 x 16 objects\n");
-    }
+    // TODO: does 8x16 mean different logic or was is just a hardware/software optimization?
+    //   int obj_8_by_8 = is_bit_set(lcd_c->regs[rLCDC], 3) ? 0 : 1;
 
     for (int oam_addr = 0xFE00; oam_addr < 0xFEA0; oam_addr+=4) {
       uint8_t y_pos = mem_read(lcd_c->memory_c, oam_addr);
@@ -127,7 +148,7 @@ static void lcd_refresh_frame(struct lcd_controller *lcd_c) {
       }
 
       // NOTE: for some reason the (0,0) top left corner of the LCD is represented by (8, 16)
-      frame_put_chr(frame, x_pos-8, y_pos-16, chr, palette, flip_horizontal, flip_vertical, override_priority);
+      frame_put_chr(lcd_c->frame, x_pos-8, y_pos-16, chr, palette, flip_horizontal, flip_vertical, override_priority);
     }
   }
 
@@ -149,19 +170,13 @@ static void lcd_refresh_frame(struct lcd_controller *lcd_c) {
       int blockY = tile_addr / 32 - 1216;
       uint8_t palette = lcd_c->regs[rBGP];
 
-      frame_put_chr(frame, blockX*8, blockY*8, chr, palette, 0, 0, 1);
+      frame_put_chr(lcd_c->frame, blockX*8, blockY*8, chr, palette, 0, 0, 1);
       tile_idx++;
     }
   }
 
-  for (int y = 0; y < 256; y++) {
-    for (int x = 0; x < 256; x++) {
-      XSetForeground(display, gc, colors[frame[y][x]]);
-      XFillRectangle(display, window, gc, x*3, y*3, 3, 3);
-    }
-  }
-
-  XFlush(display);
+  frame_to_X11_frame_buffer(lcd_c);
+  X11_refresh();
 }
 
 void lcd_tick(struct lcd_controller *lcd_c) {
@@ -213,8 +228,9 @@ void lcd_reg_write(struct lcd_controller* lcd_c, enum lcd_reg reg, uint8_t value
 	lcd_c->regs[rLY] = 0;
 	lcd_c->t_cycles_since_last_line_refresh = 0;
 
-	XSetForeground(display, gc, 0x222222);
-	XFillRectangle(display, window, gc, 0, 0, 1280, 1280);
+	XSetForeground(display, gc, 0xFFFFFF);
+	XFillRectangle(display, pixmap, gc, 0, 0, 800, 800);
+	XCopyArea(display, pixmap, window, gc, 0, 0, 800, 800, 0, 0);
 	XFlush(display);
       }
     }

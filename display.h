@@ -20,6 +20,9 @@ struct lcd_controller {
   // cycle since last vertical line refresh
   uint32_t t_cycles_since_last_line_refresh;
 
+  // current frame state where each entry is one of the 4 DMG colors
+  uint8_t frame[256][256];
+
   struct mem_controller *memory_c;
   struct interrupt_controller *interrupt_c;
 };
