@@ -41,6 +41,7 @@ struct rom load_rom(char *filename)
       printf("error: reading ROM: cannot read full 32K of ROM: %x\n", addr);
       exit(1);
     }
+  printf("info: rom type: 0x%02X\n", rom.mem[0x147]);
   printf("info: rom loaded.\n");
   fclose(fin);
   return rom;

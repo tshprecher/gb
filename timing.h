@@ -1,6 +1,7 @@
 #ifndef TIMING_H
 #define TIMING_H
 
+#include "cpu.h"
 #include <stdint.h>
 
 enum timing_reg {
@@ -10,8 +11,10 @@ enum timing_reg {
 struct timing_controller {
   // registers
   uint8_t regs[4];
+  uint16_t timer_t_cycles;
+  uint32_t div_t_cycles; // for DIV psuedoregister
 
-  uint32_t t_cycles; // for DIV psuedoregister
+  struct interrupt_controller * interrupt_c;
 };
 
 void timing_tick(struct timing_controller *);

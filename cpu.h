@@ -35,6 +35,9 @@ struct cpu {
   // 16 bit registers
   uint16_t PC, SP;
 
+  // flag for halted
+  uint8_t is_halted;
+
   // interrupt master enable flag
   uint8_t IME;
 

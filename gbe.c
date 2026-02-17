@@ -95,6 +95,8 @@ int main(int argc, char *argv[])
     struct timing_controller timing_c = {0};
     struct sound_controller sound_c = {0};
 
+    input_c.interrupt_c = &interrupt_c;
+
     lcd_c.memory_c = &memory_c;
     lcd_c.interrupt_c = &interrupt_c;
     lcd_c.regs[rLCDC] = 0x83; // TODO: put in an init?
@@ -108,6 +110,8 @@ int main(int argc, char *argv[])
 
     cpu.memory_c = &memory_c;
     cpu.interrupt_c = &interrupt_c;
+
+    timing_c.interrupt_c = &interrupt_c;
 
     sound_c.memory_c = &memory_c;
 

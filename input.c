@@ -1,4 +1,5 @@
 #include "input.h"
+#include "cpu.h"
 #include <stdio.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -8,6 +9,7 @@ extern Display *display; // for X window button events
 
 static inline void input_btn_press(struct input_controller *ic, enum btn btn) {
   ic->btns_pressed |= (1 << btn);
+  interrupt(ic->interrupt_c, PORT);
 }
 
 static inline void input_btn_release(struct input_controller *ic, enum btn btn) {
@@ -65,7 +67,6 @@ static inline void input_poll(struct input_controller *ic) {
   }
 }
 
-// TODO: handle interrupt
 void input_tick(struct input_controller *ic) {
   ic->ticks_since_last_poll++;
   if (ic->t_cycles_to_read) // TODO: handle this logic properly
@@ -91,7 +92,7 @@ void input_write_P1(struct input_controller *ic, uint8_t value) {
     ic->t_cycles_to_read = 0;
     break;
   default:
-    fprintf(stderr, "error: no-op, writing value 0x%02x to reg $P1", value);
+    fprintf(stderr, "error: no-op, writing value 0x%02x to reg $P1\n", value);
   }
 }
 

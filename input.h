@@ -20,6 +20,8 @@ struct input_controller {
   uint8_t status;
   uint8_t btns_pressed;
   uint8_t t_cycles_to_read;
+
+  struct interrupt_controller *interrupt_c;
 };
 
 void input_tick(struct input_controller *);

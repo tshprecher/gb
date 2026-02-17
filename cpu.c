@@ -181,6 +181,29 @@ void init_cpu(struct cpu *cpu) {
   cpu->SP = 0xFFFE;
 }
 
+static inline void check_interrupt(struct cpu *cpu) {
+  if (cpu->t_cycles_since_last_inst == 0 && cpu->IME && cpu->interrupt_c->IF) {
+    printf("debug: noticed interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
+    for (int i = 0; i < 5; i++) {
+      uint8_t mask = 1 << i;
+      if ((cpu->interrupt_c->IF & mask) && (cpu->interrupt_c->IE & mask)) {
+	cpu->is_halted = 0;
+	cpu->interrupt_c->IF ^= mask;
+	cpu->IME = 0;
+	printf("debug: handling interrupt #%d\n", i);
+
+	// TODO: consolidate PUSH into one operation?
+	printf("debug: pushing interrupt return address: 0x%04X\n", cpu->PC);
+	mem_write(cpu->memory_c,cpu->SP-1,  upper_8(cpu->PC));
+	mem_write(cpu->memory_c,cpu->SP-2, lower_8(cpu->PC));
+	cpu->SP -= 2;
+	cpu->PC = interrupt_handlers[i];
+	cpu->interrupt_t_cycles = 6 << 2; // TODO: is this correct for every interrupt type?
+      }
+    }
+  }
+}
+
 void cpu_tick(struct cpu *cpu) {
   if (cpu->t_cycles_since_last_inst < 0) { // catch up for variably timed instructions
       cpu->t_cycles_since_last_inst++;
@@ -192,26 +215,7 @@ void cpu_tick(struct cpu *cpu) {
     return;
   }
 
-  // check interrupt between completed instructions
-  if (cpu->t_cycles_since_last_inst == 0 && cpu->IME && cpu->interrupt_c->IF) {
-    printf("debug: noticed interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
-    for (int i = 0; i < 5; i++) {
-      uint8_t mask = 1 << i;
-      if ((cpu->interrupt_c->IF & mask) && (cpu->interrupt_c->IE & mask)) {
-	  cpu->interrupt_c->IF ^= mask;
-	  cpu->IME = 0;
-	  printf("debug: handling interrupt #%d\n", i);
-
-	  // TODO: consolidate PUSH into one operation?
-	  printf("debug: pushing interrupt return address: 0x%04X\n", cpu->PC);
-	  mem_write(cpu->memory_c,cpu->SP-1,  upper_8(cpu->PC));
-	  mem_write(cpu->memory_c,cpu->SP-2, lower_8(cpu->PC));
-	  cpu->SP -= 2;
-	  cpu->PC = interrupt_handlers[i];
-	  cpu->interrupt_t_cycles = 6 << 2; // TODO: is this correct for every interrupt type?
-      }
-    }
-  }
+  check_interrupt(cpu);
 
   if (!cpu->next_inst || cpu->t_cycles_since_last_inst == 0) // TODO: put this in the init?
     cpu->next_inst = mem_read_inst(cpu->memory_c, cpu->PC);
@@ -220,9 +224,9 @@ void cpu_tick(struct cpu *cpu) {
   int8_t exec_cycle = (cpu->next_inst->cycles << 2);
   cpu->t_cycles_since_last_inst++;
   if (cpu->t_cycles_since_last_inst == exec_cycle) {
-    /*char buf[32];
+    char buf[32];
     inst_to_str(buf, cpu->next_inst);
-    printf("DEBUG: 0x%04X\t%s\n", cpu->PC, buf);*/
+    printf("DEBUG: 0x%04X\t%s\n", cpu->PC, buf);
     int cycles = cpu_exec_instruction(cpu, cpu->next_inst);
     if (cycles < 0) {
       char buf[16];
@@ -238,7 +242,6 @@ void cpu_tick(struct cpu *cpu) {
       cpu->t_cycles_since_last_inst = 0;
     }
   }
-
 }
 
 // cpu_exec_instruction takes a executes the instruction.
@@ -903,6 +906,9 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   case POP:
     set_qq(cpu, inst->args[0].value.byte, bytes_to_word(mem_read(cpu->memory_c,cpu->SP), mem_read(cpu->memory_c, cpu->SP+1)));
     cpu->SP+=2;
+    break;
+  case HALT:
+    cpu->is_halted = 1;
     break;
   default:
     return -1;
