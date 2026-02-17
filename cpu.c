@@ -18,7 +18,7 @@ static uint16_t interrupt_handlers[] = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060};
 
 // TODO: should all enums be capital?
 void interrupt(struct interrupt_controller *ic, enum Interrupt interrupt) {
-  printf("debug: interrupt %d\n", interrupt);
+  //  printf("debug: interrupt %d\n", interrupt);
   ic->IF |= (1 << interrupt);
 }
 
@@ -183,17 +183,17 @@ void init_cpu(struct cpu *cpu) {
 
 static inline void check_interrupt(struct cpu *cpu) {
   if (cpu->t_cycles_since_last_inst == 0 && cpu->IME && cpu->interrupt_c->IF) {
-    printf("debug: noticed interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
+    //printf("debug: noticed interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
     for (int i = 0; i < 5; i++) {
       uint8_t mask = 1 << i;
       if ((cpu->interrupt_c->IF & mask) && (cpu->interrupt_c->IE & mask)) {
 	cpu->is_halted = 0;
 	cpu->interrupt_c->IF ^= mask;
 	cpu->IME = 0;
-	printf("debug: handling interrupt #%d\n", i);
+	//	printf("debug: handling interrupt #%d\n", i);
 
 	// TODO: consolidate PUSH into one operation?
-	printf("debug: pushing interrupt return address: 0x%04X\n", cpu->PC);
+	//	printf("debug: pushing interrupt return address: 0x%04X\n", cpu->PC);
 	mem_write(cpu->memory_c,cpu->SP-1,  upper_8(cpu->PC));
 	mem_write(cpu->memory_c,cpu->SP-2, lower_8(cpu->PC));
 	cpu->SP -= 2;
@@ -224,9 +224,9 @@ void cpu_tick(struct cpu *cpu) {
   int8_t exec_cycle = (cpu->next_inst->cycles << 2);
   cpu->t_cycles_since_last_inst++;
   if (cpu->t_cycles_since_last_inst == exec_cycle) {
-    char buf[32];
+    /*    char buf[32];
     inst_to_str(buf, cpu->next_inst);
-    printf("DEBUG: 0x%04X\t%s\n", cpu->PC, buf);
+    printf("DEBUG: 0x%04X\t%s\n", cpu->PC, buf);*/
     int cycles = cpu_exec_instruction(cpu, cpu->next_inst);
     if (cycles < 0) {
       char buf[16];

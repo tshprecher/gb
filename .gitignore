@@ -2,6 +2,7 @@ a.out
 **vscode*
 *~
 *.o
+*.a
 *#
 *dSYM
 .#*
