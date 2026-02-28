@@ -138,7 +138,7 @@ int main(int argc, char *argv[])
     while (addr < 0x8000) {
       int ok = init_inst_from_bytes(&decoded, &rom.mem[addr]);
       if (ok) {
-	inst_to_str(buf, &decoded);
+	inst_to_str(&decoded, buf);
 	printf("0x%02X\t%s\n", addr, buf);
 	addr+=decoded.bytelen;
       } else {

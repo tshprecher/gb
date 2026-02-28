@@ -240,6 +240,7 @@ struct inst* mem_read_inst(struct mem_controller *mc, uint16_t addr) {
     }
     return &mc->rom->cached_insts[addr];
   } else {
+    // TODO: why does this branch exist again? Explain here
     init_inst_from_bytes(&mc->_inst_in_ram, &mc->ram[addr-0x8000]);
     return &mc->_inst_in_ram;
   }

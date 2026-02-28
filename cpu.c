@@ -230,7 +230,7 @@ void cpu_tick(struct cpu *cpu) {
     int cycles = cpu_exec_instruction(cpu, cpu->next_inst);
     if (cycles < 0) {
       char buf[16];
-      inst_to_str(buf, cpu->next_inst);
+      inst_to_str(cpu->next_inst, buf);
       fprintf(stderr, "error: could not execute instr '%s' @ 0x%04X\n",
 	      buf, cpu->PC);
       exit(1);

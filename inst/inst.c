@@ -12,7 +12,21 @@ static char *map_dd_or_ss_to_str[4] = {"BC", "DE", "HL", "SP"};
 static char *map_qq_to_str[4] = {"BC", "DE", "HL", "AF"};
 
 
-static struct inst instructions[] = {
+// struct inst_prototype is a strict superset of struct inst
+// intended for use instantiating insts. It should not be used
+// outside this file.
+struct inst_prototype {
+  enum inst_type type;
+  uint8_t subtype;
+  uint8_t bytelen;
+  uint8_t cycles;
+  char *bit_pattern;
+  char *txt_pattern;
+  struct inst_arg args[3];
+  uint8_t args_count;
+};
+
+static struct inst_prototype instructions[] = {
   {ADC, 0, 1, 1, "10001{r}", "ADC A, {r}"},
   {ADC, 1, 2, 2, "11001110 {n}", "ADC A, {n}"},
   {ADC, 2, 1, 2, "10001110", "ADC A, (HL)"},
@@ -156,21 +170,32 @@ static struct inst instructions[] = {
   {XOR,2 ,2, 2, "11101110 {n}", "XOR {n}" },
 };
 
-void inst_add_arg(struct inst * inst, struct inst_arg arg) {
+static struct inst_prototype *find_inst_prototype(uint8_t type, uint8_t subtype) {
+  // TODO: consider making this faster instead of linear, but
+  // it's not executed in the execution, just debugging/disassembly
+  for (int i = 0; i < sizeof(instructions) / sizeof(struct inst_prototype); i++) {
+    struct inst_prototype *ptype = &instructions[i];
+    if (ptype->type == type && ptype->subtype == subtype) {
+      return ptype;
+    }
+  }
+  return NULL;
+}
+
+static void inst_add_arg(struct inst * inst, struct inst_arg arg) {
   inst->args[inst->args_count++] = arg;
 }
 
-void inst_clear_args(struct inst *inst) {
+static void inst_clear_args(struct inst *inst) {
   inst->args_count=0;
 }
 
 // Returns true iff the instruction byte matches the bit pattern.
 // If true, the instruction is filled with parsed args.
-static int _match_bit_pattern(struct inst* inst, char *bytes)
+static int _match_bit_pattern(struct inst* inst,  char *bytes, char *pattern)
 {
     int shift = 0;
     int c = 0;
-    char * pattern = inst->bit_pattern;
     char ch = bytes[c++];
     while (1)
     {
@@ -286,21 +311,24 @@ static int _match_bit_pattern(struct inst* inst, char *bytes)
 }
 
 int init_inst_from_bytes(struct inst* inst, void *bytes) {
-  for (int i = 0; i < sizeof(instructions) / sizeof(struct inst); i++) {
-    struct inst root_inst = instructions[i];
-    *inst = root_inst;
-    if (_match_bit_pattern(inst, bytes))
+  for (int i = 0; i < sizeof(instructions) / sizeof(struct inst_prototype); i++) {
+    struct inst_prototype ptype = instructions[i];
+    inst->type = ptype.type;
+    inst->subtype = ptype.subtype;
+    inst->bytelen = ptype.bytelen;
+    inst->cycles = ptype.cycles;
+    inst->args_count = 0;
+    if (_match_bit_pattern(inst, bytes, ptype.bit_pattern)) {
       return 1;
+    }
   }
   return 0;
 }
 
 // Returns true if and only if the assembly line matches an instruction
 // text pattern. If true, the instruction is filled with parsed args.
-static int _match_txt_pattern(struct inst* inst, char *asmline) {
+static int _match_txt_pattern(struct inst* inst, char *asmline, char *pattern) {
   int a = 0, p = 0;
-  char *pattern = inst->txt_pattern;
-
   // remove leading whitespace before comparing
   while(asmline[a] == ' ')
     a++;
@@ -463,7 +491,7 @@ static int _match_txt_pattern(struct inst* inst, char *asmline) {
       p++;
     }
   }
-  if (asmline[a] == '\0' && inst->txt_pattern[p] == '\0')
+  if (asmline[a] == '\0' && pattern[p] == '\0')
     return 1;
 
   inst_clear_args(inst);
@@ -471,12 +499,17 @@ static int _match_txt_pattern(struct inst* inst, char *asmline) {
 }
 
 // returns 0 on error.
-int init_inst_from_asm(struct inst* inst, char *asmline) {
-  for (int i = 0; i < sizeof(instructions) / sizeof(struct inst); i++) {
-    struct inst root_inst = instructions[i];
-    *inst = root_inst;
-    if (_match_txt_pattern(inst, asmline))
+int init_inst_from_asm(struct inst *inst, char *asmline) {
+  for (int i = 0; i < sizeof(instructions) / sizeof(struct inst_prototype); i++) {
+    struct inst_prototype ptype = instructions[i];
+    inst->type = ptype.type;
+    inst->subtype = ptype.subtype;
+    inst->bytelen = ptype.bytelen;
+    inst->cycles = ptype.cycles;
+    inst->args_count = 0;
+    if (_match_txt_pattern(inst, asmline, ptype.txt_pattern)) {
       return 1;
+    }
   }
   return 0;
 }
@@ -535,16 +568,16 @@ int arg_to_str(struct inst_arg *arg, char *buf, int check_special_register) {
   }
 }
 
-int inst_to_str(char *buf, struct inst * inst) {
+int inst_to_str(struct inst * inst, char *buf) {
   int len = 0;
-  char *pattern = inst->txt_pattern;
   struct inst_arg *current_arg = inst->args;
-
+  struct inst_prototype *ptype = find_inst_prototype(inst->type, inst->subtype);
+  char *pattern = ptype->txt_pattern;
   // NOTE: somewhat of a hack to indicate this by checking strings,
   // but it'll do for now.
   int check_special_register =
-    (strstr(inst->txt_pattern, "({nn})") != NULL) ||
-    (strstr(inst->txt_pattern, "({n})") != NULL);
+    (strstr(pattern, "({nn})") != NULL) ||
+    (strstr(pattern, "({n})") != NULL);
 
   while (*pattern != '\0') {
     if (*pattern == '{') {

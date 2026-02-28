@@ -108,12 +108,6 @@ struct inst {
   // delegated to the cpu at execution time.
   uint8_t cycles;
 
-  // human readable bit pattern used to decode an instruction from bytes
-  char *bit_pattern;
-
-  // human readable text used to initiate an instruction from asm
-  char *txt_pattern;
-
   // store up to 3 args associated with the instruction
   struct inst_arg args[3];
   uint8_t args_count;
@@ -121,12 +115,10 @@ struct inst {
 
 enum cond {NZ = 0, Z, NC, YC };
 
-
 int init_inst_from_bytes(struct inst*, void *);
 int init_inst_from_asm(struct inst*, char *);
 
-
 // TODO: What does this return?
-int inst_to_str(char *, struct inst *);
+int inst_to_str(struct inst *, char *);
 
 #endif

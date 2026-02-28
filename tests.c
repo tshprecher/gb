@@ -288,7 +288,6 @@ int test_cpu_exec() {
   return suite_result(&ts);
 }
 
-
 int test_inst_parsing() {
   struct test_suite ts = {0};
   suite_start(&ts, "instruction parsing");
@@ -326,9 +325,10 @@ int test_inst_parsing() {
       len = strlen(line);
       if (len == 1)
 	continue;
-      line[len-1]='\0'; // remove traling newline
+      line[len-1]='\0'; // remove trailing newline
       if (!init_inst_from_asm(&inst, line))
 	suite_test_error(&ts, "\t\tcould not parse '%s'\n", line);
+
     }
     suite_test_end(&ts);
     fclose(f);
