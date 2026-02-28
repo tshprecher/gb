@@ -133,12 +133,12 @@ int main(int argc, char *argv[])
     struct rom rom = load_rom(argv[2]);
 
     int addr = 0x0;
-    struct inst decoded;
+    struct inst_new decoded;
     char buf[16];
     while (addr < 0x8000) {
       int ok = init_inst_from_bytes(&decoded, &rom.mem[addr]);
       if (ok) {
-	inst_to_str(buf, &decoded);
+	inst_to_str(&decoded, buf);
 	printf("0x%02X\t%s\n", addr, buf);
 	addr+=decoded.bytelen;
       } else {

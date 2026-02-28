@@ -237,7 +237,7 @@ int test_cpu_exec() {
   };
 
   for (int t = 0; t < sizeof(tests) / sizeof(struct test); t++) {
-    struct inst inst = {0};
+    struct inst_new inst = {0};
     struct test tst = tests[t];
     struct mem_controller mc = {0};
     memset(mc.ram, 0, sizeof(mc.ram)); // TODO: remove this line?
@@ -246,7 +246,7 @@ int test_cpu_exec() {
 
     rom.num_banks = 1;
     uint8_t rom_mem[0x8000] = {0};
-    struct inst rom_cached_insts[0x8000] = {0};
+    struct inst_new rom_cached_insts[0x8000] = {0};
     uint8_t rom_is_cached_bitmap[0x8000 >> 3] = {0};
     rom.mem = rom_mem;
     rom.cached_insts = rom_cached_insts;
@@ -320,7 +320,7 @@ int test_inst_parsing() {
 
     suite_test_start(&ts, entry->d_name);
     while (fgets(line, 32, f) != NULL) {
-      struct inst inst;
+      struct inst_new inst;
       int len;
       line[31] = '\0'; // ensure no buffer overruns
       len = strlen(line);
@@ -367,7 +367,7 @@ int test_inst_init() {
   };
 
   for (int t = 0; t < sizeof(tests)/sizeof(struct test); t++) {
-    struct inst inst = {0};
+    struct inst_new inst = {0};
     struct test tst = tests[t];
 
     suite_test_start(&ts, tst.asm_command);

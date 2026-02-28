@@ -156,21 +156,32 @@ static struct inst instructions[] = {
   {XOR,2 ,2, 2, "11101110 {n}", "XOR {n}" },
 };
 
-void inst_add_arg(struct inst * inst, struct inst_arg arg) {
+static struct inst *find_inst_prototype(uint8_t type, uint8_t subtype) {
+  // TODO: consider making this faster instead of linear, but
+  // it's not executed in the execution, just debugging/disassembly
+  for (int i = 0; i < sizeof(instructions) / sizeof(struct inst); i++) {
+    struct inst *ptype = &instructions[i];
+    if (ptype->type == type && ptype->subtype == subtype) {
+      return ptype;
+    }
+  }
+  return NULL;
+}
+
+static void inst_add_arg(struct inst_new * inst, struct inst_arg arg) {
   inst->args[inst->args_count++] = arg;
 }
 
-void inst_clear_args(struct inst *inst) {
+static void inst_clear_args(struct inst_new *inst) {
   inst->args_count=0;
 }
 
 // Returns true iff the instruction byte matches the bit pattern.
 // If true, the instruction is filled with parsed args.
-static int _match_bit_pattern(struct inst* inst, char *bytes)
+static int _match_bit_pattern(struct inst_new* inst,  char *bytes, char *pattern)
 {
     int shift = 0;
     int c = 0;
-    char * pattern = inst->bit_pattern;
     char ch = bytes[c++];
     while (1)
     {
@@ -285,11 +296,14 @@ static int _match_bit_pattern(struct inst* inst, char *bytes)
     return 0;
 }
 
-int init_inst_from_bytes(struct inst* inst, void *bytes) {
+int init_inst_from_bytes(struct inst_new* inst, void *bytes) {
   for (int i = 0; i < sizeof(instructions) / sizeof(struct inst); i++) {
     struct inst root_inst = instructions[i];
-    *inst = root_inst;
-    if (_match_bit_pattern(inst, bytes))
+    inst->type = root_inst.type;
+    inst->subtype = root_inst.subtype;
+    inst->bytelen = root_inst.bytelen;
+    inst->cycles = root_inst.cycles;
+    if (_match_bit_pattern(inst, bytes, root_inst.bit_pattern))
       return 1;
   }
   return 0;
@@ -297,10 +311,8 @@ int init_inst_from_bytes(struct inst* inst, void *bytes) {
 
 // Returns true if and only if the assembly line matches an instruction
 // text pattern. If true, the instruction is filled with parsed args.
-static int _match_txt_pattern(struct inst* inst, char *asmline) {
+static int _match_txt_pattern(struct inst_new* inst, char *asmline, char *pattern) {
   int a = 0, p = 0;
-  char *pattern = inst->txt_pattern;
-
   // remove leading whitespace before comparing
   while(asmline[a] == ' ')
     a++;
@@ -463,7 +475,7 @@ static int _match_txt_pattern(struct inst* inst, char *asmline) {
       p++;
     }
   }
-  if (asmline[a] == '\0' && inst->txt_pattern[p] == '\0')
+  if (asmline[a] == '\0' && pattern[p] == '\0')
     return 1;
 
   inst_clear_args(inst);
@@ -471,11 +483,14 @@ static int _match_txt_pattern(struct inst* inst, char *asmline) {
 }
 
 // returns 0 on error.
-int init_inst_from_asm(struct inst* inst, char *asmline) {
+int init_inst_from_asm(struct inst_new  *inst, char *asmline) {
   for (int i = 0; i < sizeof(instructions) / sizeof(struct inst); i++) {
     struct inst root_inst = instructions[i];
-    *inst = root_inst;
-    if (_match_txt_pattern(inst, asmline))
+    inst->type = root_inst.type;
+    inst->subtype = root_inst.subtype;
+    inst->bytelen = root_inst.bytelen;
+    inst->cycles = root_inst.cycles;
+    if (_match_txt_pattern(inst, asmline, root_inst.txt_pattern))
       return 1;
   }
   return 0;
@@ -535,16 +550,16 @@ int arg_to_str(struct inst_arg *arg, char *buf, int check_special_register) {
   }
 }
 
-int inst_to_str(char *buf, struct inst * inst) {
+int inst_to_str(struct inst_new * inst, char *buf) {
   int len = 0;
-  char *pattern = inst->txt_pattern;
   struct inst_arg *current_arg = inst->args;
-
+  struct inst *root_inst = find_inst_prototype(inst->type, inst->subtype);
+  char *pattern = root_inst->txt_pattern;
   // NOTE: somewhat of a hack to indicate this by checking strings,
   // but it'll do for now.
   int check_special_register =
-    (strstr(inst->txt_pattern, "({nn})") != NULL) ||
-    (strstr(inst->txt_pattern, "({n})") != NULL);
+    (strstr(pattern, "({nn})") != NULL) ||
+    (strstr(pattern, "({n})") != NULL);
 
   while (*pattern != '\0') {
     if (*pattern == '{') {

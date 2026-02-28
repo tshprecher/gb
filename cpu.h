@@ -49,7 +49,7 @@ struct cpu {
   int8_t t_cycles_since_last_inst;
 
   // the next instruction to execute
-  struct inst *next_inst;
+  struct inst_new *next_inst;
 
   // the number of t_cycles to count down after an interrupt
   int8_t interrupt_t_cycles;
@@ -61,6 +61,6 @@ void cpu_tick(struct cpu *);
 
 // execute a specific instruction, return the number of cycles run
 // or -1 on error.
-int cpu_exec_instruction(struct cpu *, struct inst *);
+int cpu_exec_instruction(struct cpu *, struct inst_new *);
 
 #endif

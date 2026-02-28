@@ -25,7 +25,7 @@ struct rom load_rom(char *filename)
   struct rom rom = {0};
   rom.num_banks = 1;
   rom.mem = (uint8_t*) malloc(0x8000);
-  rom.cached_insts = (struct inst*) malloc(0x8000 * sizeof(struct inst));
+  rom.cached_insts = (struct inst_new*) malloc(0x8000 * sizeof(struct inst_new));
   rom.is_cached_bitmap = (uint8_t*) malloc(0x8000 >> 3);
   char b;
   int addr = 0;
@@ -227,7 +227,7 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t value) {
   }
 }
 
-struct inst* mem_read_inst(struct mem_controller *mc, uint16_t addr) {
+struct inst_new* mem_read_inst(struct mem_controller *mc, uint16_t addr) {
   if (addr < 0x8000) {
     uint8_t byte_map = mc->rom->is_cached_bitmap[addr >> 3];
     uint8_t bit_mask = 1 << (7-(addr & 7));
@@ -240,6 +240,7 @@ struct inst* mem_read_inst(struct mem_controller *mc, uint16_t addr) {
     }
     return &mc->rom->cached_insts[addr];
   } else {
+    // TODO: why does this branch exist again? Explain here
     init_inst_from_bytes(&mc->_inst_in_ram, &mc->ram[addr-0x8000]);
     return &mc->_inst_in_ram;
   }

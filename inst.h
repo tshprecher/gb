@@ -119,14 +119,36 @@ struct inst {
   uint8_t args_count;
 };
 
+struct inst_new {
+  // indicates the type of instructions (e.g. "ADD", "LD",...)
+  enum inst_type type;
+
+  // assigned during creation to distinguish
+  // between the multiple forms of an instruction type.
+  // I prefer to avoid doing string comparisons of the
+  // txt_pattern or fancier bitmask schemes like a PLA
+  // in hardware.
+  uint8_t subtype;
+
+  // the length of the opcode in bytes
+  uint8_t bytelen;
+
+  // the number of machine cycles needed to execute. note, few
+  // instructions take variable number of cycles. that's
+  // delegated to the cpu at execution time.
+  uint8_t cycles;
+
+  // store up to 3 args associated with the instruction
+  struct inst_arg args[3];
+  uint8_t args_count; // TODO: necessary?
+};
+
 enum cond {NZ = 0, Z, NC, YC };
 
-
-int init_inst_from_bytes(struct inst*, void *);
-int init_inst_from_asm(struct inst*, char *);
-
+int init_inst_from_bytes(struct inst_new*, void *);
+int init_inst_from_asm(struct inst_new*, char *);
 
 // TODO: What does this return?
-int inst_to_str(char *, struct inst *);
+int inst_to_str(struct inst_new *, char *);
 
 #endif

@@ -230,7 +230,7 @@ void cpu_tick(struct cpu *cpu) {
     int cycles = cpu_exec_instruction(cpu, cpu->next_inst);
     if (cycles < 0) {
       char buf[16];
-      inst_to_str(buf, cpu->next_inst);
+      inst_to_str(cpu->next_inst, buf);
       fprintf(stderr, "error: could not execute instr '%s' @ 0x%04X\n",
 	      buf, cpu->PC);
       exit(1);
@@ -248,7 +248,7 @@ void cpu_tick(struct cpu *cpu) {
 // It returns the number of cycles run, -1 on error
 // TODO: could use a few more macros for clarity?
 // TODO: should this return 0 cycles on error instead? makes some sense
-int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
+int cpu_exec_instruction(struct cpu *cpu , struct inst_new *inst) {
   uint16_t hl, word;
   uint8_t flag_cy, flag_h, dd_or_ss, daa_add, lower_nib, upper_nib;
   uint8_t *bytePtr;
