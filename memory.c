@@ -248,6 +248,7 @@ struct inst* mem_read_inst(struct mem_controller *mc, uint16_t addr) {
 uint8_t* mem_ptr(struct mem_controller *mc, uint16_t addr) {
   if (addr < 0x8000) {
     printf("error: returning a memory pointer outside of ram with addr: 0x%04X\n", addr);
+    return NULL;
   }
   return &mc->ram[addr-0x8000];
 }
