@@ -18,4 +18,4 @@ inst.a:	display.c sound.c input.c memory.c inst/inst.c
 
 .PHONY: clean
 clean:
-	rm -f ./gbe *_test cpu.o inst.a
+	rm -f ./gbe ./tests *_test *.o inst.a

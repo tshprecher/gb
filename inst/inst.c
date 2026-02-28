@@ -312,6 +312,7 @@ int init_inst_from_bytes(struct inst_new* inst, void *bytes) {
 // Returns true if and only if the assembly line matches an instruction
 // text pattern. If true, the instruction is filled with parsed args.
 static int _match_txt_pattern(struct inst_new* inst, char *asmline, char *pattern) {
+  printf("debug: inside match_txt_pattern with pattern -> '%s'\n", pattern);
   int a = 0, p = 0;
   // remove leading whitespace before comparing
   while(asmline[a] == ' ')

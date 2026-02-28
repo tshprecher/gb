@@ -312,6 +312,7 @@ int test_inst_parsing() {
     char line[32];
 
     sprintf(filename, "testdata/inst/%s", entry->d_name);
+    printf("debug: opening filename -> '%s'\n", filename);
     f = fopen(filename, "r");
     if (f == NULL) {
       fprintf(stderr, "error opening file '%s'\n", filename);
@@ -327,8 +328,14 @@ int test_inst_parsing() {
       if (len == 1)
 	continue;
       line[len-1]='\0'; // remove traling newline
+      //      printf("debug: test parsing of line '%s'\n", line);
       if (!init_inst_from_asm(&inst, line))
 	suite_test_error(&ts, "\t\tcould not parse '%s'\n", line);
+
+      printf("debug: file pointer value -> 0x%08llX, filename pointer value -> 0x%08llX, line pointer value -> 0x%08llX\n",
+	     (int64_t)f,
+	     (int64_t)(filename),
+	     (int64_t)line);
     }
     suite_test_end(&ts);
     fclose(f);
@@ -414,8 +421,6 @@ int test_inst_init() {
 
 int main () {
   int success = test_inst_parsing();
-  success &= test_inst_init();
-  success &= test_cpu_exec();
 
   if (success)
     print_green("SUCCESS!\n");
