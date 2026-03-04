@@ -23,7 +23,6 @@ struct sound {
   int samples_per_wave;
 
   // for sound 1
-
   int8_t sweep_time_samples;
   int8_t sweep_shift;
   int8_t is_sweep_decreasing;
@@ -36,7 +35,7 @@ struct sound {
 
   // for sound 3
   uint8_t waveform[32];
-  uint8_t output_level; //[0, 1, 2, 4]
+  uint8_t output_level; // [0,1,2,3]
 
 };
 

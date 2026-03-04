@@ -1,6 +1,7 @@
 #include <pulse/simple.h>
 #include <pulse/error.h>
 #include <stdint.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include "sound.h"
@@ -58,6 +59,11 @@ static inline int is_sound_type_enabled(struct sound_controller *sc,
   return (sc->regs[rNR52] & (1 << (sound_type-1))) > 0;
 }
 
+static inline void disable_sound(struct sound_controller *sc,
+				uint8_t sound_type) {
+  sc->regs[rNR52] &= ~(1 << (sound_type-1));
+}
+
 static inline int is_sound_enabled(struct sound_controller *sc, struct sound *sound) {
   int is_continuous_or_incomplete = sound->is_continuous ||
     is_sound_type_enabled(sc, sound->type);
@@ -109,15 +115,19 @@ static int generate_square_wave_samples(struct sound *sound, int16_t *buf, int l
     if (sound->sweep_shift && sound->sweep_time_samples &&
 	((sound->current_sample / sound->sweep_time_samples) > current_sweep))  {
       current_sweep++;
-      int freq_step = sound->frequency >> (1 << sound->sweep_shift);
+      int freq_step = sound->frequency >> sound->sweep_shift;
       if (sound->is_sweep_decreasing) {
+	//	printf("debug: sweep decreasing, subtracting %d from frequency %d\n", freq_step, sound->frequency);
 	sound->frequency -= freq_step;
       } else {
 	sound->frequency += freq_step;
       }
-      if (sound->frequency < (1 << 11)) { // only if the frequency is small enough
+      if (sound->frequency < (1 << 11)) {
 	// redefine samples per wave from new frequency
 	sound->samples_per_wave = ss.rate / sound->frequency;
+      } else { // if frequency is greater than 11 bits, turn off the sound
+	printf("debug: frequency > 11 bits, turning off sound\n");
+	return -s;
       }
     }
 
@@ -130,7 +140,7 @@ static int generate_square_wave_samples(struct sound *sound, int16_t *buf, int l
 	sound->env_value++;
     }
 
-    buf[s] = is_high ? 0xA5 : 0;
+    buf[s] = is_high ? (0xF << 2) : 0;
     buf[s] *= sound->env_value;
     s++;
     sound->current_sample++;
@@ -147,7 +157,7 @@ static int generate_defined_wave_samples(struct sound *sound, int16_t *buf, int 
   while (s < len && !is_completed(sound)) {
     int current_step = (int)(sound->current_sample / samples_per_step) % 32;
     if (sound->output_level) {
-      buf[s] = sound->waveform[current_step] * (0x2C >> (sound->output_level-1));
+      buf[s] = sound->waveform[current_step] >> (sound->output_level-1);
     } else {
       buf[s] = 0;
     }
@@ -161,7 +171,7 @@ static int generate_defined_wave_samples(struct sound *sound, int16_t *buf, int 
   return s;
 }
 
-int sound_generate_samples(struct sound *sound, int16_t *buf, int len) {
+static int sound_generate_samples(struct sound *sound, int16_t *buf, int len) {
   switch (sound->type) {
   case 1:
   case 2:
@@ -179,19 +189,12 @@ void sound_tick(struct sound_controller *sc) {
 
   sc->t_cycles++;
   // TODO: consider bundling more than one sample at a time
-  while (sc->t_cycles >= 1500) { // TODO: compute this on init
-    int16_t accumulated_samples[32];
-    for (int s = 0; s < 32; s++) {
-      accumulated_samples[s] = 0;
-    }
-
-    int8_t volume_left = stereo_vol_left(sc);
-    int8_t volume_right = stereo_vol_right(sc);
-
-    int16_t sbuf[16];
+  while (sc->t_cycles >= 190) { // TODO: compute this on init
+    int16_t accumulated_samples[4] = {0}; // TODO: rename stereo samples?
+    int16_t sbuf[2];
     for (int s = 0; s < 3; s++) {
       struct sound *sound = &sc->sounds[s];
-      if (sound->type < 1 || sound->type > 4) { // type not valid: sound not yet set
+      if (sound->type < 1 || sound->type > 4) { // invalid type
 	continue;
       }
       if (!is_sound_enabled(sc, sound)) {
@@ -201,24 +204,28 @@ void sound_tick(struct sound_controller *sc) {
 	sc->regs[rNR52] &= ~(1<<s); // done, turn sound off
 	continue;
       }
-      int generated = sound_generate_samples(sound, sbuf, 16);
+      int generated = sound_generate_samples(sound, sbuf, 2);
+      if (generated < 0) { // turn of the sound
+	disable_sound(sc, sound->type);
+	generated = -generated;
+      }
       for (int s = 0; s < generated; s++) {
 	if (is_on_stereo_left(sc, sound->type)) {
-	  accumulated_samples[s*2] += sbuf[s]*volume_left;
+	  accumulated_samples[s*2] += sbuf[s]*stereo_vol_left(sc);
 	}
 	if (is_on_stereo_right(sc, sound->type)) {
-	  accumulated_samples[s*2+1] += sbuf[s]*volume_right;
+	  accumulated_samples[s*2+1] += sbuf[s]*stereo_vol_right(sc);
 	}
       }
     }
 
     int error = 0;
-    pa_simple_write(s, accumulated_samples, 32*sizeof(int16_t), &error);
+    pa_simple_write(s, accumulated_samples, 4*sizeof(int16_t), &error);
     if (error) {
       printf("error: writing samples, error code: %d\n", error);
       printf("error: writing samples, error str: %s\n", pa_strerror(error));
     }
-    sc->t_cycles -= 1500;
+    sc->t_cycles -= 190;
   }
 }
 
@@ -259,6 +266,12 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, uint8_t va
 	sc->regs[rNR52] |= 1;
       }
 
+      /*      printf("debug: new sound 1 with freq: %d, sweep_shift: %d, sweep_decreasing: %d, env_decreasing: %d\n",
+	     sc->sounds[0].frequency,
+	     sc->sounds[0].sweep_shift,
+	     sc->sounds[0].is_sweep_decreasing,
+	     sc->sounds[0].is_env_decreasing);*/
+
     }
     break;
   case rNR24:
@@ -298,7 +311,7 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, uint8_t va
     if (sc->regs[rNR30] & 0x80) {
       // TODO: restart sound
       // may have to implement other sound 3 params changing while the waveform is playing
-      printf("warn: implement restart sound 3\n");
+      //      printf("warn: implement restart sound 3\n");
     }
     break;
   case rNR34:
@@ -331,7 +344,7 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, uint8_t va
     }
     break;
   case rNR44:
-    printf("warn: TODO implement SOUND 4: NR44 -> 0x%02X\n", sc->regs[rNR44]);
+    //printf("warn: TODO implement SOUND 4: NR44 -> 0x%02X\n", sc->regs[rNR44]);
     break;
   default:
     break;
