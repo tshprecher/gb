@@ -11,6 +11,9 @@
 pa_simple *s;
 pa_sample_spec ss;
 
+// TODO: for all sounds make sure they operate properly as parameters
+//       change between initializations.
+
 void init_sound() {
   ss.format = PA_SAMPLE_S16NE;
   ss.channels = 2;
@@ -117,7 +120,6 @@ static int generate_square_wave_samples(struct sound *sound, int16_t *buf, int l
       current_sweep++;
       int freq_step = sound->frequency >> sound->sweep_shift;
       if (sound->is_sweep_decreasing) {
-	//	printf("debug: sweep decreasing, subtracting %d from frequency %d\n", freq_step, sound->frequency);
 	sound->frequency -= freq_step;
       } else {
 	sound->frequency += freq_step;
@@ -171,6 +173,47 @@ static int generate_defined_wave_samples(struct sound *sound, int16_t *buf, int 
   return s;
 }
 
+static int generate_white_noise_wave_samples(struct sound *sound, int16_t *buf, int len) {
+  int s = 0;
+  while (s < len && !is_completed(sound)) {
+    int is_high = sound->lfsr_shift_register & 1;
+
+    // handle envelope
+    if (sound->current_sample && sound->samples_per_env_step &&
+	sound->current_sample % sound->samples_per_env_step == 0) {
+      if (sound->env_value > 0 && sound->is_env_decreasing)
+	sound->env_value--;
+      if (sound->env_value < 15 && !sound->is_env_decreasing)
+	sound->env_value++;
+    }
+
+    buf[s] = is_high ? (0xF << 2) : 0;
+    buf[s] *= sound->env_value;
+
+    // TODO: handle case where sound->frequency < ss.rate?
+    int noise_cycle_before = sound->current_sample * sound->frequency / ss.rate;
+    sound->current_sample++;
+    int noise_cycle_after = sound->current_sample * sound->frequency / ss.rate;
+
+    while (noise_cycle_before < noise_cycle_after) {
+      int bit_0 = sound->lfsr_shift_register & 1;
+      int bit_1 = (sound->lfsr_shift_register >> 1) & 1;
+      sound->lfsr_shift_register >>= 1;
+
+      int xor_result = bit_0 ^ bit_1;
+      if (sound->is_long_mode) {
+	sound->lfsr_shift_register |= (xor_result << 14);
+      } else {
+	sound->lfsr_shift_register |= (xor_result << 6);
+      }
+      noise_cycle_before++;
+    }
+
+    s++;
+  }
+  return s;
+}
+
 static int sound_generate_samples(struct sound *sound, int16_t *buf, int len) {
   switch (sound->type) {
   case 1:
@@ -178,6 +221,8 @@ static int sound_generate_samples(struct sound *sound, int16_t *buf, int len) {
     return generate_square_wave_samples(sound, buf, len);
   case 3:
     return generate_defined_wave_samples(sound, buf, len);
+  case 4:
+    return generate_white_noise_wave_samples(sound, buf, len);
   default:
     return 0;
   }
@@ -192,7 +237,7 @@ void sound_tick(struct sound_controller *sc) {
   while (sc->t_cycles >= 190) { // TODO: compute this on init
     int16_t accumulated_samples[4] = {0}; // TODO: rename stereo samples?
     int16_t sbuf[2];
-    for (int s = 0; s < 3; s++) {
+    for (int s = 0; s < 4; s++) {
       struct sound *sound = &sc->sounds[s];
       if (sound->type < 1 || sound->type > 4) { // invalid type
 	continue;
@@ -237,7 +282,7 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, uint8_t va
     if (initialize_on(sc->regs[rNR14])) {
       int frequency = calculate_frequency(sc->regs[rNR14], sc->regs[rNR13]);
       int sweep_time = ((sc->regs[rNR10] >> 4) & 7);
-      int duration_ms = (64-(sc->regs[rNR11] & 0x4F)) * 1000 / 256;
+      int duration_ms = (64-(sc->regs[rNR11] & 0x3F)) * 1000 / 256;
 
       // define sound 1 wave
       sc->sounds[0] = (struct sound) {
@@ -265,19 +310,12 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, uint8_t va
       if (!sc->sounds[0].is_continuous) {
 	sc->regs[rNR52] |= 1;
       }
-
-      /*      printf("debug: new sound 1 with freq: %d, sweep_shift: %d, sweep_decreasing: %d, env_decreasing: %d\n",
-	     sc->sounds[0].frequency,
-	     sc->sounds[0].sweep_shift,
-	     sc->sounds[0].is_sweep_decreasing,
-	     sc->sounds[0].is_env_decreasing);*/
-
     }
     break;
   case rNR24:
     if (initialize_on(sc->regs[rNR24])) {
       int frequency = calculate_frequency(sc->regs[rNR24], sc->regs[rNR23]);
-      int duration_ms = (64-(sc->regs[rNR21] & 0x4F)) * 1000 / 256;
+      int duration_ms = (64-(sc->regs[rNR21] & 0x3F)) * 1000 / 256;
 
       // define sound 2 wave (sound 1 but sweep off)
       sc->sounds[1] = (struct sound) {
@@ -301,7 +339,6 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, uint8_t va
 	.env_value = sc->regs[rNR22] >> 4,
 	.is_env_decreasing = !(sc->regs[rNR22] & 8),
       };
-
       if (!sc->sounds[1].is_continuous) {
 	sc->regs[rNR52] |= 2;
       }
@@ -344,7 +381,43 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, uint8_t va
     }
     break;
   case rNR44:
-    //printf("warn: TODO implement SOUND 4: NR44 -> 0x%02X\n", sc->regs[rNR44]);
+    if (initialize_on(sc->regs[rNR44])) {
+      int duration_ms = (64-(sc->regs[rNR41] & 0x3F)) * 1000 / 256;
+      int frequency = (4194304 >> 3);
+      int div_factor = sc->regs[rNR43] & 7;
+      if (div_factor) {
+	frequency /= div_factor;
+      } else {
+	frequency *= 2;
+      }
+
+      int shift_factor = (sc->regs[rNR43] >> 4) & 15;
+      if (shift_factor > 14) {
+	printf("warn: invalid sound 4 shift factor: %d\n", shift_factor);
+      } else {
+	frequency >>= (shift_factor+1);
+      }
+
+      int is_long_mode = !(sc->regs[rNR43] & 8);
+
+      sc->sounds[3] = (struct sound) {
+	.type = 4,
+	.current_sample = 0,
+	.frequency = frequency,
+	.duration_samples = ss.rate*duration_ms/1000,
+	.is_continuous = (sc->regs[rNR44] & 0x40) == 0,
+	.lfsr_shift_register = is_long_mode ? 0x7FFF : 0x7F,
+
+	.samples_per_env_step = ss.rate * (sc->regs[rNR42] & 7) / 64,
+	.env_value = sc->regs[rNR42] >> 4,
+	.is_env_decreasing = !(sc->regs[rNR42] & 8),
+
+	.is_long_mode = is_long_mode
+      };
+      if (!sc->sounds[3].is_continuous) {
+	sc->regs[rNR52] |= 8;
+      }
+    }
     break;
   default:
     break;
