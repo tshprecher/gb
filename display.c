@@ -38,7 +38,7 @@ void init_lcd() {
       XMapWindow(display, window);
 
       pixmap =  XCreatePixmap(display, window, SCREEN_SIZE, SCREEN_SIZE, 24);
-      framebuf = malloc(256 * 256 * 4);
+      framebuf = malloc(256 * PIXEL_SCALAR * 256 * PIXEL_SCALAR * 4);
       //printf("DEBUG: pixmap result -> %lu\n", pixmap);
 
       image = XCreateImage(display, DefaultVisual(display, screen), DefaultDepth(display, screen),
