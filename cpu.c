@@ -157,11 +157,7 @@ static uint8_t alu_add(struct cpu *cpu, uint8_t op1, uint8_t op2, uint8_t in_car
 }
 
 // handles ALU operations for subtraction, properly assigning the flags
-static uint8_t alu_sub(struct cpu *cpu, uint8_t op1, uint8_t op2, uint8_t in_carry) {
-  if (in_carry) {
-    // subtract the carry bit recursively for proper flag assignment
-    op1 = alu_sub(cpu, op1, 1, 0);
-  }
+static uint8_t alu_sub(struct cpu *cpu, uint8_t op1, uint8_t op2) {
   op2 = ~op2;
   uint8_t h_carry, cy_carry;
   uint8_t lower4 = alu_4bit_add(op1, op2, 1, &h_carry); // 2's complement means carry is 1 after bits flipped
@@ -190,10 +186,10 @@ static inline void check_interrupt(struct cpu *cpu) {
 	cpu->is_halted = 0;
 	cpu->interrupt_c->IF ^= mask;
 	cpu->IME = 0;
-	//	printf("debug: handling interrupt #%d\n", i);
+	//      printf("debug: handling interrupt #%d\n", i);
 
 	// TODO: consolidate PUSH into one operation?
-	//	printf("debug: pushing interrupt return address: 0x%04X\n", cpu->PC);
+	//      printf("debug: pushing interrupt return address: 0x%04X\n", cpu->PC);
 	mem_write(cpu->memory_c,cpu->SP-1,  upper_8(cpu->PC));
 	mem_write(cpu->memory_c,cpu->SP-2, lower_8(cpu->PC));
 	cpu->SP -= 2;
@@ -203,6 +199,7 @@ static inline void check_interrupt(struct cpu *cpu) {
     }
   }
 }
+
 
 void cpu_tick(struct cpu *cpu) {
   if (cpu->t_cycles_since_last_inst < 0) { // catch up for variably timed instructions
@@ -225,7 +222,7 @@ void cpu_tick(struct cpu *cpu) {
   cpu->t_cycles_since_last_inst++;
   if (cpu->t_cycles_since_last_inst == exec_cycle) {
     /*    char buf[32];
-    inst_to_str(buf, cpu->next_inst);
+    inst_to_str(cpu->next_inst, buf);
     printf("DEBUG: 0x%04X\t%s\n", cpu->PC, buf);*/
     int cycles = cpu_exec_instruction(cpu, cpu->next_inst);
     if (cycles < 0) {
@@ -250,7 +247,7 @@ void cpu_tick(struct cpu *cpu) {
 // TODO: should this return 0 cycles on error instead? makes some sense
 int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   uint16_t hl, word;
-  uint8_t flag_cy, flag_h, dd_or_ss, daa_add, lower_nib, upper_nib;
+  uint8_t flag_cy=0, flag_h=0, flag_n=0, flag_z=0, dd_or_ss, daa_add, lower_nib, upper_nib;
   uint8_t *bytePtr;
   int8_t e;
   switch (inst->type) {
@@ -287,46 +284,60 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
 	alu_add(cpu, upper_8(cpu->SP), 0, flag_cy); // to set upper carry bits
       } else {
 	flag_cy = (lower_8(cpu->SP) < -e) ? 1 : 0;
-	alu_sub(cpu, upper_8(cpu->SP), flag_cy, 0); // to set upper carry bits
+	alu_sub(cpu, upper_8(cpu->SP), flag_cy); // to set upper carry bits
       }
       cpu_clear_flag(cpu, FLAG_Z);
       cpu_clear_flag(cpu, FLAG_N);
       cpu->SP += e;
       break;
     case 4:
+      flag_z = cpu_flag(cpu, FLAG_Z); // store before to set back at end
       hl = regs_to_word(cpu, rH, rL);
       word = get_dd_or_ss(cpu, inst->args[0].value.byte);
       flag_cy = (cpu->L + lower_8(word)) >= (1<<8) ? 1 : 0;
       alu_add(cpu, cpu->H, upper_8(word), flag_cy); // to set upper carry bits
       word_to_regs(cpu, hl+word, rH, rL);
+
+      cpu_clear_flag(cpu, FLAG_N);
+      flag_z ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
       break;
     }
     break;
   case SUB:
     switch (inst->subtype) {
     case 0:
-      cpu->A = alu_sub(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)), 0);
+      cpu->A = alu_sub(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)));
       break;
     case 1:
-      cpu->A = alu_sub(cpu, cpu->A, inst->args[0].value.byte, 0);
+      cpu->A = alu_sub(cpu, cpu->A, inst->args[0].value.byte);
       break;
     case 2:
-      cpu->A = alu_sub(cpu, cpu->A, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)), 0);
+      cpu->A = alu_sub(cpu, cpu->A, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)));
       break;
     }
     break;
   case SBC:
+    if (cpu_flag(cpu, FLAG_CY)) {
+      cpu->A = alu_sub(cpu, cpu->A, 1);
+      flag_cy = cpu_flag(cpu, FLAG_CY);
+      flag_h = cpu_flag(cpu, FLAG_H);
+    }
     switch (inst->subtype) {
     case 0:
-      cpu->A = alu_sub(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)), cpu_flag(cpu, FLAG_CY));
+      cpu->A = alu_sub(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)));
       break;
     case 1:
-      cpu->A = alu_sub(cpu, cpu->A, inst->args[0].value.byte, cpu_flag(cpu, FLAG_CY));
+      cpu->A = alu_sub(cpu, cpu->A, inst->args[0].value.byte);
       break;
     case 2:
-      cpu->A = alu_sub(cpu, cpu->A, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)), cpu_flag(cpu, FLAG_CY));
+      cpu->A = alu_sub(cpu, cpu->A, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)));
       break;
     }
+    flag_cy |= cpu_flag(cpu, FLAG_CY);
+    flag_h |= cpu_flag(cpu, FLAG_H);
+
+    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_h ? cpu_set_flag(cpu, FLAG_H) : cpu_clear_flag(cpu, FLAG_H);
     break;
   case INC:
     switch (inst->subtype) {
@@ -351,7 +362,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     switch (inst->subtype) {
     case 0:
       flag_cy = cpu_flag(cpu, FLAG_CY);
-      *(reg(cpu, inst->args[0].value.byte)) = alu_sub(cpu, *(reg(cpu, inst->args[0].value.byte)), 1, 0);
+      *(reg(cpu, inst->args[0].value.byte)) = alu_sub(cpu, *(reg(cpu, inst->args[0].value.byte)), 1);
       flag_cy == 0 ? cpu_clear_flag(cpu, FLAG_CY) : cpu_set_flag(cpu, FLAG_CY);
       break;
     case 1:
@@ -361,7 +372,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     case 2:
       flag_cy = cpu_flag(cpu, FLAG_CY);
       mem_write(cpu->memory_c, regs_to_word(cpu, rH, rL),
-		alu_sub(cpu, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)), 1, 0));
+		alu_sub(cpu, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)), 1));
       flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
       break;
     }
@@ -420,18 +431,20 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   case CP:
     switch (inst->subtype) {
     case 0:
-      alu_sub(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)), 0);
+      alu_sub(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)));
       break;
     case 1:
-      alu_sub(cpu, cpu->A, inst->args[0].value.byte, 0);
+      alu_sub(cpu, cpu->A, inst->args[0].value.byte);
       break;
     case 2:
-      alu_sub(cpu, cpu->A, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)), 0);
+      alu_sub(cpu, cpu->A, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)));
       break;
     }
     break;
   case CPL:
     cpu->A = ~cpu->A;
+    cpu_set_flag(cpu, FLAG_N);
+    cpu_set_flag(cpu, FLAG_H);
     break;
   case RLCA:
     flag_cy = (cpu->A & 0x80) != 0;
@@ -815,11 +828,23 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       break;
     }
     break;
+  case LDHL:
+    e = (int8_t) inst->args[0].value.byte;
+    if (e >= 0) {
+      flag_cy = (lower_8(cpu->SP) + e) >= (1<<8) ? 1 : 0;
+      alu_add(cpu, upper_8(cpu->SP), 0, flag_cy); // to set upper carry bits
+    } else {
+      flag_cy = (lower_8(cpu->SP) < -e) ? 1 : 0;
+      alu_sub(cpu, upper_8(cpu->SP), flag_cy); // to set upper carry bits
+    }
+    cpu_clear_flag(cpu, FLAG_Z);
+    cpu_clear_flag(cpu, FLAG_N);
+    word_to_regs(cpu, cpu->SP+e, rH, rL);
+    break;
   case DAA:
     // direct implementation from the table defined in the Nintendo/Z80 manual.
     lower_nib = cpu->A & 0x0F;
     upper_nib = (cpu->A>>4) & 0x0F;
-    flag_h = cpu_flag(cpu, FLAG_H);
     if (!cpu_flag(cpu, FLAG_N)) {
       if (!cpu_flag(cpu, FLAG_CY)) {
 	if (!cpu_flag(cpu, FLAG_H)) {
@@ -892,10 +917,11 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
 	}
       }
     }
+    flag_n = cpu_flag(cpu, FLAG_N);
     cpu->A = alu_add(cpu, cpu->A, daa_add, 0);
     cpu_clear_flag(cpu, FLAG_H);
     flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
-    flag_h ? cpu_set_flag(cpu, FLAG_H) : cpu_clear_flag(cpu, FLAG_H);
+    flag_n ? cpu_set_flag(cpu, FLAG_N) : cpu_clear_flag(cpu, FLAG_N);
     break;
   case PUSH:
     word = get_qq(cpu, inst->args[0].value.byte);

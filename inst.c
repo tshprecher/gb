@@ -99,7 +99,7 @@ static struct inst_prototype instructions[] = {
   {LD, 21,3, 5, "00001000 {nn}", "LD ({nn}), SP"},
 
   {LDHL, 0,2, 3, "11111000 {e}", "LDHL SP, {e}"},
-  {NOP, 0,1, 1, "00000000", "NOP"},
+  {NOP, 0, 1, 1, "00000000", "NOP"},
 
   {OR,0 ,1, 1, "10110{r}", "OR {r}"},
   {OR,1 ,1, 2, "10110110", "OR (HL)"},
@@ -148,7 +148,7 @@ static struct inst_prototype instructions[] = {
   {SET, 1, 2, 4, "11001011 11{b}110", "SET {b}, (HL)"},
 
   {SLA, 0, 2, 2, "11001011 00100{r}", "SLA {r}"},
-  {SLA, 1, 2, 4, "11011011 00100110", "SLA (HL)"},
+  {SLA, 1, 2, 4, "11001011 00100110", "SLA (HL)"},
 
   {SRA, 0, 2, 2, "11001011 00101{r}", "SRA {r}"},
   {SRA, 1, 2, 4, "11001011 00101110", "SRA (HL)"},
@@ -449,7 +449,8 @@ static int _match_txt_pattern(struct inst* inst, char *asmline, char *pattern) {
 
 	arg.type = E;
 
-	if (inst->type != ADD)
+	// TODO: somewhat of a hack
+	if (inst->type == JR)
 	  parsed_dec -= 2;
 
 	arg.value.byte = parsed_dec & 0xFF;
@@ -514,7 +515,7 @@ int init_inst_from_asm(struct inst *inst, char *asmline) {
   return 0;
 }
 
-int arg_to_str(struct inst_arg *arg, char *buf, int check_special_register) {
+static int arg_to_str(enum inst_type type, struct inst_arg *arg, char *buf, int check_special_register) {
   char *arg_str;
   char ebuf[8];
   int16_t word;
@@ -545,7 +546,8 @@ int arg_to_str(struct inst_arg *arg, char *buf, int check_special_register) {
     return 2;
   case E:
     word = (int8_t)arg->value.byte;
-    word+=2;
+    if (type == JR)
+      word+=2;
     sprintf(ebuf, "%d", word);
     strcpy(buf, ebuf);
     return strlen(ebuf);
@@ -582,7 +584,7 @@ int inst_to_str(struct inst * inst, char *buf) {
   while (*pattern != '\0') {
     if (*pattern == '{') {
       pattern++;
-      len += arg_to_str(current_arg++, buf+len, check_special_register);
+      len += arg_to_str(inst->type, current_arg++, buf+len, check_special_register);
       while (*pattern++ != '}')
 	;
     } else {

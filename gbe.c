@@ -66,7 +66,7 @@ void gb_run(struct gb *gb)
 	 cur_period_time_ns = cur_cycle_time_ns - last_cycle_time_ns;
       } else {
 	cur_period_time_ns = 999999999 - last_cycle_time_ns + cur_cycle_time_ns;
-      }
+     }
 
       last_cycle_time_ns = cur_cycle_time_ns;
       int sleep_time_ns = 15625000 > cur_period_time_ns ? (15625000 - cur_period_time_ns) : 0;
@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
 	printf("0x%02X\t%s\n", addr, buf);
 	addr+=decoded.bytelen;
       } else {
-	printf("0x%02X\tDB 0x%02X\n", addr, memory_c.ram[addr]);
+	printf("0x%02X\tDB 0x%02X\n", addr, rom.mem[addr]);
 	addr++;
       }
     }
