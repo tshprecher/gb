@@ -139,6 +139,9 @@ static void lcd_refresh_tiles_by_line(struct lcd_controller *lcd_c,
 				      int char_select_addr) {
   // TODO: priorities, SCY and SCX
 
+  // TODO: fix
+  char_select_addr = 0x8000;
+
   // tiles are each 8x8, but show the full tile once a new one is seen, forgo
   // perfect line refresh accuracy in favor of simplicity.
   uint8_t line = lcd_c->regs[rLY];

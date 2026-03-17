@@ -1,7 +1,15 @@
 #include "timing.h"
 #include <stdio.h>
 
-static uint16_t clocks[] = { 1<<9, 1<<3, 1<<5, 1<<7 };
+
+#define MAIN_CLOCK_FREQ 4194304
+
+static int clocks[] = {
+  MAIN_CLOCK_FREQ >> 10,
+  MAIN_CLOCK_FREQ >> 4,
+  MAIN_CLOCK_FREQ >> 6,
+  MAIN_CLOCK_FREQ >> 8
+};
 
 void timing_tick(struct timing_controller *tc) {
   tc->div_t_cycles++;
@@ -10,16 +18,15 @@ void timing_tick(struct timing_controller *tc) {
     return;
   }
 
-  printf("DEBUG: timer is on!\n");
   tc->timer_t_cycles++;
-  // TODO: check overflow
   if (tc->timer_t_cycles == clocks[tc->regs[rTAC] & 3]) {
     tc->regs[rTIMA]++;
     if (tc->regs[rTIMA] == 0x00) { // overflow
+      printf("debug: timing overflow!\n");
       tc->regs[rTIMA] = tc->regs[rTMA];
+      tc->timer_t_cycles = 0;
+      interrupt(tc->interrupt_c, TIMER_OVERFLOW);
     }
-    tc->timer_t_cycles = 0;
-    interrupt(tc->interrupt_c, TIMER_OVERFLOW);
   }
 }
 

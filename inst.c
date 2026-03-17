@@ -546,8 +546,10 @@ static int arg_to_str(enum inst_type type, struct inst_arg *arg, char *buf, int 
     return 2;
   case E:
     word = (int8_t)arg->value.byte;
+
     if (type == JR)
       word+=2;
+
     sprintf(ebuf, "%d", word);
     strcpy(buf, ebuf);
     return strlen(ebuf);
