@@ -43,7 +43,4 @@ uint8_t mem_read(struct mem_controller *, uint16_t);
 void mem_write(struct mem_controller *, uint16_t, uint8_t);
 struct inst* mem_read_inst(struct mem_controller *, uint16_t);
 
-// TODO: remove this to make sure all write go through mem_write
-uint8_t* mem_ptr(struct mem_controller *, uint16_t);
-
 #endif

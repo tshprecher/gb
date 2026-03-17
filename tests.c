@@ -125,11 +125,11 @@ int test_cpu_exec() {
     {"LDHL SP, 2", F_OFF, {.SP = 0xFFF8}, 3, {.H = 0xFF, .L = 0xFA, .PC = 0x0002, .SP = 0xFFF8}, 0, {}, {}},
     {"LDHL SP, 2", F_ON, {.SP = 0xFFF8}, 3, {.H = 0xFF, .L = 0xFA, .PC = 0x0002, .SP = 0xFFF8}, 0, {}, {}},
 
-    {"LDHL SP, -1", F_OFF, {.SP = 0xFACE}, 3, {.H = 0xFA, .L = 0xCD, .PC = 0x0002, .SP = 0xFACE}, 0, {}, {}},
-    {"LDHL SP, -1", F_ON, {.SP = 0xFACE}, 3, {.H = 0xFA, .L = 0xCD, .PC = 0x0002, .SP = 0xFACE}, 0, {}, {}},
+    {"LDHL SP, -1", F_OFF, {.SP = 0xFACE}, 3, {.H = 0xFA, .L = 0xCD, .PC = 0x0002, .SP = 0xFACE}, 0x30, {}, {}},
+    {"LDHL SP, -1", F_ON, {.SP = 0xFACE}, 3, {.H = 0xFA, .L = 0xCD, .PC = 0x0002, .SP = 0xFACE}, 0x30, {}, {}},
 
-    {"LDHL SP, 1", F_OFF, {.SP = 0x0FFF}, 3, {.H = 0x10, .L = 0x00, .PC = 0x0002, .SP = 0x0FFF}, 0x20, {}, {}},
-    {"LDHL SP, 1", F_ON, {.SP = 0x0FFF}, 3, {.H = 0x10, .L = 0x00, .PC = 0x0002, .SP = 0x0FFF}, 0x20, {}, {}},
+    {"LDHL SP, 1", F_OFF, {.SP = 0x0FFF}, 3, {.H = 0x10, .L = 0x00, .PC = 0x0002, .SP = 0x0FFF}, 0x30, {}, {}},
+    {"LDHL SP, 1", F_ON, {.SP = 0x0FFF}, 3, {.H = 0x10, .L = 0x00, .PC = 0x0002, .SP = 0x0FFF}, 0x30, {}, {}},
 
     {"LDHL SP, 15", F_OFF, {.SP = 0xFFF1}, 3, {.H = 0x00, .L = 0x00, .PC = 0x0002, .SP = 0xFFF1}, 0x30, {}, {}},
     {"LDHL SP, 15", F_ON, {.SP = 0xFFF1}, 3, {.H = 0x00, .L = 0x00, .PC = 0x0002, .SP = 0xFFF1}, 0x30, {}, {}},
@@ -147,6 +147,7 @@ int test_cpu_exec() {
 
     {"PUSH AF", F_OFF, {.A = 0xBE, .SP = 0xFFFE}, 4, {.A = 0xBE, .PC = 0x0001, .SP = 0xFFFC}, 0, {0xFFFD, 0xFFFC}, {0xBE, 0x00}},
     {"PUSH AF", F_ON, {.A = 0xBE, .SP = 0xFFFE}, 4, {.A = 0xBE,  .PC = 0x0001, .SP = 0xFFFC}, 0xF0, {0xFFFD, 0xFFFC}, {0xBE, 0xF0}},
+    {"PUSH AF", 0xFF, {.A = 0xBE, .SP = 0xFFFE}, 4, {.A = 0xBE,  .PC = 0x0001, .SP = 0xFFFC}, 0xFF, {0xFFFD, 0xFFFC}, {0xBE, 0xF0}},
 
     // POP
 
@@ -206,8 +207,14 @@ int test_cpu_exec() {
     {"ADD SP, 2", F_OFF, {.SP = 0xFFF8}, 4, {.SP = 0xFFFA, .PC = 0x0002}, {}, {}},
     {"ADD SP, 2", F_ON, {.SP = 0xFFF8}, 4, {.SP = 0xFFFA, .PC = 0x0002}, {}, {}},
 
-    {"ADD SP, -2", F_OFF, {.SP = 0x1000}, 4, {.SP = 0x0FFE, .PC = 0x0002}, 0x20, {}, {}},
-    {"ADD SP, -2", F_ON, {.SP = 0x1000}, 4, {.SP = 0x0FFE, .PC = 0x0002}, 0x20, {}, {}},
+    {"ADD SP, -2", F_OFF, {.SP = 0x1000}, 4, {.SP = 0x0FFE, .PC = 0x0002}, 0, {}, {}},
+    {"ADD SP, -2", F_ON, {.SP = 0x1000}, 4, {.SP = 0x0FFE, .PC = 0x0002}, 0, {}, {}},
+
+    {"ADD SP, -1", F_OFF, {.SP = 0x0000}, 4, {.SP = 0xFFFF, .PC = 0x0002}, 0, {}, {}},
+    {"ADD SP, -1", F_ON, {.SP = 0x0000}, 4, {.SP = 0xFFFF, .PC = 0x0002}, 0, {}, {}},
+
+    {"ADD SP, 1", F_OFF, {.SP = 0xFFFF}, 4, {.SP = 0x0000, .PC = 0x0002}, 0x30, {}, {}},
+    {"ADD SP, 1", F_ON, {.SP = 0xFFFF}, 4, {.SP = 0x0000, .PC = 0x0002}, 0x30, {}, {}},
 
     {"ADD HL, BC", F_OFF, {.B = 0x06, .C = 0x05, .H = 0x8A, .L = 0x23}, 2,
      {.B = 0x06, .C = 0x05, .H = 0x90, .L = 0x28, .F = 0x20, .PC = 0x0001}, 0x20, {}, {}},
@@ -247,6 +254,12 @@ int test_cpu_exec() {
     {"INC DE", F_OFF, {.D = 0x23, .E = 0x5F}, 2, {.D = 0x23, .E = 0x60, .PC = 0x0001}, 0, {}, {}},
     {"INC DE", F_ON, {.D = 0x23, .E = 0x5F}, 2, {.D = 0x23, .E = 0x60, .PC = 0x0001}, 0xF0, {}, {}},
 
+    {"INC SP", F_OFF, {.SP = 0xFF00}, 2, {.SP = 0xFF01, .PC = 0x0001}, 0, {}, {}},
+    {"INC SP", F_ON, {.SP = 0xFF00}, 2, {.SP = 0xFF01, .PC = 0x0001}, 0xF0, {}, {}},
+
+    {"INC SP", F_OFF, {.SP = 0xFFFF}, 2, {.SP = 0x0, .PC = 0x0001}, 0, {}, {}},
+    {"INC SP", F_ON, {.SP = 0xFFFF}, 2, {.SP = 0x0, .PC = 0x0001}, 0xF0, {}, {}},
+
     {"INC (HL)", F_OFF, {.H = 0xFA, .L = 0xCE}, 3, {.H = 0xFA, .L = 0xCE, .PC = 0x0001}, 0, {0xFACE}, {0x01}},
     {"INC (HL)", F_ON, {.H = 0xFA, .L = 0xCE}, 3, {.H = 0xFA, .L = 0xCE, .PC = 0x0001}, 0x10, {0xFACE}, {0x01}},
 
@@ -257,6 +270,12 @@ int test_cpu_exec() {
 
     {"DEC DE", F_OFF, {.D = 0x23, .E = 0x5F}, 2, {.D = 0x23, .E = 0x5E, .PC = 0x0001}, 0, {}, {}},
     {"DEC DE", F_ON, {.D = 0x23, .E = 0x5F}, 2, {.D = 0x23, .E = 0x5E, .PC = 0x0001}, 0xF0,{}, {}},
+
+    {"DEC SP", F_OFF, {.SP = 0xFF00}, 2, {.SP = 0xFEFF, .PC = 0x0001}, 0, {}, {}},
+    {"DEC SP", F_ON, {.SP = 0xFF00}, 2, {.SP = 0xFEFF, .PC = 0x0001}, 0xF0, {}, {}},
+
+    {"DEC SP", F_OFF, {.SP = 0x0000}, 2, {.SP = 0xFFFF, .PC = 0x0001}, 0, {}, {}},
+    {"DEC SP", F_ON, {.SP = 0x0000}, 2, {.SP = 0xFFFF, .PC = 0x0001}, 0xF0, {}, {}},
 
     {"DEC (HL)", F_OFF, {.H = 0xFA, .L = 0xCE}, 3, {.H = 0xFA, .L = 0xCE, .PC = 0x0001}, 0x60, {0xFACE}, {0xFF}},
     {"DEC (HL)", F_ON, {.H = 0xFA, .L = 0xCE}, 3, {.H = 0xFA, .L = 0xCE,  .PC = 0x0001}, 0x70, {0xFACE}, {0xFF}},
@@ -472,14 +491,14 @@ int test_cpu_exec() {
 
     // SET
 
-    {"SET 2, A", F_OFF, {.A = 0x80}, 2, {.A = 0x84, .PC = 0x0002}, 0, {}, {}},
-    {"SET 2, A", F_ON, {.A = 0x80}, 2, {.A = 0x84, .PC = 0x0002}, 0xF0, {}, {}},
+    {"SET 3, A", F_OFF, {.A = 0x80}, 2, {.A = 0x88, .PC = 0x0002}, 0, {}, {}},
+    {"SET 3, A", F_ON, {.A = 0x80}, 2, {.A = 0x88, .PC = 0x0002}, 0xF0, {}, {}},
 
     {"SET 7, L", F_OFF, {.L = 0x3B}, 2, {.L = 0xBB, .PC = 0x0002}, 0, {}, {}},
     {"SET 7, L", F_ON, {.L = 0x3B}, 2, {.L = 0xBB, .PC = 0x0002}, 0xF0, {}, {}},
 
-    {"SET 7, (HL)", F_OFF, {.H = 0xFA, .L = 0xCE}, 4, {.H = 0xFA, .L = 0xCE, .PC = 0x0002}, 0, {0xFACE}, {0x80}},
-    {"SET 7, (HL)", F_ON, {.H = 0xFA, .L = 0xCE}, 4, {.H = 0xFA, .L = 0xCE, .PC = 0x0002}, 0xF0, {0xFACE}, {0x80}},
+    {"SET 2, (HL)", F_OFF, {.H = 0xFA, .L = 0xCE}, 4, {.H = 0xFA, .L = 0xCE, .PC = 0x0002}, 0, {0xFACE}, {0x04}},
+    {"SET 2, (HL)", F_ON, {.H = 0xFA, .L = 0xCE}, 4, {.H = 0xFA, .L = 0xCE, .PC = 0x0002}, 0xF0, {0xFACE}, {0x04}},
 
     // RES
 

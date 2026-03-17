@@ -98,7 +98,7 @@ static struct inst_prototype instructions[] = {
   {LD, 20,3, 4, "11111010 {nn}", "LD A, ({nn})"},
   {LD, 21,3, 5, "00001000 {nn}", "LD ({nn}), SP"},
 
-  {LDHL, 0,2, 3, "11111000 {e}", "LDHL SP, {e}"},
+  {LDHL, 0, 2, 3, "11111000 {e}", "LDHL SP, {e}"},
   {NOP, 0, 1, 1, "00000000", "NOP"},
 
   {OR,0 ,1, 1, "10110{r}", "OR {r}"},
@@ -117,8 +117,8 @@ static struct inst_prototype instructions[] = {
 
   {RETI,0 ,1, 4, "11011001", "RETI"},
 
-  {RL,0 ,2, 2, "11001011 00010{r}", "RL {r}"},
-  {RL,1 ,2, 4, "11011011 00010110", "RL (HL)"},
+  {RL,0 , 2, 2, "11001011 00010{r}", "RL {r}"},
+  {RL,1 , 2, 4, "11001011 00010110", "RL (HL)"}, // NOTE: wrong in the manual
 
   {RLA,0 ,1, 1, "00010111", "RLA"},
 
@@ -128,7 +128,7 @@ static struct inst_prototype instructions[] = {
   {RLCA, 0 ,1, 1, "00000111", "RLCA"},
 
   {RR, 0,2, 2, "11001011 00011{r}", "RR {r}"},
-  {RR, 1,2, 4, "11011011 00011110", "RR (HL)"},
+  {RR, 1,2, 4, "11001011 00011110", "RR (HL)"}, // NOTE: wrong in the manual
 
   {RRA,0 ,1, 1, "00011111", "RRA"},
 
@@ -448,7 +448,6 @@ static int _match_txt_pattern(struct inst* inst, char *asmline, char *pattern) {
 	long parsed_dec = strtol(&asmline[a], &end, 10);
 
 	arg.type = E;
-
 	// TODO: somewhat of a hack
 	if (inst->type == JR)
 	  parsed_dec -= 2;
@@ -546,8 +545,10 @@ static int arg_to_str(enum inst_type type, struct inst_arg *arg, char *buf, int 
     return 2;
   case E:
     word = (int8_t)arg->value.byte;
+
     if (type == JR)
       word+=2;
+
     sprintf(ebuf, "%d", word);
     strcpy(buf, ebuf);
     return strlen(ebuf);

@@ -54,8 +54,12 @@ void init_lcd() {
 
 //
 // TODO: do the modes properly
-//
 
+// TODO: make this an enum
+static inline void setMode(struct lcd_controller *lcd_c,  uint8_t mode) {
+  lcd_c->regs[rSTAT] &= 0xFC;
+  lcd_c->regs[rSTAT] |= (mode & 3);
+}
 
 static inline int is_background_on(struct lcd_controller *lcd_c) {
   return is_bit_set(lcd_c->regs[rLCDC], 0);
@@ -138,6 +142,9 @@ static void lcd_refresh_tiles_by_line(struct lcd_controller *lcd_c,
 				      int code_select_addr,
 				      int char_select_addr) {
   // TODO: priorities, SCY and SCX
+
+  // TODO: fix
+  //char_select_addr = 0x8000;
 
   // tiles are each 8x8, but show the full tile once a new one is seen, forgo
   // perfect line refresh accuracy in favor of simplicity.
