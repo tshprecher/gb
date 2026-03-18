@@ -22,6 +22,55 @@ void interrupt(struct interrupt_controller *ic, enum Interrupt interrupt) {
   ic->IF |= (1 << interrupt);
 }
 
+static inline void check_interrupt(struct cpu *cpu) {
+  //printf("debug: t_cycles_since_last_inst: %d, is_halted: %d\n", cpu->t_cycles_since_last_inst, cpu->is_halted);
+  if (cpu->t_cycles_since_last_inst == 0 &&
+      (cpu->interrupt_c->IF & cpu->interrupt_c->IE)) {
+    printf("debug: noticed interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
+
+    uint16_t *handler_addr = interrupt_handlers;
+    uint8_t mask = 1;
+    while (mask < (1<<5)) {
+      if ((cpu->interrupt_c->IF & mask) && (cpu->interrupt_c->IE & mask))
+       break;
+      mask <<= 1;
+      handler_addr++;
+    }
+
+    printf("debug: interrupt found mask 0x%02X\n", mask);
+
+    if (cpu->IME) {
+      printf("debug: interrupt IME is true, so handle and mark unhalted\n");
+
+      cpu->interrupt_c->IF ^= mask;
+      cpu->is_halted = 0;
+      cpu->IME = 0;
+      printf("debug: handling interrupt addr 0x%04X\n", *handler_addr);
+
+      // TODO: consolidate PUSH into one operation?
+      //       printf("debug: pushing interrupt return address: 0x%04X\n", cpu->PC);
+      mem_write(cpu->memory_c,cpu->SP-1,  upper_8(cpu->PC));
+      mem_write(cpu->memory_c,cpu->SP-2, lower_8(cpu->PC));
+      cpu->SP -= 2;
+      cpu->PC = *handler_addr;
+      cpu->interrupt_t_cycles = 6 << 2; // TODO: is this correct for every interrupt type?
+
+      printf("debug: exit interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
+    } else {
+      printf("debug: interrupt IME is false\n");
+
+      if (cpu->is_halted) {
+       printf("debug: interrupt is halted\n");
+       // PC is already set to the instruction after halt, just unhalt
+       cpu->is_halted = 0;
+      } else {
+       // do noting here (TODO: remove this?)
+      }
+      printf("debug: exit interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
+    }
+  }
+}
+
 static uint8_t * reg(struct cpu *cpu, uint8_t reg) {
   if (reg == rA)
       return &cpu->A;
@@ -176,30 +225,6 @@ void init_cpu(struct cpu *cpu) {
   cpu->PC = 0x150;
   cpu->SP = 0xFFFE;
 }
-
-static inline void check_interrupt(struct cpu *cpu) {
-  if (cpu->t_cycles_since_last_inst == 0 && cpu->IME && cpu->interrupt_c->IF) {
-    //printf("debug: noticed interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
-    for (int i = 0; i < 5; i++) {
-      uint8_t mask = 1 << i;
-      if ((cpu->interrupt_c->IF & mask) && (cpu->interrupt_c->IE & mask)) {
-	cpu->is_halted = 0;
-	cpu->interrupt_c->IF ^= mask;
-	cpu->IME = 0;
-	//      printf("debug: handling interrupt #%d\n", i);
-
-	// TODO: consolidate PUSH into one operation?
-	//      printf("debug: pushing interrupt return address: 0x%04X\n", cpu->PC);
-	mem_write(cpu->memory_c,cpu->SP-1,  upper_8(cpu->PC));
-	mem_write(cpu->memory_c,cpu->SP-2, lower_8(cpu->PC));
-	cpu->SP -= 2;
-	cpu->PC = interrupt_handlers[i];
-	cpu->interrupt_t_cycles = 6 << 2; // TODO: is this correct for every interrupt type?
-      }
-    }
-  }
-}
-
 
 void cpu_tick(struct cpu *cpu) {
   if (cpu->t_cycles_since_last_inst < 0) { // catch up for variably timed instructions

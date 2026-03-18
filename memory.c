@@ -232,11 +232,11 @@ struct inst* mem_read_inst(struct mem_controller *mc, uint16_t addr) {
     uint8_t byte_map = mc->rom->is_cached_bitmap[addr >> 3];
     uint8_t bit_mask = 1 << (7-(addr & 7));
     if (!(byte_map & bit_mask)) {
-      printf("debug: memory: inst bytes 0x%02X 0x%02X 0x%02X 0x%02X\n",
+      /*      printf("debug: memory: inst bytes 0x%02X 0x%02X 0x%02X 0x%02X\n",
 	     mc->rom->mem[addr],
 	     mc->rom->mem[addr+1],
 	     mc->rom->mem[addr+2],
-	     mc->rom->mem[addr+3]);
+	     mc->rom->mem[addr+3]);*/
       int ok = init_inst_from_bytes(&mc->rom->cached_insts[addr], &mc->rom->mem[addr]);
       if (!ok)
 	return NULL;

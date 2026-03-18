@@ -21,6 +21,7 @@ void timing_tick(struct timing_controller *tc) {
   tc->timer_t_cycles++;
   if (tc->timer_t_cycles == clocks[tc->regs[rTAC] & 3]) {
     tc->regs[rTIMA]++;
+    printf("debug: timing TIMA incremented to %d, freq: %d\n", tc->regs[rTIMA], clocks[tc->regs[rTAC] & 3]);
     if (tc->regs[rTIMA] == 0x00) { // overflow
       printf("debug: timing overflow!\n");
       tc->regs[rTIMA] = tc->regs[rTMA];
