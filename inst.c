@@ -448,7 +448,6 @@ static int _match_txt_pattern(struct inst* inst, char *asmline, char *pattern) {
 	long parsed_dec = strtol(&asmline[a], &end, 10);
 
 	arg.type = E;
-
 	// TODO: somewhat of a hack
 	if (inst->type == JR)
 	  parsed_dec -= 2;

@@ -304,6 +304,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       break;
     case 3:
       e = (int8_t) inst->args[0].value.byte;
+      printf("ADD SP, e where e -> %d\n", e);
       if (e >= 0) {
 	flag_cy = (lower_8(cpu->SP) + e) >= (1<<8) ? 1 : 0;
 	alu_add(cpu, upper_8(cpu->SP), 0, flag_cy); // to set upper carry bits
@@ -955,6 +956,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu->SP-=2;
     break;
   case POP:
+    printf("debug: POP: arg -> %d\n", inst->args[0].value.byte);
     set_qq(cpu, inst->args[0].value.byte, bytes_to_word(mem_read(cpu->memory_c,cpu->SP), mem_read(cpu->memory_c, cpu->SP+1)));
     cpu->SP+=2;
     break;
