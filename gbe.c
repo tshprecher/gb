@@ -128,8 +128,6 @@ int main(int argc, char *argv[])
       fprintf(stderr, "error: unknown argument %s, use '-d'.\n", argv[1]);
       return 1;
     }
-
-    struct mem_controller memory_c = {0};
     struct rom rom = load_rom(argv[2]);
 
     int addr = 0x150;
