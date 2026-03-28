@@ -18,7 +18,7 @@ static uint16_t interrupt_handlers[] = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060};
 
 // TODO: should all enums be capital?
 void interrupt(struct interrupt_controller *ic, enum Interrupt interrupt) {
-  //  printf("debug: interrupt %d\n", interrupt);
+  printf("debug: interrupt %d\n", interrupt);
   ic->IF |= (1 << interrupt);
 }
 
@@ -26,7 +26,7 @@ static inline void check_interrupt(struct cpu *cpu) {
   //printf("debug: t_cycles_since_last_inst: %d, is_halted: %d\n", cpu->t_cycles_since_last_inst, cpu->is_halted);
   if (cpu->t_cycles_since_last_inst == 0 &&
       (cpu->interrupt_c->IF & cpu->interrupt_c->IE)) {
-    printf("debug: noticed interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
+    printf("\tdebug: noticed interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
 
     uint16_t *handler_addr = interrupt_handlers;
     uint8_t mask = 1;
@@ -37,36 +37,36 @@ static inline void check_interrupt(struct cpu *cpu) {
       handler_addr++;
     }
 
-    printf("debug: interrupt found mask 0x%02X\n", mask);
+    printf("\tdebug: interrupt found mask 0x%02X\n", mask);
 
     if (cpu->IME) {
-      printf("debug: interrupt IME is true, so handle and mark unhalted\n");
+      printf("\tdebug: interrupt IME is true, so handle and mark unhalted\n");
 
       cpu->interrupt_c->IF ^= mask;
       cpu->is_halted = 0;
       cpu->IME = 0;
-      printf("debug: handling interrupt addr 0x%04X\n", *handler_addr);
+      printf("\tdebug: handling interrupt addr 0x%04X\n", *handler_addr);
 
       // TODO: consolidate PUSH into one operation?
-      //       printf("debug: pushing interrupt return address: 0x%04X\n", cpu->PC);
+      //       printf("\tdebug: pushing interrupt return address: 0x%04X\n", cpu->PC);
       mem_write(cpu->memory_c,cpu->SP-1,  upper_8(cpu->PC));
       mem_write(cpu->memory_c,cpu->SP-2, lower_8(cpu->PC));
       cpu->SP -= 2;
       cpu->PC = *handler_addr;
       cpu->interrupt_t_cycles = 6 << 2; // TODO: is this correct for every interrupt type?
 
-      printf("debug: exit interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
+      printf("\tdebug: exit interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
     } else {
-      printf("debug: interrupt IME is false\n");
+      printf("\tdebug: interrupt IME is false\n");
 
       if (cpu->is_halted) {
-       printf("debug: interrupt is halted\n");
+       printf("\tdebug: interrupt is halted\n");
        // PC is already set to the instruction after halt, just unhalt
        cpu->is_halted = 0;
       } else {
        // do noting here (TODO: remove this?)
       }
-      printf("debug: exit interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
+      printf("\tdebug: exit interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
     }
   }
 }
@@ -112,7 +112,7 @@ static uint16_t get_qq(struct cpu *cpu, uint8_t qq) {
   case 2:
     return regs_to_word(cpu, rH, rL);
   case 3:
-    return regs_to_word(cpu, rA, rF);
+    return regs_to_word(cpu, rA, rF) & 0xFFF0; // flags register alyways has lower nibble 0
   }
   // TODO: panic here
   return 0;
@@ -134,7 +134,7 @@ static void set_qq(struct cpu *cpu, uint8_t qq, uint16_t word) {
     break;
   case 3:
     cpu->A = upper_8(word);
-    cpu->F = lower_8(word);
+    cpu->F = lower_8(word) & 0xF0; // flags register alyways has lower nibble 0
     break;
     }
 }
@@ -226,6 +226,15 @@ void init_cpu(struct cpu *cpu) {
   cpu->SP = 0xFFFE;
 }
 
+// FOR DEBUGGING: remove
+static void cpu_to_str(char *buf, struct cpu *cpu) {
+  int pos = sprintf(buf, "{A: 0x%02X,B: 0x%02X,", cpu->A, cpu->B);
+  pos += sprintf(buf+pos, "C: 0x%02X,D: 0x%02X,", cpu->C, cpu->D);
+  pos += sprintf(buf+pos, "E: 0x%02X,F: 0x%02X,", cpu->E, cpu->F);
+  pos += sprintf(buf+pos, "H: 0x%02X,L: 0x%02X,", cpu->H, cpu->L);
+  sprintf(buf+pos, "PC: 0x%04X,SP: 0x%04X}", cpu->PC, cpu->SP);
+}
+
 void cpu_tick(struct cpu *cpu) {
   if (cpu->t_cycles_since_last_inst < 0) { // catch up for variably timed instructions
       cpu->t_cycles_since_last_inst++;
@@ -239,6 +248,9 @@ void cpu_tick(struct cpu *cpu) {
 
   check_interrupt(cpu);
 
+  if (cpu->is_halted)
+    return;
+
   if (!cpu->next_inst || cpu->t_cycles_since_last_inst == 0) // TODO: put this in the init?
     cpu->next_inst = mem_read_inst(cpu->memory_c, cpu->PC);
 
@@ -246,10 +258,13 @@ void cpu_tick(struct cpu *cpu) {
   int8_t exec_cycle = (cpu->next_inst->cycles << 2);
   cpu->t_cycles_since_last_inst++;
   if (cpu->t_cycles_since_last_inst == exec_cycle) {
-    /*    char buf[32];
+    char buf[128];
     inst_to_str(cpu->next_inst, buf);
-    printf("DEBUG: 0x%04X\t%s\n", cpu->PC, buf);*/
+    printf("(DEBUG): 0x%04X\t%s\n", cpu->PC, buf);
     int cycles = cpu_exec_instruction(cpu, cpu->next_inst);
+    cpu_to_str(buf, cpu);
+    printf("\t(DEBUG): cpu -> %s\n", buf);
+
     if (cycles < 0) {
       char buf[16];
       inst_to_str(cpu->next_inst, buf);
@@ -961,6 +976,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu->SP+=2;
     break;
   case HALT:
+    printf("debug: IME -> 0x%02X, IF -> 0x%02X, IE -> 0x%02X\n", cpu->IME, cpu->interrupt_c->IF, cpu->interrupt_c->IE);
     cpu->is_halted = 1;
     break;
   default:
