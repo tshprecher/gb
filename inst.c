@@ -117,8 +117,8 @@ static struct inst_prototype instructions[] = {
 
   {RETI,0 ,1, 4, "11011001", "RETI"},
 
-  {RL,0 ,2, 2, "11001011 00010{r}", "RL {r}"},
-  {RL,1 ,2, 4, "11011011 00010110", "RL (HL)"},
+  {RL,0 , 2, 2, "11001011 00010{r}", "RL {r}"},
+  {RL,1 , 2, 4, "11001011 00010110", "RL (HL)"}, // NOTE: wrong in the manual
 
   {RLA,0 ,1, 1, "00010111", "RLA"},
 
@@ -128,7 +128,7 @@ static struct inst_prototype instructions[] = {
   {RLCA, 0 ,1, 1, "00000111", "RLCA"},
 
   {RR, 0,2, 2, "11001011 00011{r}", "RR {r}"},
-  {RR, 1,2, 4, "11011011 00011110", "RR (HL)"},
+  {RR, 1,2, 4, "11001011 00011110", "RR (HL)"}, // NOTE: wrong in the manual
 
   {RRA,0 ,1, 1, "00011111", "RRA"},
 
