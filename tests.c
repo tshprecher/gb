@@ -210,6 +210,12 @@ int test_cpu_exec() {
     {"ADD SP, -2", F_OFF, {.SP = 0x1000}, 4, {.SP = 0x0FFE, .PC = 0x0002}, 0x20, {}, {}},
     {"ADD SP, -2", F_ON, {.SP = 0x1000}, 4, {.SP = 0x0FFE, .PC = 0x0002}, 0x20, {}, {}},
 
+    {"ADD SP, -1", F_OFF, {.SP = 0x0000}, 4, {.SP = 0xFFFF, .PC = 0x0002}, 0x30, {}, {}},
+    {"ADD SP, -1", F_ON, {.SP = 0x0000}, 4, {.SP = 0xFFFF, .PC = 0x0002}, 0x30, {}, {}},
+
+    {"ADD SP, 1", F_OFF, {.SP = 0xFFFF}, 4, {.SP = 0x0000, .PC = 0x0002}, 0x30, {}, {}},
+    {"ADD SP, 1", F_ON, {.SP = 0xFFFF}, 4, {.SP = 0x0000, .PC = 0x0002}, 0x30, {}, {}},
+
     {"ADD HL, BC", F_OFF, {.B = 0x06, .C = 0x05, .H = 0x8A, .L = 0x23}, 2,
      {.B = 0x06, .C = 0x05, .H = 0x90, .L = 0x28, .F = 0x20, .PC = 0x0001}, 0x20, {}, {}},
     {"ADD HL, BC", F_ON, {.B = 0x06, .C = 0x05, .H = 0x8A, .L = 0x23}, 2,
@@ -248,6 +254,9 @@ int test_cpu_exec() {
     {"INC DE", F_OFF, {.D = 0x23, .E = 0x5F}, 2, {.D = 0x23, .E = 0x60, .PC = 0x0001}, 0, {}, {}},
     {"INC DE", F_ON, {.D = 0x23, .E = 0x5F}, 2, {.D = 0x23, .E = 0x60, .PC = 0x0001}, 0xF0, {}, {}},
 
+    {"INC SP", F_OFF, {.SP = 0xFF00}, 2, {.SP = 0xFF01, .PC = 0x0001}, 0, {}, {}},
+    {"INC SP", F_ON, {.SP = 0xFF00}, 2, {.SP = 0xFF01, .PC = 0x0001}, 0xF0, {}, {}},
+
     {"INC (HL)", F_OFF, {.H = 0xFA, .L = 0xCE}, 3, {.H = 0xFA, .L = 0xCE, .PC = 0x0001}, 0, {0xFACE}, {0x01}},
     {"INC (HL)", F_ON, {.H = 0xFA, .L = 0xCE}, 3, {.H = 0xFA, .L = 0xCE, .PC = 0x0001}, 0x10, {0xFACE}, {0x01}},
 
@@ -258,6 +267,12 @@ int test_cpu_exec() {
 
     {"DEC DE", F_OFF, {.D = 0x23, .E = 0x5F}, 2, {.D = 0x23, .E = 0x5E, .PC = 0x0001}, 0, {}, {}},
     {"DEC DE", F_ON, {.D = 0x23, .E = 0x5F}, 2, {.D = 0x23, .E = 0x5E, .PC = 0x0001}, 0xF0,{}, {}},
+
+    {"DEC SP", F_OFF, {.SP = 0xFF00}, 2, {.SP = 0xFEFF, .PC = 0x0001}, 0, {}, {}},
+    {"DEC SP", F_ON, {.SP = 0xFF00}, 2, {.SP = 0xFEFF, .PC = 0x0001}, 0xF0, {}, {}},
+
+    {"DEC SP", F_OFF, {.SP = 0x0000}, 2, {.SP = 0xFFFF, .PC = 0x0001}, 0, {}, {}},
+    {"DEC SP", F_ON, {.SP = 0x0000}, 2, {.SP = 0xFFFF, .PC = 0x0001}, 0xF0, {}, {}},
 
     {"DEC (HL)", F_OFF, {.H = 0xFA, .L = 0xCE}, 3, {.H = 0xFA, .L = 0xCE, .PC = 0x0001}, 0x60, {0xFACE}, {0xFF}},
     {"DEC (HL)", F_ON, {.H = 0xFA, .L = 0xCE}, 3, {.H = 0xFA, .L = 0xCE,  .PC = 0x0001}, 0x70, {0xFACE}, {0xFF}},

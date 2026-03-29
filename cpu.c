@@ -287,7 +287,8 @@ void cpu_tick(struct cpu *cpu) {
 // TODO: should this return 0 cycles on error instead? makes some sense
 int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   uint16_t hl, word;
-  uint8_t flag_cy=0, flag_h=0, flag_n=0, flag_z=0, dd_or_ss, daa_add, lower_nib, upper_nib;
+  uint8_t flag_cy=0, flag_h=0, flag_n=0, flag_z=0,
+    lower, upper, dd_or_ss, daa_add, lower_nib, upper_nib;
   uint8_t *bytePtr;
   int8_t e;
   switch (inst->type) {
@@ -319,24 +320,26 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       break;
     case 3:
       e = (int8_t) inst->args[0].value.byte;
-      printf("ADD SP, e where e -> %d\n", e);
+      lower = lower_8(cpu->SP);
+      upper = upper_8(cpu->SP);
       if (e >= 0) {
-	flag_cy = (lower_8(cpu->SP) + e) >= (1<<8) ? 1 : 0;
-	alu_add(cpu, upper_8(cpu->SP), 0, flag_cy); // to set upper carry bits
+	lower = alu_add(cpu, lower, e, 0);
+	upper = alu_add(cpu, upper, 0, cpu_flag(cpu, FLAG_CY));
       } else {
-	flag_cy = (lower_8(cpu->SP) < -e) ? 1 : 0;
-	alu_sub(cpu, upper_8(cpu->SP), flag_cy); // to set upper carry bits
+	lower = alu_sub(cpu, lower, -e);
+	upper = alu_sub(cpu, upper, cpu_flag(cpu, FLAG_CY)); // to set upper carry bits
       }
       cpu_clear_flag(cpu, FLAG_Z);
       cpu_clear_flag(cpu, FLAG_N);
-      cpu->SP += e;
+      cpu->SP = bytes_to_word(lower, upper);
       break;
     case 4:
       flag_z = cpu_flag(cpu, FLAG_Z); // store before to set back at end
       hl = regs_to_word(cpu, rH, rL);
       word = get_dd_or_ss(cpu, inst->args[0].value.byte);
-      flag_cy = (cpu->L + lower_8(word)) >= (1<<8) ? 1 : 0;
-      alu_add(cpu, cpu->H, upper_8(word), flag_cy); // to set upper carry bits
+
+      alu_add(cpu, cpu->L, lower_8(word), 0);
+      alu_add(cpu, cpu->H, upper_8(word), cpu_flag(cpu, FLAG_CY));
       word_to_regs(cpu, hl+word, rH, rL);
 
       cpu_clear_flag(cpu, FLAG_N);
@@ -871,16 +874,18 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     break;
   case LDHL:
     e = (int8_t) inst->args[0].value.byte;
+    lower = lower_8(cpu->SP);
+    upper = upper_8(cpu->SP);
     if (e >= 0) {
-      flag_cy = (lower_8(cpu->SP) + e) >= (1<<8) ? 1 : 0;
-      alu_add(cpu, upper_8(cpu->SP), 0, flag_cy); // to set upper carry bits
+      lower = alu_add(cpu, lower, e, 0);
+      upper = alu_add(cpu, upper, 0, cpu_flag(cpu, FLAG_CY));
     } else {
-      flag_cy = (lower_8(cpu->SP) < -e) ? 1 : 0;
-      alu_sub(cpu, upper_8(cpu->SP), flag_cy); // to set upper carry bits
+      lower = alu_sub(cpu, lower, -e);
+      upper = alu_sub(cpu, upper, cpu_flag(cpu, FLAG_CY)); // to set upper carry bits
     }
     cpu_clear_flag(cpu, FLAG_Z);
     cpu_clear_flag(cpu, FLAG_N);
-    word_to_regs(cpu, cpu->SP+e, rH, rL);
+    word_to_regs(cpu, bytes_to_word(lower, upper), rH, rL);
     break;
   case DAA:
     // direct implementation from the table defined in the Nintendo/Z80 manual.
@@ -971,7 +976,6 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu->SP-=2;
     break;
   case POP:
-    printf("debug: POP: arg -> %d\n", inst->args[0].value.byte);
     set_qq(cpu, inst->args[0].value.byte, bytes_to_word(mem_read(cpu->memory_c,cpu->SP), mem_read(cpu->memory_c, cpu->SP+1)));
     cpu->SP+=2;
     break;
