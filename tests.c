@@ -488,14 +488,14 @@ int test_cpu_exec() {
 
     // SET
 
-    {"SET 2, A", F_OFF, {.A = 0x80}, 2, {.A = 0x84, .PC = 0x0002}, 0, {}, {}},
-    {"SET 2, A", F_ON, {.A = 0x80}, 2, {.A = 0x84, .PC = 0x0002}, 0xF0, {}, {}},
+    {"SET 3, A", F_OFF, {.A = 0x80}, 2, {.A = 0x88, .PC = 0x0002}, 0, {}, {}},
+    {"SET 3, A", F_ON, {.A = 0x80}, 2, {.A = 0x88, .PC = 0x0002}, 0xF0, {}, {}},
 
     {"SET 7, L", F_OFF, {.L = 0x3B}, 2, {.L = 0xBB, .PC = 0x0002}, 0, {}, {}},
     {"SET 7, L", F_ON, {.L = 0x3B}, 2, {.L = 0xBB, .PC = 0x0002}, 0xF0, {}, {}},
 
-    {"SET 7, (HL)", F_OFF, {.H = 0xFA, .L = 0xCE}, 4, {.H = 0xFA, .L = 0xCE, .PC = 0x0002}, 0, {0xFACE}, {0x80}},
-    {"SET 7, (HL)", F_ON, {.H = 0xFA, .L = 0xCE}, 4, {.H = 0xFA, .L = 0xCE, .PC = 0x0002}, 0xF0, {0xFACE}, {0x80}},
+    {"SET 2, (HL)", F_OFF, {.H = 0xFA, .L = 0xCE}, 4, {.H = 0xFA, .L = 0xCE, .PC = 0x0002}, 0, {0xFACE}, {0x04}},
+    {"SET 2, (HL)", F_ON, {.H = 0xFA, .L = 0xCE}, 4, {.H = 0xFA, .L = 0xCE, .PC = 0x0002}, 0xF0, {0xFACE}, {0x04}},
 
     // RES
 

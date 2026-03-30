@@ -98,7 +98,7 @@ static struct inst_prototype instructions[] = {
   {LD, 20,3, 4, "11111010 {nn}", "LD A, ({nn})"},
   {LD, 21,3, 5, "00001000 {nn}", "LD ({nn}), SP"},
 
-  {LDHL, 0,2, 3, "11111000 {e}", "LDHL SP, {e}"},
+  {LDHL, 0, 2, 3, "11111000 {e}", "LDHL SP, {e}"},
   {NOP, 0, 1, 1, "00000000", "NOP"},
 
   {OR,0 ,1, 1, "10110{r}", "OR {r}"},

@@ -165,6 +165,10 @@ char * mmapped_reg_to_str(uint16_t addr) {
 }
 
 uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
+  // DEBUG: remove this override
+  //if (addr == 0xFF02)
+  //  return 0;
+
   if (addr < 0x8000) { // route to rom
     return rom_read(mc->rom, addr);
   } else if (addr == 0xFF00) { // try memory mapped registers
@@ -232,11 +236,6 @@ struct inst* mem_read_inst(struct mem_controller *mc, uint16_t addr) {
     uint8_t byte_map = mc->rom->is_cached_bitmap[addr >> 3];
     uint8_t bit_mask = 1 << (7-(addr & 7));
     if (!(byte_map & bit_mask)) {
-      /*      printf("debug: memory: inst bytes 0x%02X 0x%02X 0x%02X 0x%02X\n",
-	     mc->rom->mem[addr],
-	     mc->rom->mem[addr+1],
-	     mc->rom->mem[addr+2],
-	     mc->rom->mem[addr+3]);*/
       int ok = init_inst_from_bytes(&mc->rom->cached_insts[addr], &mc->rom->mem[addr]);
       if (!ok)
 	return NULL;
