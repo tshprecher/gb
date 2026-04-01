@@ -367,9 +367,8 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, uint8_t va
 	.output_level = (sc->regs[rNR32] >> 5) & 0x3,
       };
 
-      uint8_t *waveform = mem_ptr(sc->memory_c, 0xFF30);
       for (int step = 0; step < 32; step+=2) {
-	uint8_t byte = waveform[step/2];
+	uint8_t byte = mem_read(sc->memory_c, 0xFF30 + step/2);
 	sound3.waveform[step] = (byte >> 4) & 0x0F;
 	sound3.waveform[step+1] = byte & 0x0F;
       }
