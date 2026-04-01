@@ -281,15 +281,47 @@ void cpu_tick(struct cpu *cpu) {
   }
 }
 
+
+struct dst {
+  uint8_t *reg;
+  uint16_t addr;
+  struct mem_controller *mc;
+};
+
+
+// TODO: find out why removing these declarations craps out the linker
+void dst_init_reg(struct dst *dst, struct cpu * cpu, uint8_t r);
+void dst_init_addr(struct dst *dst, struct mem_controller *mc, uint16_t addr);
+uint8_t dst_val(struct dst *dst);
+void dst_assign(struct dst *dst, int8_t byte);
+
+inline void dst_init_reg(struct dst *dst, struct cpu * cpu, uint8_t r) {
+  dst->reg = reg(cpu, r);
+}
+
+inline void dst_init_addr(struct dst *dst, struct mem_controller *mc, uint16_t addr) {
+  dst->reg = NULL;
+  dst->addr = addr;
+  dst->mc = mc;
+}
+
+inline uint8_t dst_val(struct dst *dst) {
+  return dst->reg ? *dst->reg : mem_read(dst->mc, dst->addr);
+}
+
+inline void dst_assign(struct dst *dst, int8_t byte) {
+  dst->reg ? *dst->reg = byte : mem_write(dst->mc, dst->addr, byte);
+}
+
 // cpu_exec_instruction takes a executes the instruction.
 // It returns the number of cycles run, -1 on error
 // TODO: could use a few more macros for clarity?
 // TODO: should this return 0 cycles on error instead? makes some sense
 int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   uint16_t hl, word;
-  uint8_t flag_cy=0, flag_h=0, flag_n=0, flag_z=0,
+  uint8_t flag_cy=0, flag_h=0, flag_n=0, flag_z=0, byte,
     lower, upper, dd_or_ss, daa_add, lower_nib, upper_nib;
-  uint8_t *bytePtr;
+  struct dst dst = {0};
   int8_t e;
   switch (inst->type) {
   case NOP:
@@ -503,17 +535,19 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   case RLC:
     switch (inst->subtype) {
     case 0:
-      bytePtr = reg(cpu, inst->args[0].value.byte);
+      dst_init_reg(&dst, cpu, inst->args[0].value.byte);
       break;
     case 1:
-      bytePtr = mem_ptr(cpu->memory_c, regs_to_word(cpu, rH, rL));
+      dst_init_addr(&dst, cpu->memory_c, regs_to_word(cpu, rH, rL));
       break;
     }
-    flag_cy = (*bytePtr & 0x80) != 0;
-    *bytePtr = (*bytePtr << 1) | flag_cy;
+    byte = dst_val(&dst);
+    flag_cy = (byte & 0x80) != 0;
+    byte = (byte << 1) | flag_cy;
+    dst_assign(&dst, byte);
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
-    *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
+    byte == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
     flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case RLA:
@@ -527,17 +561,20 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   case RL:
     switch (inst->subtype) {
     case 0:
-      bytePtr = reg(cpu, inst->args[0].value.byte);
+      dst_init_reg(&dst, cpu, inst->args[0].value.byte);
       break;
     case 1:
-      bytePtr = mem_ptr(cpu->memory_c, regs_to_word(cpu, rH, rL));
+      dst_init_addr(&dst, cpu->memory_c, regs_to_word(cpu, rH, rL));
       break;
     }
-    flag_cy = (*bytePtr & 0x80) != 0;
-    *bytePtr = (*bytePtr << 1) | cpu_flag(cpu, FLAG_CY);
+    byte = dst_val(&dst);
+    flag_cy = (byte & 0x80) != 0;
+    byte = (byte << 1) | cpu_flag(cpu, FLAG_CY);
+    dst_assign(&dst, byte);
+
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
-    *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
+    byte == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
     flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case RRCA:
@@ -559,121 +596,142 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   case RRC:
     switch (inst->subtype) {
     case 0:
-      bytePtr = reg(cpu, inst->args[0].value.byte);
+      dst_init_reg(&dst, cpu, inst->args[0].value.byte);
       break;
     case 1:
-      bytePtr = mem_ptr(cpu->memory_c, regs_to_word(cpu, rH, rL));
+      dst_init_addr(&dst, cpu->memory_c, regs_to_word(cpu, rH, rL));
       break;
     }
-    flag_cy = *bytePtr & 1;
-    *bytePtr = (*bytePtr >> 1) | (flag_cy << 7);
+    byte = dst_val(&dst);
+    flag_cy = byte & 1;
+    byte = (byte >> 1) | (flag_cy << 7);
+    dst_assign(&dst, byte);
+
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
-    *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
+    byte == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
     flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case RR:
     switch (inst->subtype) {
     case 0:
-      bytePtr = reg(cpu, inst->args[0].value.byte);
+      dst_init_reg(&dst, cpu, inst->args[0].value.byte);
       break;
     case 1:
-      bytePtr = mem_ptr(cpu->memory_c, regs_to_word(cpu, rH, rL));
+      dst_init_addr(&dst, cpu->memory_c, regs_to_word(cpu, rH, rL));
       break;
     }
-    flag_cy = *bytePtr & 1;
-    *bytePtr = (*bytePtr >> 1) | (cpu_flag(cpu, FLAG_CY) << 7);
+    byte = dst_val(&dst);
+    flag_cy = byte & 1;
+    byte = (byte >> 1) | (cpu_flag(cpu, FLAG_CY) << 7);
+    dst_assign(&dst, byte);
+
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
-    *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
+    byte == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
     flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case SLA:
     switch (inst->subtype) {
     case 0:
-      bytePtr = reg(cpu, inst->args[0].value.byte);
+      dst_init_reg(&dst, cpu, inst->args[0].value.byte);
       break;
     case 1:
-      bytePtr = mem_ptr(cpu->memory_c,regs_to_word(cpu, rH, rL));
+      dst_init_addr(&dst, cpu->memory_c, regs_to_word(cpu, rH, rL));
       break;
     }
-    flag_cy = (*bytePtr & 0x80) != 0;
-    *bytePtr <<= 1;
+    byte = dst_val(&dst);
+    flag_cy = (byte & 0x80) != 0;
+    byte <<= 1;
+    dst_assign(&dst, byte);
+
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
-    *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
+    byte == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
     flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case SRA:
     switch (inst->subtype) {
     case 0:
-      bytePtr = reg(cpu, inst->args[0].value.byte);
+      dst_init_reg(&dst, cpu, inst->args[0].value.byte);
       break;
     case 1:
-      bytePtr = mem_ptr(cpu->memory_c,regs_to_word(cpu, rH, rL));
+      dst_init_addr(&dst, cpu->memory_c, regs_to_word(cpu, rH, rL));
       break;
     }
-    flag_cy = *bytePtr & 1;
-    *bytePtr = (*bytePtr >> 1) | (*bytePtr & 0x80);
+    byte = dst_val(&dst);
+    flag_cy = byte & 1;
+    byte = (byte >> 1) | (byte & 0x80);
+    dst_assign(&dst, byte);
+
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
-    *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
+    byte == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
     flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case SRL:
     switch (inst->subtype) {
     case 0:
-      bytePtr = reg(cpu, inst->args[0].value.byte);
+      dst_init_reg(&dst, cpu, inst->args[0].value.byte);
       break;
     case 1:
-      bytePtr = mem_ptr(cpu->memory_c,regs_to_word(cpu, rH, rL));
+      dst_init_addr(&dst, cpu->memory_c, regs_to_word(cpu, rH, rL));
       break;
     }
-    flag_cy = *bytePtr & 1;
-    *bytePtr >>= 1;
+    byte = dst_val(&dst);
+    flag_cy = byte & 1;
+    byte >>= 1;
+    dst_assign(&dst, byte);
+
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
-    *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
+    byte == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
     flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case SWAP:
     switch (inst->subtype) {
     case 0:
-      bytePtr = reg(cpu, inst->args[0].value.byte);
+      dst_init_reg(&dst, cpu, inst->args[0].value.byte);
       break;
     case 1:
-      bytePtr = mem_ptr(cpu->memory_c,regs_to_word(cpu, rH, rL));
+      dst_init_addr(&dst, cpu->memory_c, regs_to_word(cpu, rH, rL));
       break;
     }
-    *bytePtr = (*bytePtr << 4) | (*bytePtr >> 4);
+    byte = dst_val(&dst);
+    byte = (byte << 4) | (byte >> 4);
+    dst_assign(&dst, byte);
+
     cpu_clear_flag(cpu, FLAG_N);
     cpu_clear_flag(cpu, FLAG_H);
     cpu_clear_flag(cpu, FLAG_CY);
-    *bytePtr == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
+    byte == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
     break;
   case BIT:
     switch (inst->subtype) {
     case 0:
-      bytePtr = reg(cpu, inst->args[1].value.byte);
+      dst_init_reg(&dst, cpu, inst->args[1].value.byte);
       break;
     case 1:
-      bytePtr = mem_ptr(cpu->memory_c,regs_to_word(cpu, rH, rL));
+      dst_init_addr(&dst, cpu->memory_c, regs_to_word(cpu, rH, rL));
       break;
     }
-    (*bytePtr & (1 << inst->args[0].value.byte)) ? cpu_clear_flag(cpu, FLAG_Z): cpu_set_flag(cpu, FLAG_Z);
+    byte = dst_val(&dst);
+    (byte & (1 << inst->args[0].value.byte)) ? cpu_clear_flag(cpu, FLAG_Z): cpu_set_flag(cpu, FLAG_Z);
     cpu_clear_flag(cpu, FLAG_N);
     cpu_set_flag(cpu, FLAG_H);
     break;
   case SET:
     switch (inst->subtype) {
     case 0:
-      bytePtr = reg(cpu, inst->args[1].value.byte);
+      dst_init_reg(&dst, cpu, inst->args[1].value.byte);
       break;
     case 1:
-      bytePtr = mem_ptr(cpu->memory_c,regs_to_word(cpu, rH, rL));
+      dst_init_addr(&dst, cpu->memory_c, regs_to_word(cpu, rH, rL));
       break;
     }
-    *bytePtr |= (1 << inst->args[0].value.byte);
+    byte = dst_val(&dst);
+    byte |= (1 << inst->args[0].value.byte);
+    dst_assign(&dst, byte);
     break;
   case DI:
     cpu->IME = 0;
@@ -684,13 +742,15 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   case RES:
     switch (inst->subtype) {
     case 0:
-      bytePtr = reg(cpu, inst->args[1].value.byte);
+      dst_init_reg(&dst, cpu, inst->args[1].value.byte);
       break;
     case 1:
-      bytePtr = mem_ptr(cpu->memory_c,regs_to_word(cpu, rH, rL));
+      dst_init_addr(&dst, cpu->memory_c, regs_to_word(cpu, rH, rL));
       break;
     }
-    *bytePtr &= ~(1 << inst->args[0].value.byte);
+    byte = dst_val(&dst);
+    byte &= ~(1 << inst->args[0].value.byte);
+    dst_assign(&dst, byte);
     break;
   case JP:
     switch (inst->subtype) {
