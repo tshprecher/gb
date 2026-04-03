@@ -423,6 +423,8 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     break;
   case SCF:
     // TODO: test
+    cpu_clear_flag(cpu, FLAG_N);
+    cpu_clear_flag(cpu, FLAG_H);
     cpu_set_flag(cpu, FLAG_CY);
     break;
   case INC:
