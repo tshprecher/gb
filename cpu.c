@@ -320,7 +320,7 @@ inline void dst_assign(struct dst *dst, int8_t byte) {
 int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   uint16_t hl, word;
   uint8_t flag_cy=0, flag_h=0, flag_n=0, flag_z=0, byte,
-    lower, upper, dd_or_ss, daa_add, lower_nib, upper_nib;
+    lower, upper, dd_or_ss, daa_adj, lower_nib, upper_nib;
   struct dst dst = {0};
   int8_t e;
   switch (inst->type) {
@@ -977,82 +977,71 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     break;
   case DAA:
     // direct implementation from the table defined in the Nintendo/Z80 manual.
+    daa_adj = 0;
     lower_nib = cpu->A & 0x0F;
     upper_nib = (cpu->A>>4) & 0x0F;
     if (!cpu_flag(cpu, FLAG_N)) {
       if (!cpu_flag(cpu, FLAG_CY)) {
 	if (!cpu_flag(cpu, FLAG_H)) {
 	  if (upper_nib <= 9 && lower_nib <= 9) {
-	    daa_add = 0;
+	    daa_adj = 0;
 	    flag_cy = 0;
 	  } else if (upper_nib <= 8 && lower_nib >= 0xA) {
-	    daa_add = 0x06;
+	    daa_adj = 0x06;
 	    flag_cy = 0;
 	  } else if (upper_nib >= 0xA && lower_nib <= 9) {
-	    daa_add = 0x60;
+	    daa_adj = 0x60;
 	    flag_cy = 1;
 	  } else if (upper_nib >= 0x9 && lower_nib >= 0xA) {
-	    daa_add = 0x66;
+	    daa_adj = 0x66;
 	    flag_cy = 1;
-	  } else {
-	    break;
 	  }
 	} else {
 	  if (upper_nib <= 9 && lower_nib <= 3) {
-	    daa_add = 0x06;
+	    daa_adj = 0x06;
 	    flag_cy = 0;
 	  } else if (upper_nib >= 0xA  && lower_nib <= 3) {
-	    daa_add = 0x66;
+	    daa_adj = 0x66;
 	    flag_cy = 1;
-	  } else {
-	    break;
 	  }
 	}
       } else {
 	if (!cpu_flag(cpu, FLAG_H)) {
 	  if (upper_nib <= 2 && lower_nib <= 9) {
-	    daa_add = 0x60;
+	    daa_adj = 0x60;
 	    flag_cy = 1;
 	  } else if (upper_nib <= 2 && lower_nib >= 0xA) {
-	    daa_add = 0x66;
+	    daa_adj = 0x66;
 	    flag_cy = 1;
-	  } else {
-	    break;
 	  }
 	} else {
 	  if (upper_nib <= 3 && lower_nib <= 3) {
-	    daa_add = 0x66;
+	    daa_adj = 0x66;
 	    flag_cy = 1;
-	  } else {
-	    break;
 	  }
 	}
       }
     } else {
       if (!cpu_flag(cpu, FLAG_CY)) {
 	if (!cpu_flag(cpu, FLAG_H) && upper_nib <=9 && lower_nib <= 9) {
-	  daa_add = 0;
+	  daa_adj = 0;
 	  flag_cy =0;
 	} else if (cpu_flag(cpu, FLAG_H) && upper_nib <= 8 && lower_nib >= 6) {
-	  daa_add = 0xFA;
+	  daa_adj = 0xFA;
 	  flag_cy = 0;
-	} else {
-	  break;
 	}
       } else {
 	if (!cpu_flag(cpu, FLAG_H) && upper_nib >= 7 && lower_nib <= 9) {
-	  daa_add = 0xA0;
+	  daa_adj = 0xA0;
 	  flag_cy = 1;
 	} else if (cpu_flag(cpu, FLAG_H) && upper_nib >= 6 && lower_nib >= 6) {
-	  daa_add = 0x9A;
+	  daa_adj = 0x9A;
 	  flag_cy = 1;
-	} else {
-	  break;
 	}
       }
     }
     flag_n = cpu_flag(cpu, FLAG_N);
-    cpu->A = alu_add(cpu, cpu->A, daa_add, 0);
+    cpu->A = alu_add(cpu, cpu->A, daa_adj, 0);
     cpu_clear_flag(cpu, FLAG_H);
     flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     flag_n ? cpu_set_flag(cpu, FLAG_N) : cpu_clear_flag(cpu, FLAG_N);
