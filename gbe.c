@@ -130,7 +130,7 @@ int main(int argc, char *argv[])
     }
     struct rom rom = load_rom(argv[2]);
 
-    int addr = 0x0;
+    int addr = 0x150;
     struct inst decoded;
     char buf[16];
     while (addr < 0x8000) {

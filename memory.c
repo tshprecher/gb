@@ -52,6 +52,7 @@ uint8_t rom_read(struct rom * rom, uint16_t addr) {
 };
 
 void rom_write(struct rom * rom, uint16_t addr, uint8_t value) {
+  printf("ERROR: writing to ROM\n");
   // TODO: implement for later MBCs
   return;
 };

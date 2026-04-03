@@ -257,6 +257,9 @@ int test_cpu_exec() {
     {"INC SP", F_OFF, {.SP = 0xFF00}, 2, {.SP = 0xFF01, .PC = 0x0001}, 0, {}, {}},
     {"INC SP", F_ON, {.SP = 0xFF00}, 2, {.SP = 0xFF01, .PC = 0x0001}, 0xF0, {}, {}},
 
+    {"INC SP", F_OFF, {.SP = 0xFFFF}, 2, {.SP = 0x0, .PC = 0x0001}, 0, {}, {}},
+    {"INC SP", F_ON, {.SP = 0xFFFF}, 2, {.SP = 0x0, .PC = 0x0001}, 0xF0, {}, {}},
+
     {"INC (HL)", F_OFF, {.H = 0xFA, .L = 0xCE}, 3, {.H = 0xFA, .L = 0xCE, .PC = 0x0001}, 0, {0xFACE}, {0x01}},
     {"INC (HL)", F_ON, {.H = 0xFA, .L = 0xCE}, 3, {.H = 0xFA, .L = 0xCE, .PC = 0x0001}, 0x10, {0xFACE}, {0x01}},
 

@@ -260,7 +260,7 @@ void cpu_tick(struct cpu *cpu) {
   if (cpu->t_cycles_since_last_inst == exec_cycle) {
     char buf[128];
     inst_to_str(cpu->next_inst, buf);
-    printf("(DEBUG): 0x%04X\t%s\n", cpu->PC, buf);
+    printf("(DEBUG): [t: %d, st: %d]  0x%04X\t%s\n", cpu->next_inst->type, cpu->next_inst->subtype, cpu->PC, buf);
     int cycles = cpu_exec_instruction(cpu, cpu->next_inst);
     cpu_to_str(buf, cpu);
     printf("\t(DEBUG): cpu -> %s\n", buf);
@@ -946,13 +946,23 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     upper = upper_8(cpu->SP);
     if (e >= 0) {
       lower = alu_add(cpu, lower, e, 0);
+      flag_h = cpu_flag(cpu, FLAG_H);
+      flag_cy = cpu_flag(cpu, FLAG_CY);
+
       upper = alu_add(cpu, upper, 0, cpu_flag(cpu, FLAG_CY));
     } else {
       lower = alu_sub(cpu, lower, -e);
+      flag_h = cpu_flag(cpu, FLAG_H);
+      flag_cy = cpu_flag(cpu, FLAG_CY);
+
       upper = alu_sub(cpu, upper, cpu_flag(cpu, FLAG_CY));
     }
     cpu_clear_flag(cpu, FLAG_Z);
     cpu_clear_flag(cpu, FLAG_N);
+    flag_h ? cpu_set_flag(cpu, FLAG_H) : cpu_clear_flag(cpu, FLAG_H);
+    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+
+    //cpu->SP = bytes_to_word(lower, upper);
     word_to_regs(cpu, bytes_to_word(lower, upper), rH, rL);
     break;
   case DAA:
