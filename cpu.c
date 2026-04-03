@@ -399,11 +399,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     }
     break;
   case SBC:
-    if (cpu_flag(cpu, FLAG_CY)) {
-      cpu->A = alu_sub(cpu, cpu->A, 1);
-      flag_cy = cpu_flag(cpu, FLAG_CY);
-      flag_h = cpu_flag(cpu, FLAG_H);
-    }
+    flag_cy = cpu_flag(cpu, FLAG_CY);
     switch (inst->subtype) {
     case 0:
       cpu->A = alu_sub(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)));
@@ -415,11 +411,18 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       cpu->A = alu_sub(cpu, cpu->A, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)));
       break;
     }
-    flag_cy |= cpu_flag(cpu, FLAG_CY);
-    flag_h |= cpu_flag(cpu, FLAG_H);
+    if (flag_cy) { // if initial carry bit on, subtract 1
+      flag_cy = cpu_flag(cpu, FLAG_CY);
+      flag_h = cpu_flag(cpu, FLAG_H);
 
-    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
-    flag_h ? cpu_set_flag(cpu, FLAG_H) : cpu_clear_flag(cpu, FLAG_H);
+      cpu->A = alu_sub(cpu, cpu->A, 1);
+
+      flag_cy |= cpu_flag(cpu, FLAG_CY);
+      flag_h |= cpu_flag(cpu, FLAG_H);
+
+      flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+      flag_h ? cpu_set_flag(cpu, FLAG_H) : cpu_clear_flag(cpu, FLAG_H);
+    }
     break;
   case SCF:
     // TODO: test
