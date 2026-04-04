@@ -125,11 +125,11 @@ int test_cpu_exec() {
     {"LDHL SP, 2", F_OFF, {.SP = 0xFFF8}, 3, {.H = 0xFF, .L = 0xFA, .PC = 0x0002, .SP = 0xFFF8}, 0, {}, {}},
     {"LDHL SP, 2", F_ON, {.SP = 0xFFF8}, 3, {.H = 0xFF, .L = 0xFA, .PC = 0x0002, .SP = 0xFFF8}, 0, {}, {}},
 
-    {"LDHL SP, -1", F_OFF, {.SP = 0xFACE}, 3, {.H = 0xFA, .L = 0xCD, .PC = 0x0002, .SP = 0xFACE}, 0, {}, {}},
-    {"LDHL SP, -1", F_ON, {.SP = 0xFACE}, 3, {.H = 0xFA, .L = 0xCD, .PC = 0x0002, .SP = 0xFACE}, 0, {}, {}},
+    {"LDHL SP, -1", F_OFF, {.SP = 0xFACE}, 3, {.H = 0xFA, .L = 0xCD, .PC = 0x0002, .SP = 0xFACE}, 0x30, {}, {}},
+    {"LDHL SP, -1", F_ON, {.SP = 0xFACE}, 3, {.H = 0xFA, .L = 0xCD, .PC = 0x0002, .SP = 0xFACE}, 0x30, {}, {}},
 
-    {"LDHL SP, 1", F_OFF, {.SP = 0x0FFF}, 3, {.H = 0x10, .L = 0x00, .PC = 0x0002, .SP = 0x0FFF}, 0x20, {}, {}},
-    {"LDHL SP, 1", F_ON, {.SP = 0x0FFF}, 3, {.H = 0x10, .L = 0x00, .PC = 0x0002, .SP = 0x0FFF}, 0x20, {}, {}},
+    {"LDHL SP, 1", F_OFF, {.SP = 0x0FFF}, 3, {.H = 0x10, .L = 0x00, .PC = 0x0002, .SP = 0x0FFF}, 0x30, {}, {}},
+    {"LDHL SP, 1", F_ON, {.SP = 0x0FFF}, 3, {.H = 0x10, .L = 0x00, .PC = 0x0002, .SP = 0x0FFF}, 0x30, {}, {}},
 
     {"LDHL SP, 15", F_OFF, {.SP = 0xFFF1}, 3, {.H = 0x00, .L = 0x00, .PC = 0x0002, .SP = 0xFFF1}, 0x30, {}, {}},
     {"LDHL SP, 15", F_ON, {.SP = 0xFFF1}, 3, {.H = 0x00, .L = 0x00, .PC = 0x0002, .SP = 0xFFF1}, 0x30, {}, {}},
@@ -207,11 +207,11 @@ int test_cpu_exec() {
     {"ADD SP, 2", F_OFF, {.SP = 0xFFF8}, 4, {.SP = 0xFFFA, .PC = 0x0002}, {}, {}},
     {"ADD SP, 2", F_ON, {.SP = 0xFFF8}, 4, {.SP = 0xFFFA, .PC = 0x0002}, {}, {}},
 
-    {"ADD SP, -2", F_OFF, {.SP = 0x1000}, 4, {.SP = 0x0FFE, .PC = 0x0002}, 0x20, {}, {}},
-    {"ADD SP, -2", F_ON, {.SP = 0x1000}, 4, {.SP = 0x0FFE, .PC = 0x0002}, 0x20, {}, {}},
+    {"ADD SP, -2", F_OFF, {.SP = 0x1000}, 4, {.SP = 0x0FFE, .PC = 0x0002}, 0, {}, {}},
+    {"ADD SP, -2", F_ON, {.SP = 0x1000}, 4, {.SP = 0x0FFE, .PC = 0x0002}, 0, {}, {}},
 
-    {"ADD SP, -1", F_OFF, {.SP = 0x0000}, 4, {.SP = 0xFFFF, .PC = 0x0002}, 0x30, {}, {}},
-    {"ADD SP, -1", F_ON, {.SP = 0x0000}, 4, {.SP = 0xFFFF, .PC = 0x0002}, 0x30, {}, {}},
+    {"ADD SP, -1", F_OFF, {.SP = 0x0000}, 4, {.SP = 0xFFFF, .PC = 0x0002}, 0, {}, {}},
+    {"ADD SP, -1", F_ON, {.SP = 0x0000}, 4, {.SP = 0xFFFF, .PC = 0x0002}, 0, {}, {}},
 
     {"ADD SP, 1", F_OFF, {.SP = 0xFFFF}, 4, {.SP = 0x0000, .PC = 0x0002}, 0x30, {}, {}},
     {"ADD SP, 1", F_ON, {.SP = 0xFFFF}, 4, {.SP = 0x0000, .PC = 0x0002}, 0x30, {}, {}},

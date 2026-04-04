@@ -351,37 +351,12 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       cpu->A = alu_add(cpu, cpu->A, inst->args[0].value.byte, 0);
       break;
     case 3:
-      printf("DEBUG: unsigned e -> %d, signed e->%d, negated e-> %d\n",
-	     inst->args[0].value.byte,
-	     (int8_t) inst->args[0].value.byte,
-	     (uint8_t)(-((int8_t) inst->args[0].value.byte)));
       e = (int8_t) inst->args[0].value.byte;
-
+      alu_add(cpu, lower_8(cpu->SP), e, 0);
 
       cpu_clear_flag(cpu, FLAG_Z);
       cpu_clear_flag(cpu, FLAG_N);
-
-      (e & 0xFF) + (cpu->SP & 0xFF) >= 0x100 ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
-      (e & 0xF) + (cpu->SP & 0xF) >= 0x10 ? cpu_set_flag(cpu, FLAG_H) : cpu_clear_flag(cpu, FLAG_H);
       cpu->SP += e;
-
-      /*      lower = lower_8(cpu->SP);
-      upper = upper_8(cpu->SP);
-      if (e >= 0) {
-	lower = alu_add(cpu, lower, e, 0);
-	flag_h = cpu_flag(cpu, FLAG_H);
-	flag_cy = cpu_flag(cpu, FLAG_CY);
-
-	upper = alu_add(cpu, upper, cpu_flag(cpu, FLAG_CY), 0);
-      } else {
-	lower = alu_sub(cpu, lower, -e);
-	flag_h = cpu_flag(cpu, FLAG_H);
-	flag_cy = cpu_flag(cpu, FLAG_CY);
-
-	upper = alu_sub(cpu, upper, cpu_flag(cpu, FLAG_CY));
-	}*/
-
-
       break;
     case 4:
       flag_z = cpu_flag(cpu, FLAG_Z); // store before to set back at end
@@ -965,32 +940,11 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     break;
   case LDHL:
     e = (int8_t) inst->args[0].value.byte;
-    lower = lower_8(cpu->SP);
-    upper = upper_8(cpu->SP);
-    if (e >= 0) {
-      lower = alu_add(cpu, lower, e, 0);
-      flag_h = cpu_flag(cpu, FLAG_H);
-      flag_cy = cpu_flag(cpu, FLAG_CY);
+    alu_add(cpu, lower_8(cpu->SP), e, 0);
 
-      upper = alu_add(cpu, upper, cpu_flag(cpu, FLAG_CY), 0);
-    } else {
-      lower = alu_sub(cpu, lower, -e);
-      flag_h = cpu_flag(cpu, FLAG_H);
-      flag_cy = cpu_flag(cpu, FLAG_CY);
-
-      upper = alu_sub(cpu, upper, cpu_flag(cpu, FLAG_CY));
-    }
     cpu_clear_flag(cpu, FLAG_Z);
     cpu_clear_flag(cpu, FLAG_N);
-    flag_h ? cpu_set_flag(cpu, FLAG_H) : cpu_clear_flag(cpu, FLAG_H);
-    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
-
-    if (e < 0)
-      printf("DEBUG LDHL: subtracted 1 from SP: 0x%04X to get 0x%04X, flag h: %d, flag cy: %d\n", cpu->SP, bytes_to_word(lower, upper), cpu_flag(cpu, FLAG_H), cpu_flag(cpu, FLAG_CY));
-    //cpu->SP = bytes_to_word(lower, upper);
-    word_to_regs(cpu, bytes_to_word(lower, upper), rH, rL);
-    if (e < 0)
-      printf("DEBUG: H: 0x%02X, L: 0x%02X\n", cpu->H, cpu->L);
+    word_to_regs(cpu, cpu->SP + e, rH, rL);
     break;
   case DAA:
     // direct implementation from the table defined in the Nintendo/Z80 manual.
