@@ -1,7 +1,7 @@
 #ifndef INST_H
 #define INST_H
 
-#include <stdint.h>
+#include "types.h"
 
 // enum value for each cpu instruction in lexicographic order
 // NOTE: DO NOT REORDER! Tests rely on ADC being the first and XOR
@@ -84,8 +84,8 @@ enum reg { // Z80 index of each register in opcodes
 struct inst_arg {
   enum arg_type type;
   union {
-    uint8_t byte;
-    uint8_t word[2]; // little endian: first byte is lower part
+    u8 byte;
+    u8 word[2]; // little endian: first byte is lower part
   } value;
 };
 
@@ -95,19 +95,19 @@ struct inst {
 
   // assigned during creation to distinguish
   // between the multiple forms of an instruction type.
-  uint8_t form;
+  u8 form;
 
   // the length of the opcode in bytes
-  uint8_t bytelen;
+  u8 bytelen;
 
   // the number of machine cycles needed to execute. note, few
   // instructions take variable number of cycles. that's
   // delegated to the cpu at execution time.
-  uint8_t cycles;
+  u8 cycles;
 
   // store up to 3 args associated with the instruction
   struct inst_arg args[3];
-  uint8_t args_count;
+  u8 args_count;
 };
 
 enum cond {NZ = 0, Z, NC, YC };

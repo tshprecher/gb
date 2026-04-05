@@ -31,16 +31,16 @@ void timing_tick(struct timing_controller *tc) {
   }
 }
 
-uint8_t timing_reg_read(struct timing_controller* tc, enum timing_reg reg) {
+u8 timing_reg_read(struct timing_controller* tc, enum timing_reg reg) {
   switch (reg) {
   case rDIV:
-    return (uint8_t) ((tc->div_t_cycles >> 9) & 0xFF);
+    return (u8) ((tc->div_t_cycles >> 9) & 0xFF);
   default:
     return tc->regs[reg];
   }
 }
 
-void timing_reg_write(struct timing_controller* tc, enum timing_reg reg, uint8_t value) {
+void timing_reg_write(struct timing_controller* tc, enum timing_reg reg, u8 value) {
   switch (reg) {
   case rDIV:
     tc->div_t_cycles = 0;

@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include "types.h"
 #include "cpu.h"
 #include "memory.h"
 #include "inst.h"
@@ -10,11 +11,11 @@
 
 #define nn_lower(i, a) (i->args[a].value.word[0])
 #define nn_upper(i, a) (i->args[a].value.word[1])
-#define bytes_to_word(l, u) ((uint16_t) (u << 8 | l))
+#define bytes_to_word(l, u) ((u16) (u << 8 | l))
 #define nn_to_word(i, a) bytes_to_word(nn_lower(i,a),nn_upper(i,a))
 
 // hard coded interrupt handler addresses by interrupt priority
-static uint16_t interrupt_handlers[] = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060};
+static u16 interrupt_handlers[] = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060};
 
 // TODO: should all enums be capital?
 void interrupt(struct interrupt_controller *ic, enum Interrupt interrupt) {
@@ -28,8 +29,8 @@ static inline void check_interrupt(struct cpu *cpu) {
       (cpu->interrupt_c->IF & cpu->interrupt_c->IE)) {
     printf("\tdebug: noticed interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
 
-    uint16_t *handler_addr = interrupt_handlers;
-    uint8_t mask = 1;
+    u16 *handler_addr = interrupt_handlers;
+    u8 mask = 1;
     while (mask < (1<<5)) {
       if ((cpu->interrupt_c->IF & mask) && (cpu->interrupt_c->IE & mask))
        break;
@@ -71,7 +72,7 @@ static inline void check_interrupt(struct cpu *cpu) {
   }
 }
 
-static uint8_t * reg(struct cpu *cpu, uint8_t reg) {
+static u8 * reg(struct cpu *cpu, u8 reg) {
   if (reg == rA)
       return &cpu->A;
   if (reg == rB)
@@ -91,19 +92,19 @@ static uint8_t * reg(struct cpu *cpu, uint8_t reg) {
   return NULL;
 }
 
-static uint16_t regs_to_word(struct cpu * cpu, uint8_t upper, uint8_t lower) {
-  uint8_t l, u;
+static u16 regs_to_word(struct cpu * cpu, u8 upper, u8 lower) {
+  u8 l, u;
   l = *(reg(cpu, lower));
   u = *(reg(cpu, upper));
   return bytes_to_word(l, u);
 }
 
-static void word_to_regs(struct cpu * cpu, uint16_t word, uint8_t upper, uint8_t lower) {
+static void word_to_regs(struct cpu * cpu, u16 word, u8 upper, u8 lower) {
   *(reg(cpu, lower)) = lower_8(word);
   *(reg(cpu, upper)) = upper_8(word);
 }
 
-static uint16_t get_qq(struct cpu *cpu, uint8_t qq) {
+static u16 get_qq(struct cpu *cpu, u8 qq) {
   switch(qq) {
   case 0:
     return regs_to_word(cpu, rB, rC);
@@ -118,7 +119,7 @@ static uint16_t get_qq(struct cpu *cpu, uint8_t qq) {
   return 0;
 }
 
-static void set_qq(struct cpu *cpu, uint8_t qq, uint16_t word) {
+static void set_qq(struct cpu *cpu, u8 qq, u16 word) {
   switch(qq) {
   case 0:
     cpu->B = upper_8(word);
@@ -139,7 +140,7 @@ static void set_qq(struct cpu *cpu, uint8_t qq, uint16_t word) {
     }
 }
 
-static uint16_t get_dd_or_ss(struct cpu *cpu, uint8_t dd_or_ss) {
+static u16 get_dd_or_ss(struct cpu *cpu, u8 dd_or_ss) {
   switch(dd_or_ss) {
   case 0:
     return regs_to_word(cpu, rB, rC);
@@ -153,7 +154,7 @@ static uint16_t get_dd_or_ss(struct cpu *cpu, uint8_t dd_or_ss) {
   return 0;
 }
 
-static void set_dd_or_ss(struct cpu *cpu, uint8_t dd_or_ss, uint16_t word) {
+static void set_dd_or_ss(struct cpu *cpu, u8 dd_or_ss, u16 word) {
   switch(dd_or_ss) {
   case 0:
     cpu->B = upper_8(word);
@@ -184,18 +185,18 @@ static int is_cond_true(struct cpu *cpu, enum cond cc) {
 }
 
 // imitates the Z80-based 4-bit ALU for easier tracking of half carry and carry bits
-static uint8_t alu_4bit_add(uint8_t op1, uint8_t op2, uint8_t in_carry, uint8_t *out_carry) {
-  uint16_t result = (op1 & 0x0F) + (op2 & 0x0F) + (in_carry ? 1 : 0);
+static u8 alu_4bit_add(u8 op1, u8 op2, u8 in_carry, u8 *out_carry) {
+  u16 result = (op1 & 0x0F) + (op2 & 0x0F) + (in_carry ? 1 : 0);
   *out_carry = (result & (1 << 4)) > 0;
   return result & 0x0F;
 }
 
 // handles ALU operations for addition, properly assigning the flags
-static uint8_t alu_add(struct cpu *cpu, uint8_t op1, uint8_t op2, uint8_t in_carry) {
-  uint8_t h_carry, cy_carry;
-  uint8_t lower4 = alu_4bit_add(op1, op2, in_carry, &h_carry);
-  uint8_t upper4 = alu_4bit_add(op1 >> 4, op2 >> 4, h_carry, &cy_carry);
-  uint8_t result = lower4+(upper4 << 4);
+static u8 alu_add(struct cpu *cpu, u8 op1, u8 op2, u8 in_carry) {
+  u8 h_carry, cy_carry;
+  u8 lower4 = alu_4bit_add(op1, op2, in_carry, &h_carry);
+  u8 upper4 = alu_4bit_add(op1 >> 4, op2 >> 4, h_carry, &cy_carry);
+  u8 result = lower4+(upper4 << 4);
 
   result == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
   cpu_clear_flag(cpu, FLAG_N);
@@ -206,12 +207,12 @@ static uint8_t alu_add(struct cpu *cpu, uint8_t op1, uint8_t op2, uint8_t in_car
 }
 
 // handles ALU operations for subtraction, properly assigning the flags
-static uint8_t alu_sub(struct cpu *cpu, uint8_t op1, uint8_t op2) {
+static u8 alu_sub(struct cpu *cpu, u8 op1, u8 op2) {
   op2 = ~op2;
-  uint8_t h_carry, cy_carry;
-  uint8_t lower4 = alu_4bit_add(op1, op2, 1, &h_carry); // 2's complement means carry is 1 after bits flipped
-  uint8_t upper4 = alu_4bit_add(op1 >> 4, op2 >> 4, h_carry, &cy_carry);
-  uint8_t result = lower4+(upper4 << 4);
+  u8 h_carry, cy_carry;
+  u8 lower4 = alu_4bit_add(op1, op2, 1, &h_carry); // 2's complement means carry is 1 after bits flipped
+  u8 upper4 = alu_4bit_add(op1 >> 4, op2 >> 4, h_carry, &cy_carry);
+  u8 result = lower4+(upper4 << 4);
 
   result == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
   cpu_set_flag(cpu, FLAG_N);
@@ -255,7 +256,7 @@ void cpu_tick(struct cpu *cpu) {
     cpu->next_inst = mem_read_inst(cpu->memory_c, cpu->PC);
 
   // 4 clock "t" cycles per machine "m" cycle
-  int8_t exec_cycle = (cpu->next_inst->cycles << 2);
+  s8 exec_cycle = (cpu->next_inst->cycles << 2);
   cpu->t_cycles_since_last_inst++;
   if (cpu->t_cycles_since_last_inst == exec_cycle) {
     char buf[128];
@@ -283,33 +284,33 @@ void cpu_tick(struct cpu *cpu) {
 
 
 struct dst {
-  uint8_t *reg;
-  uint16_t addr;
+  u8 *reg;
+  u16 addr;
   struct mem_controller *mc;
 };
 
 
 // TODO: find out why removing these declarations craps out the linker
-void dst_init_reg(struct dst *dst, struct cpu * cpu, uint8_t r);
-void dst_init_addr(struct dst *dst, struct mem_controller *mc, uint16_t addr);
-uint8_t dst_val(struct dst *dst);
-void dst_assign(struct dst *dst, int8_t byte);
+void dst_init_reg(struct dst *dst, struct cpu * cpu, u8 r);
+void dst_init_addr(struct dst *dst, struct mem_controller *mc, u16 addr);
+u8 dst_val(struct dst *dst);
+void dst_assign(struct dst *dst, s8 byte);
 
-inline void dst_init_reg(struct dst *dst, struct cpu * cpu, uint8_t r) {
+inline void dst_init_reg(struct dst *dst, struct cpu * cpu, u8 r) {
   dst->reg = reg(cpu, r);
 }
 
-inline void dst_init_addr(struct dst *dst, struct mem_controller *mc, uint16_t addr) {
+inline void dst_init_addr(struct dst *dst, struct mem_controller *mc, u16 addr) {
   dst->reg = NULL;
   dst->addr = addr;
   dst->mc = mc;
 }
 
-inline uint8_t dst_val(struct dst *dst) {
+inline u8 dst_val(struct dst *dst) {
   return dst->reg ? *dst->reg : mem_read(dst->mc, dst->addr);
 }
 
-inline void dst_assign(struct dst *dst, int8_t byte) {
+inline void dst_assign(struct dst *dst, s8 byte) {
   dst->reg ? *dst->reg = byte : mem_write(dst->mc, dst->addr, byte);
 }
 
@@ -318,11 +319,11 @@ inline void dst_assign(struct dst *dst, int8_t byte) {
 // TODO: could use a few more macros for clarity?
 // TODO: should this return 0 cycles on error instead? makes some sense
 int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
-  uint16_t hl, word;
-  uint8_t flag_cy=0, flag_h=0, flag_n=0, flag_z=0, byte,
+  u16 hl, word;
+  u8 flag_cy=0, flag_h=0, flag_n=0, flag_z=0, byte,
     lower, upper, dd_or_ss, daa_adj, lower_nib, upper_nib;
   struct dst dst = {0};
-  int8_t e;
+  s8 e;
   switch (inst->type) {
   case NOP:
     break;
@@ -351,7 +352,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       cpu->A = alu_add(cpu, cpu->A, inst->args[0].value.byte, 0);
       break;
     case 3:
-      e = (int8_t) inst->args[0].value.byte;
+      e = (s8) inst->args[0].value.byte;
       alu_add(cpu, lower_8(cpu->SP), e, 0);
 
       cpu_clear_flag(cpu, FLAG_Z);
@@ -769,12 +770,12 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   case JR:
     switch (inst->form) {
     case 0:
-      e = (int8_t) inst->args[0].value.byte;
+      e = (s8) inst->args[0].value.byte;
       cpu->PC = cpu->PC + e + 2;
       return inst->cycles;
     case 1:
       if (is_cond_true(cpu, inst->args[0].value.byte)) {
-	e = (int8_t) inst->args[1].value.byte;
+	e = (s8) inst->args[1].value.byte;
 	cpu->PC = cpu->PC + e + 2;
 	return 3;
       }
@@ -939,7 +940,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     }
     break;
   case LDHL:
-    e = (int8_t) inst->args[0].value.byte;
+    e = (s8) inst->args[0].value.byte;
     alu_add(cpu, lower_8(cpu->SP), e, 0);
 
     cpu_clear_flag(cpu, FLAG_Z);

@@ -24,9 +24,9 @@ struct rom load_rom(char *filename)
 
   struct rom rom = {0};
   rom.num_banks = 1;
-  rom.mem = (uint8_t*) malloc(0x8000);
+  rom.mem = (u8*) malloc(0x8000);
   rom.cached_insts = (struct inst*) malloc(0x8000 * sizeof(struct inst));
-  rom.is_cached_bitmap = (uint8_t*) malloc(0x8000 >> 3);
+  rom.is_cached_bitmap = (u8*) malloc(0x8000 >> 3);
   char b;
   int addr = 0;
   while (addr < 0x8000)
@@ -47,11 +47,11 @@ struct rom load_rom(char *filename)
   return rom;
 }
 
-uint8_t rom_read(struct rom * rom, uint16_t addr) {
+u8 rom_read(struct rom * rom, u16 addr) {
   return rom->mem[addr];
 };
 
-void rom_write(struct rom * rom, uint16_t addr, uint8_t value) {
+void rom_write(struct rom * rom, u16 addr, u8 value) {
   // TODO: implement for later MBCs
   return;
 };
@@ -142,7 +142,7 @@ static char* mmapped_registers[] = {
   "$NR52",
 };
 
-char * mmapped_reg_to_str(uint16_t addr) {
+char * mmapped_reg_to_str(u16 addr) {
   // fail fast in the commmon case
   if (addr < 0xFE00)
     return NULL;
@@ -164,11 +164,11 @@ char * mmapped_reg_to_str(uint16_t addr) {
   return NULL;
 }
 
-uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
+u8 mem_read(struct mem_controller * mc, u16 addr) {
   if (addr < 0x8000) { // route to rom
     return rom_read(mc->rom, addr);
   } else if (addr == 0xFF00) { // try memory mapped registers
-    uint8_t inputs = 0;
+    u8 inputs = 0;
     input_read_P1(mc->input_c, &inputs);
     return inputs;
   } else if (addr >= 0xFF04 && addr <= 0xFF07) {
@@ -196,7 +196,7 @@ uint8_t mem_read(struct mem_controller * mc, uint16_t addr) {
   return mc->ram[addr-0x8000];
 }
 
-void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t value) {
+void mem_write(struct mem_controller *mc, u16 addr, u8 value) {
   if (addr < 0x8000) { // route to rom
     rom_write(mc->rom, addr, value);
   } else if (addr == 0xFF00) { // try memory mapped registers
@@ -227,10 +227,10 @@ void mem_write(struct mem_controller *mc, uint16_t addr, uint8_t value) {
   }
 }
 
-struct inst* mem_read_inst(struct mem_controller *mc, uint16_t addr) {
+struct inst* mem_read_inst(struct mem_controller *mc, u16 addr) {
   if (addr < 0x8000) {
-    uint8_t byte_map = mc->rom->is_cached_bitmap[addr >> 3];
-    uint8_t bit_mask = 1 << (7-(addr & 7));
+    u8 byte_map = mc->rom->is_cached_bitmap[addr >> 3];
+    u8 bit_mask = 1 << (7-(addr & 7));
     if (!(byte_map & bit_mask)) {
       int ok = init_inst_from_bytes(&mc->rom->cached_insts[addr], &mc->rom->mem[addr]);
       if (!ok)

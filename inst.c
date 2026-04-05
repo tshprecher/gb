@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "types.h"
 #include "memory.h"
 #include "inst.h"
 
@@ -17,13 +18,13 @@ static char *map_qq_to_str[4] = {"BC", "DE", "HL", "AF"};
 // outside this file.
 struct inst_prototype {
   enum inst_type type;
-  uint8_t form;
-  uint8_t bytelen;
-  uint8_t cycles;
+  u8 form;
+  u8 bytelen;
+  u8 cycles;
   char *bit_pattern;
   char *txt_pattern;
   struct inst_arg args[3];
-  uint8_t args_count;
+  u8 args_count;
 };
 
 static struct inst_prototype instructions[] = {
@@ -170,7 +171,7 @@ static struct inst_prototype instructions[] = {
   {XOR,2 ,2, 2, "11101110 {n}", "XOR {n}" },
 };
 
-static struct inst_prototype *find_inst_prototype(uint8_t type, uint8_t form) {
+static struct inst_prototype *find_inst_prototype(u8 type, u8 form) {
   // TODO: consider making this faster instead of linear, but
   // it's not executed in the execution, just debugging/disassembly
   for (int i = 0; i < sizeof(instructions) / sizeof(struct inst_prototype); i++) {
@@ -242,55 +243,55 @@ static int _match_bit_pattern(struct inst* inst,  char *bytes, char *pattern)
 	  pattern += arglen+1;
 
 	  if (strcmp(arg, "r") == 0) {
- 	    uint8_t byte = (0b11100000 & si) >> 5;
+ 	    u8 byte = (0b11100000 & si) >> 5;
 	    if (byte == 6) // used in another instr to indicate (HL)
 	      return 0;
 	    struct inst_arg arg = { .type = R, .value.byte = byte };
 	    inst_add_arg(inst, arg);
 	    shift += 3;
 	  } else  if (strcmp(arg, "b") == 0) {
-	    uint8_t byte = (0b11100000 & si) >> 5;
+	    u8 byte = (0b11100000 & si) >> 5;
 	    struct inst_arg arg = { .type = B, .value.byte = byte };
 	    inst_add_arg(inst, arg);
 	    shift += 3;
 	  } else  if (strcmp(arg, "t") == 0) {
-	    uint8_t byte = (0b11100000 & si) >> 5;
+	    u8 byte = (0b11100000 & si) >> 5;
 	    struct inst_arg arg = { .type = T, .value.byte = byte };
 	    inst_add_arg(inst, arg);
 	    shift += 3;
 	  } else if (strcmp(arg, "cc") == 0) {
-	    uint8_t byte = (0b11000000 & si) >> 6;
+	    u8 byte = (0b11000000 & si) >> 6;
 	    struct inst_arg arg = { .type = CC, .value.byte = byte };
 	    inst_add_arg(inst, arg);
 	    shift += 2;
 	  } else if (strcmp(arg, "dd") == 0) {
-	    uint8_t byte = (0b11000000 & si) >> 6;
+	    u8 byte = (0b11000000 & si) >> 6;
 	    struct inst_arg arg = { .type = DD, .value.byte = byte };
 	    inst_add_arg(inst, arg);
 	    shift += 2;
 	  } else if (strcmp(arg, "qq") == 0) {
-	    uint8_t byte = (0b11000000 & si) >> 6;
+	    u8 byte = (0b11000000 & si) >> 6;
 	    struct inst_arg arg = { .type = QQ, .value.byte = byte };
 	    inst_add_arg(inst, arg);
 	    shift += 2;
 	  } else if (strcmp(arg, "ss") == 0) {
-	    uint8_t byte = (0b11000000 & si) >> 6;
+	    u8 byte = (0b11000000 & si) >> 6;
 	    struct inst_arg arg = { .type = SS, .value.byte = byte };
 	    inst_add_arg(inst, arg);
 	    shift += 2;
 	  } else if (strcmp(arg, "e") == 0) {
-	    uint8_t byte = si;
+	    u8 byte = si;
 	    struct inst_arg arg = { .type = E, .value.byte = byte };
 	    inst_add_arg(inst, arg);
 	    shift += 8;
 	  } else if (strcmp(arg, "n") == 0) {
-	    uint8_t byte = si;
+	    u8 byte = si;
 	    struct inst_arg arg = { .type = N, .value.byte = byte };
 	    inst_add_arg(inst, arg);
 	    shift += 8;
 	  } else if (strcmp(arg, "nn") == 0) {
-	    uint8_t lower = si;
-	    uint8_t upper = bytes[c++];
+	    u8 lower = si;
+	    u8 upper = bytes[c++];
 	    struct inst_arg arg = { .type = NN, .value.word = {lower, upper}};
 	    inst_add_arg(inst, arg);
 	    shift += 8;
@@ -517,7 +518,7 @@ int init_inst_from_asm(struct inst *inst, char *asmline) {
 static int arg_to_str(enum inst_type type, struct inst_arg *arg, char *buf, int check_special_register) {
   char *arg_str;
   char ebuf[8];
-  int16_t word;
+  s16 word;
   switch (arg->type) {
   case R:
     arg_str = map_reg_to_str[arg->value.byte];
@@ -544,7 +545,7 @@ static int arg_to_str(enum inst_type type, struct inst_arg *arg, char *buf, int 
     strcpy(buf, arg_str);
     return 2;
   case E:
-    word = (int8_t)arg->value.byte;
+    word = (s8)arg->value.byte;
 
     if (type == JR)
       word+=2;

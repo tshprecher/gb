@@ -41,15 +41,15 @@ int test_cpu_exec() {
 
   struct test {
     char *asm_command;
-    uint8_t initial_flags;
+    u8 initial_flags;
     struct cpu initial_cpu;
 
     // expected state after instruction exec
     int cycles;
     struct cpu expected;
-    uint8_t expected_flags;
-    uint16_t modified_addrs[2];
-    uint8_t modified_addr_values[2];
+    u8 expected_flags;
+    u16 modified_addrs[2];
+    u8 modified_addr_values[2];
   } tests[] = {
     // LD
 
@@ -623,9 +623,9 @@ int test_cpu_exec() {
     struct rom rom = {0};
 
     rom.num_banks = 1;
-    uint8_t rom_mem[0x8000] = {0};
+    u8 rom_mem[0x8000] = {0};
     struct inst rom_cached_insts[0x8000] = {0};
-    uint8_t rom_is_cached_bitmap[0x8000 >> 3] = {0};
+    u8 rom_is_cached_bitmap[0x8000 >> 3] = {0};
     rom.mem = rom_mem;
     rom.cached_insts = rom_cached_insts;
     rom.is_cached_bitmap = rom_is_cached_bitmap;
@@ -731,7 +731,7 @@ int test_inst_init() {
     // expected output
     enum inst_type type;
     struct inst_arg args[3];
-    uint8_t args_count;
+    u8 args_count;
   } tests[] = {
     { .asm_command = "ADC A, (HL)", .type = ADC, {}, 0},
     { .asm_command = "ADD A, B", .type = ADD, {{.type = R, .value.byte = 0}} , 1},

@@ -2,7 +2,9 @@
 #define CPU_H
 
 #include <stdint.h>
+#include "types.h"
 #include "inst.h"
+
 
 #define cpu_flag(c, f) ((c->F>>f) & 1)
 #define cpu_set_flag(c, f) (c->F |= (1 << f))
@@ -23,36 +25,36 @@ enum Interrupt {
 };
 
 struct interrupt_controller {
-  uint8_t IF, IE;
+  u8 IF, IE;
 };
 
 void interrupt(struct interrupt_controller *, enum Interrupt);
 
 struct cpu {
   // 8 bit registers
-  uint8_t A, B, C, D, E, F /*flags register*/, H, L;
+  u8 A, B, C, D, E, F /*flags register*/, H, L;
 
   // 16 bit registers
-  uint16_t PC, SP;
+  u16 PC, SP;
 
   // flag for halted
-  uint8_t is_halted;
+  u8 is_halted;
 
   // interrupt master enable flag
-  uint8_t IME;
+  u8 IME;
 
   // controllers to interface with other hardware
   struct mem_controller *memory_c;
   struct interrupt_controller *interrupt_c;
 
   // the number of t_cycles since last instruction execution
-  int8_t t_cycles_since_last_inst;
+  s8 t_cycles_since_last_inst;
 
   // the next instruction to execute
   struct inst *next_inst;
 
   // the number of t_cycles to count down after an interrupt
-  int8_t interrupt_t_cycles;
+  s8 interrupt_t_cycles;
 };
 
 void init_cpu(struct cpu *);

@@ -6,26 +6,26 @@
 #include "inst.h"
 #include "timing.h"
 
-char * mmapped_reg_to_str(uint16_t);
+char * mmapped_reg_to_str(u16);
 
 struct rom {
-  uint8_t mbc_type;
-  uint8_t num_banks;
-  uint8_t *mem;
+  u8 mbc_type;
+  u8 num_banks;
+  u8 *mem;
 
   // cache for decoded instructions
   struct inst *cached_insts;
-  uint8_t *is_cached_bitmap;
+  u8 *is_cached_bitmap;
 };
 
 struct rom load_rom(char *);
-uint8_t rom_read(struct rom *, uint16_t);
-void rom_write(struct rom *, uint16_t, uint8_t); // used by some memory banked controllers (MBCs)
+u8 rom_read(struct rom *, u16);
+void rom_write(struct rom *, u16, u8); // used by some memory banked controllers (MBCs)
 
 struct mem_controller {
   // general memory space mapping
   struct rom *rom; // lower 32K is rom
-  uint8_t ram[0x8000]; // upper 32K is ram (including VRAM, memory mapped registers)
+  u8 ram[0x8000]; // upper 32K is ram (including VRAM, memory mapped registers)
 
   // memory mapped registers routed to controllers
   struct interrupt_controller *interrupt_c;
@@ -39,8 +39,8 @@ struct mem_controller {
   struct inst _inst_in_ram;
 };
 
-uint8_t mem_read(struct mem_controller *, uint16_t);
-void mem_write(struct mem_controller *, uint16_t, uint8_t);
-struct inst* mem_read_inst(struct mem_controller *, uint16_t);
+u8 mem_read(struct mem_controller *, u16);
+void mem_write(struct mem_controller *, u16, u8);
+struct inst* mem_read_inst(struct mem_controller *, u16);
 
 #endif

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <X11/Xlib.h>
+#include "types.h"
 #include "display.h"
 
 #define PIXEL_SCALAR 3
@@ -56,7 +57,7 @@ void init_lcd() {
 // TODO: do the modes properly
 
 // TODO: make this an enum
-static inline void setMode(struct lcd_controller *lcd_c,  uint8_t mode) {
+static inline void setMode(struct lcd_controller *lcd_c,  u8 mode) {
   lcd_c->regs[rSTAT] &= 0xFC;
   lcd_c->regs[rSTAT] |= (mode & 3);
 }
@@ -108,13 +109,13 @@ static void X11_refresh() {
 }
 
 static void lcd_put_chr(struct lcd_controller *lcd_c,
-			uint8_t x,
-			uint8_t y,
-			uint8_t *chr,
-			uint8_t palette,
-			uint8_t flip_horizontal,
-			uint8_t flip_vertical,
-			uint8_t override_priority) { // TODO: rename to just override?
+			u8 x,
+			u8 y,
+			u8 *chr,
+			u8 palette,
+			u8 flip_horizontal,
+			u8 flip_vertical,
+			u8 override_priority) { // TODO: rename to just override?
   for (int c = 0; c < 16; c+=2) {
     for (int b = 7; b >= 0; b--) {
       int upper_bit = (chr[c] & (1 << b)) != 0;
@@ -148,26 +149,26 @@ static void lcd_refresh_tiles_by_line(struct lcd_controller *lcd_c,
 
   // tiles are each 8x8, but show the full tile once a new one is seen, forgo
   // perfect line refresh accuracy in favor of simplicity.
-  uint8_t line = lcd_c->regs[rLY];
+  u8 line = lcd_c->regs[rLY];
   if (line % 8 != 0) {
     return;
   }
 
-  uint8_t chr[16];
+  u8 chr[16];
   int x_scan = 0;
   while (x_scan < 160) {
     int tile_idx = (line/8)*32 + x_scan/8;
 
     // get character code
     int tile_addr = code_select_addr + tile_idx;
-    uint16_t chr_code = mem_read(lcd_c->memory_c, tile_addr);
+    u16 chr_code = mem_read(lcd_c->memory_c, tile_addr);
     for (int c = 0; c < 16; c++) {
       chr[c] = mem_read(lcd_c->memory_c, char_select_addr + (chr_code<<4) + c);
     }
 
     int blockX = tile_addr % 32;
     int blockY = tile_addr / 32;
-    uint8_t palette = lcd_c->regs[rBGP];
+    u8 palette = lcd_c->regs[rBGP];
 
     lcd_put_chr(lcd_c, blockX*8, blockY*8, chr, palette, 0, 0, 1);
     x_scan+=8;
@@ -178,13 +179,13 @@ static void lcd_refresh_objs_by_line(struct lcd_controller *lcd_c) {
   // TODO: does 8x16 mean different logic or was is just a hardware/software optimization?
   //int obj_8_by_8 = is_bit_set(lcd_c->regs[rLCDC], 3) ? 0 : 1;
 
-  uint8_t line = lcd_c->regs[rLY];
+  u8 line = lcd_c->regs[rLY];
 
   // TODO: handle SCX, SCY
   if (line >= 144)
     return;
 
-  uint8_t chr[16];
+  u8 chr[16];
   int obj_ids_on_line[10]; // max 10 on a given line
   int obj_x_pos_on_line[10];
   int num_objs = 0;
@@ -192,13 +193,13 @@ static void lcd_refresh_objs_by_line(struct lcd_controller *lcd_c) {
   // find the objects on the line, sorted by x coordinate
   for (int oam_id = 0; oam_id < 40 && num_objs < 10; oam_id++) {
     int oam_addr = 0xFE00 + oam_id*4;
-    uint8_t y_pos = mem_read(lcd_c->memory_c, oam_addr);
+    u8 y_pos = mem_read(lcd_c->memory_c, oam_addr);
     // NOTE: object positions are offset by 16 y-pixels and 8 x-pixels (see comment below)
     if (y_pos-16 != line) {
       continue;
     }
 
-    uint8_t x_pos = mem_read(lcd_c->memory_c, oam_addr+1);
+    u8 x_pos = mem_read(lcd_c->memory_c, oam_addr+1);
     obj_ids_on_line[num_objs] = oam_id;
     obj_x_pos_on_line[num_objs] = x_pos;
 
@@ -216,15 +217,15 @@ static void lcd_refresh_objs_by_line(struct lcd_controller *lcd_c) {
   // TODO: revisit the priority logic of objects
   for (int i = num_objs-1; i >= 0; i--) {
     int oam_addr = 0xFE00 + obj_ids_on_line[i]*4;
-    uint8_t y_pos = mem_read(lcd_c->memory_c, oam_addr);
-    uint8_t x_pos = mem_read(lcd_c->memory_c, oam_addr+1);
-    uint8_t chr_code = mem_read(lcd_c->memory_c, oam_addr+2);
-    uint8_t attributes = mem_read(lcd_c->memory_c, oam_addr+3);
+    u8 y_pos = mem_read(lcd_c->memory_c, oam_addr);
+    u8 x_pos = mem_read(lcd_c->memory_c, oam_addr+1);
+    u8 chr_code = mem_read(lcd_c->memory_c, oam_addr+2);
+    u8 attributes = mem_read(lcd_c->memory_c, oam_addr+3);
 
-    uint8_t palette = is_bit_set(attributes, 4) ? lcd_c->regs[rOBP1] : lcd_c->regs[rOBP0];
-    uint8_t flip_horizontal = is_bit_set(attributes, 5);
-    uint8_t flip_vertical = is_bit_set(attributes, 6);
-    uint8_t override_priority = !is_bit_set(attributes, 7);
+    u8 palette = is_bit_set(attributes, 4) ? lcd_c->regs[rOBP1] : lcd_c->regs[rOBP0];
+    u8 flip_horizontal = is_bit_set(attributes, 5);
+    u8 flip_vertical = is_bit_set(attributes, 6);
+    u8 override_priority = !is_bit_set(attributes, 7);
 
     for (int c = 0; c < 16; c++) {
       chr[c] = mem_read(lcd_c->memory_c, 0x8000 + (chr_code<<4) + c);
@@ -301,12 +302,12 @@ void lcd_tick(struct lcd_controller *lcd_c) {
   }
 }
 
-uint8_t lcd_reg_read(struct lcd_controller* lcd_c, enum lcd_reg reg) {
+u8 lcd_reg_read(struct lcd_controller* lcd_c, enum lcd_reg reg) {
   return lcd_c->regs[reg];
 }
 
-void lcd_reg_write(struct lcd_controller* lcd_c, enum lcd_reg reg, uint8_t value) {
-  uint8_t original_value = lcd_c->regs[reg];
+void lcd_reg_write(struct lcd_controller* lcd_c, enum lcd_reg reg, u8 value) {
+  u8 original_value = lcd_c->regs[reg];
   lcd_c->regs[reg] = value;
   switch (reg) {
   case rLCDC:

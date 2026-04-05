@@ -10,8 +10,8 @@ enum timing_reg {
 
 struct timing_controller {
   // registers
-  uint8_t regs[4];
-  uint16_t timer_t_cycles;
+  u8 regs[4];
+  u16 timer_t_cycles;
   uint32_t div_t_cycles; // for DIV psuedoregister
 
   struct interrupt_controller * interrupt_c;
@@ -19,7 +19,7 @@ struct timing_controller {
 
 void timing_tick(struct timing_controller *);
 
-uint8_t timing_reg_read(struct timing_controller*, enum timing_reg);
-void timing_reg_write(struct timing_controller*, enum timing_reg, uint8_t);
+u8 timing_reg_read(struct timing_controller*, enum timing_reg);
+void timing_reg_write(struct timing_controller*, enum timing_reg, u8);
 
 #endif

@@ -77,7 +77,7 @@ void input_tick(struct input_controller *ic) {
   }
 }
 
-void input_write_P1(struct input_controller *ic, uint8_t value) {
+void input_write_P1(struct input_controller *ic, u8 value) {
   switch (value) {
   case 0x10:
     ic->status = value;
@@ -96,7 +96,7 @@ void input_write_P1(struct input_controller *ic, uint8_t value) {
   }
 }
 
-int input_read_P1(struct input_controller *ic, uint8_t *result) {
+int input_read_P1(struct input_controller *ic, u8 *result) {
   if (ic->status == 0x30)
     return 0;
   if (ic->t_cycles_to_read)

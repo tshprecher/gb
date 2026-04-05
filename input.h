@@ -1,7 +1,7 @@
 #ifndef INPUT_H
 #define INPUT_H
 
-#include <stdint.h>
+#include "types.h"
 
 enum btn {
   BTN_RIGHT = 0,
@@ -15,17 +15,17 @@ enum btn {
 };
 
 struct input_controller {
-  uint16_t polling_freq;
-  uint16_t ticks_since_last_poll;
-  uint8_t status;
-  uint8_t btns_pressed;
-  uint8_t t_cycles_to_read;
+  u16 polling_freq;
+  u16 ticks_since_last_poll;
+  u8 status;
+  u8 btns_pressed;
+  u8 t_cycles_to_read;
 
   struct interrupt_controller *interrupt_c;
 };
 
 void input_tick(struct input_controller *);
-void input_write_P1(struct input_controller *, uint8_t);
-int input_read_P1(struct input_controller *, uint8_t *);
+void input_write_P1(struct input_controller *, u8);
+int input_read_P1(struct input_controller *, u8 *);
 
 #endif

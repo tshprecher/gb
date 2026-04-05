@@ -1,7 +1,7 @@
 #ifndef SOUND_H
 #define SOUND_H
 
-#include <stdint.h>
+#include "types.h"
 #include "memory.h"
 
 enum sound_reg {
@@ -13,31 +13,31 @@ enum sound_reg {
 };
 
 struct sound {
-  uint8_t type; // [1,2,3,4]
+  u8 type; // [1,2,3,4]
 
   // common fields
   int frequency;
   int current_sample;
   int duration_samples;
   int samples_per_wave;
-  uint8_t is_continuous; // TODO: combine is_continuous with duration_samples?
+  u8 is_continuous; // TODO: combine is_continuous with duration_samples?
 
   // for sounds 1, 2
-  int8_t waveform_duty_cycle;
+  s8 waveform_duty_cycle;
 
   // for sound 1
-  int8_t sweep_time_samples;
-  int8_t sweep_shift;
-  int8_t is_sweep_decreasing;
+  s8 sweep_time_samples;
+  s8 sweep_shift;
+  s8 is_sweep_decreasing;
 
   // for sounds 3, 4
-  uint8_t env_value;
+  u8 env_value;
   int samples_per_env_step;
-  int8_t is_env_decreasing;
+  s8 is_env_decreasing;
 
   // for sound 3
-  uint8_t waveform[32];
-  uint8_t output_level; // [0,1,2,3]
+  u8 waveform[32];
+  u8 output_level; // [0,1,2,3]
 
   // for sound 4
   int is_long_mode; // long: 15 bit shift register, short: 7 bit
@@ -46,7 +46,7 @@ struct sound {
 
 struct sound_controller {
   // registers
-  uint8_t regs[21];
+  u8 regs[21];
 
   struct mem_controller *memory_c;
 
@@ -58,7 +58,7 @@ struct sound_controller {
 void init_sound();
 void sound_tick(struct sound_controller*);
 
-uint8_t sound_reg_read(struct sound_controller*, enum sound_reg);
-void sound_reg_write(struct sound_controller*, enum sound_reg, uint8_t);
+u8 sound_reg_read(struct sound_controller*, enum sound_reg);
+void sound_reg_write(struct sound_controller*, enum sound_reg, u8);
 
 #endif
