@@ -95,10 +95,7 @@ struct inst {
 
   // assigned during creation to distinguish
   // between the multiple forms of an instruction type.
-  // I prefer to avoid doing string comparisons of the
-  // txt_pattern or fancier bitmask schemes like a PLA
-  // in hardware.
-  uint8_t subtype;
+  uint8_t form;
 
   // the length of the opcode in bytes
   uint8_t bytelen;

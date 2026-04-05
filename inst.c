@@ -17,7 +17,7 @@ static char *map_qq_to_str[4] = {"BC", "DE", "HL", "AF"};
 // outside this file.
 struct inst_prototype {
   enum inst_type type;
-  uint8_t subtype;
+  uint8_t form;
   uint8_t bytelen;
   uint8_t cycles;
   char *bit_pattern;
@@ -170,12 +170,12 @@ static struct inst_prototype instructions[] = {
   {XOR,2 ,2, 2, "11101110 {n}", "XOR {n}" },
 };
 
-static struct inst_prototype *find_inst_prototype(uint8_t type, uint8_t subtype) {
+static struct inst_prototype *find_inst_prototype(uint8_t type, uint8_t form) {
   // TODO: consider making this faster instead of linear, but
   // it's not executed in the execution, just debugging/disassembly
   for (int i = 0; i < sizeof(instructions) / sizeof(struct inst_prototype); i++) {
     struct inst_prototype *ptype = &instructions[i];
-    if (ptype->type == type && ptype->subtype == subtype) {
+    if (ptype->type == type && ptype->form == form) {
       return ptype;
     }
   }
@@ -314,7 +314,7 @@ int init_inst_from_bytes(struct inst* inst, void *bytes) {
   for (int i = 0; i < sizeof(instructions) / sizeof(struct inst_prototype); i++) {
     struct inst_prototype ptype = instructions[i];
     inst->type = ptype.type;
-    inst->subtype = ptype.subtype;
+    inst->form = ptype.form;
     inst->bytelen = ptype.bytelen;
     inst->cycles = ptype.cycles;
     inst->args_count = 0;
@@ -503,7 +503,7 @@ int init_inst_from_asm(struct inst *inst, char *asmline) {
   for (int i = 0; i < sizeof(instructions) / sizeof(struct inst_prototype); i++) {
     struct inst_prototype ptype = instructions[i];
     inst->type = ptype.type;
-    inst->subtype = ptype.subtype;
+    inst->form = ptype.form;
     inst->bytelen = ptype.bytelen;
     inst->cycles = ptype.cycles;
     inst->args_count = 0;
@@ -574,7 +574,7 @@ static int arg_to_str(enum inst_type type, struct inst_arg *arg, char *buf, int 
 int inst_to_str(struct inst * inst, char *buf) {
   int len = 0;
   struct inst_arg *current_arg = inst->args;
-  struct inst_prototype *ptype = find_inst_prototype(inst->type, inst->subtype);
+  struct inst_prototype *ptype = find_inst_prototype(inst->type, inst->form);
   char *pattern = ptype->txt_pattern;
   // NOTE: somewhat of a hack to indicate this by checking strings,
   // but it'll do for now.

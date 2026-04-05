@@ -260,7 +260,7 @@ void cpu_tick(struct cpu *cpu) {
   if (cpu->t_cycles_since_last_inst == exec_cycle) {
     char buf[128];
     inst_to_str(cpu->next_inst, buf);
-    printf("(DEBUG): [t: %d, st: %d]  0x%04X\t%s\n", cpu->next_inst->type, cpu->next_inst->subtype, cpu->PC, buf);
+    printf("(DEBUG): [t: %d, f: %d]  0x%04X\t%s\n", cpu->next_inst->type, cpu->next_inst->form, cpu->PC, buf);
     int cycles = cpu_exec_instruction(cpu, cpu->next_inst);
     cpu_to_str(buf, cpu);
     printf("\t(DEBUG): cpu -> %s\n", buf);
@@ -327,7 +327,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   case NOP:
     break;
   case ADC:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       cpu->A = alu_add(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)), cpu_flag(cpu, FLAG_CY));
       break;
@@ -340,7 +340,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     }
     break;
   case ADD:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       cpu->A = alu_add(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)), 0);
       break;
@@ -371,7 +371,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     }
     break;
   case SUB:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       cpu->A = alu_sub(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)));
       break;
@@ -385,7 +385,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     break;
   case SBC:
     flag_cy = cpu_flag(cpu, FLAG_CY);
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       cpu->A = alu_sub(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)));
       break;
@@ -416,7 +416,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu_set_flag(cpu, FLAG_CY);
     break;
   case INC:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       flag_cy = cpu_flag(cpu, FLAG_CY);
       *(reg(cpu, inst->args[0].value.byte)) = alu_add(cpu, *(reg(cpu, inst->args[0].value.byte)), 1, 0);
@@ -435,7 +435,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     }
     break;
   case DEC:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       flag_cy = cpu_flag(cpu, FLAG_CY);
       *(reg(cpu, inst->args[0].value.byte)) = alu_sub(cpu, *(reg(cpu, inst->args[0].value.byte)), 1);
@@ -454,7 +454,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     }
     break;
   case AND:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       cpu->A &= *(reg(cpu, inst->args[0].value.byte));
       break;
@@ -471,7 +471,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu_clear_flag(cpu, FLAG_CY);
     break;
   case OR:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       cpu->A |= *(reg(cpu, inst->args[0].value.byte));
       break;
@@ -488,7 +488,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu_clear_flag(cpu, FLAG_CY);
     break;
   case XOR:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       cpu->A ^= *(reg(cpu, inst->args[0].value.byte));
       break;
@@ -505,7 +505,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu_clear_flag(cpu, FLAG_CY);
     break;
   case CP:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       alu_sub(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)));
       break;
@@ -531,7 +531,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case RLC:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       dst_init_reg(&dst, cpu, inst->args[0].value.byte);
       break;
@@ -557,7 +557,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case RL:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       dst_init_reg(&dst, cpu, inst->args[0].value.byte);
       break;
@@ -592,7 +592,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case RRC:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       dst_init_reg(&dst, cpu, inst->args[0].value.byte);
       break;
@@ -611,7 +611,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case RR:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       dst_init_reg(&dst, cpu, inst->args[0].value.byte);
       break;
@@ -630,7 +630,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case SLA:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       dst_init_reg(&dst, cpu, inst->args[0].value.byte);
       break;
@@ -649,7 +649,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case SRA:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       dst_init_reg(&dst, cpu, inst->args[0].value.byte);
       break;
@@ -668,7 +668,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case SRL:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       dst_init_reg(&dst, cpu, inst->args[0].value.byte);
       break;
@@ -687,7 +687,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
     break;
   case SWAP:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       dst_init_reg(&dst, cpu, inst->args[0].value.byte);
       break;
@@ -705,7 +705,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     byte == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
     break;
   case BIT:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       dst_init_reg(&dst, cpu, inst->args[1].value.byte);
       break;
@@ -719,7 +719,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu_set_flag(cpu, FLAG_H);
     break;
   case SET:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       dst_init_reg(&dst, cpu, inst->args[1].value.byte);
       break;
@@ -738,7 +738,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu->IME = 1;
     break;
   case RES:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       dst_init_reg(&dst, cpu, inst->args[1].value.byte);
       break;
@@ -751,7 +751,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     dst_assign(&dst, byte);
     break;
   case JP:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       cpu->PC = nn_to_word(inst, 0);
       return inst->cycles;
@@ -767,7 +767,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     }
     break;
   case JR:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       e = (int8_t) inst->args[0].value.byte;
       cpu->PC = cpu->PC + e + 2;
@@ -782,7 +782,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     }
     break;
   case CALL:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       mem_write(cpu->memory_c, cpu->SP-1, upper_8((cpu->PC + 3)));
       mem_write(cpu->memory_c, cpu->SP-2, lower_8((cpu->PC + 3)));
@@ -807,7 +807,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu_flag(cpu, FLAG_CY) ? cpu_clear_flag(cpu, FLAG_CY) : cpu_set_flag(cpu, FLAG_CY);
     break;
   case RET:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       cpu->PC = bytes_to_word(mem_read(cpu->memory_c, cpu->SP), mem_read(cpu->memory_c, cpu->SP+1));
       cpu->SP+=2;
@@ -858,7 +858,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     }
     return inst->cycles;
   case LD:
-    switch (inst->subtype) {
+    switch (inst->form) {
     case 0:
       *(reg(cpu, inst->args[0].value.byte)) = *(reg(cpu, inst->args[1].value.byte));
       break;
