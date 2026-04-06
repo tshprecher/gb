@@ -237,12 +237,15 @@ static void lcd_refresh_objs_by_line(struct lcd_controller *lcd_c) {
 }
 
 static void lcd_refresh_frame_line(struct lcd_controller *lcd_c) { // TODO: naming consistency "by_line" vs. just "_line"?
+  printf("DEBUG: SCY -> %d, SCX -> %d\n", lcd_c->regs[rSCX], lcd_c->regs[rSCY]);
   // first: background
   if (is_background_on(lcd_c)) {
+    printf("DEBUG (display): background on\n");
     lcd_refresh_tiles_by_line(lcd_c,
 			      is_bg_code_area_upper(lcd_c) ? 0x9C00 : 0x9800,
 			      is_char_area_upper(lcd_c) ? 0x8800 : 0x8000);
   } else {
+    printf("DEBUG (display): background off\n");
     XSetForeground(display, gc, 0xAAAAAA);
     XFillRectangle(display, pixmap, gc, 0, 0, SCREEN_SIZE, SCREEN_SIZE);
     XFlush(display);
@@ -251,14 +254,20 @@ static void lcd_refresh_frame_line(struct lcd_controller *lcd_c) { // TODO: nami
   // second: objects
   // TODO: do this by line for better accuracy
   if (is_obj_on(lcd_c)) {
+    printf("DEBUG (display): OAM on\n");
     lcd_refresh_objs_by_line(lcd_c);
+  } else {
+    printf("DEBUG (display): OAM off\n");
   }
 
   // third: window
   if (is_windowing_on(lcd_c)) {
+    printf("DEBUG (display): windowing on\n");
     lcd_refresh_tiles_by_line(lcd_c,
 			      is_window_code_area_upper(lcd_c) ? 0x9C00 : 0x9800,
 			      is_char_area_upper(lcd_c) ? 0x8000 : 0x8800);
+  } else {
+    printf("DEBUG (display): windowing off\n");
   }
 }
 
@@ -332,6 +341,7 @@ void lcd_reg_write(struct lcd_controller* lcd_c, enum lcd_reg reg, u8 value) {
     }
     break;
   default:
+    lcd_c->regs[reg] = value;
     break;
   }
 }

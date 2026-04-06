@@ -6,6 +6,17 @@
 #include "inst.h"
 #include "timing.h"
 
+// flags
+#define F_Z 7
+#define F_N 6
+#define F_H 5
+#define F_CY 4
+
+#define flag_get(c, f) ((c->F>>f) & 1)
+#define flag_on(c, f) (c->F |= (1 << f))
+#define flag_off(c, f) (c->F &= ~(1 << f))
+#define flag_set(c, f, v) (c->F = (c->F & ~(1 << f)) |  ((v) << f))
+
 #define upper_8(v) ((v >> 8) & 0xFF)
 #define lower_8(v) (v & 0xFF)
 
@@ -175,10 +186,10 @@ static void set_dd_or_ss(struct cpu *cpu, u8 dd_or_ss, u16 word) {
 }
 
 static int is_cond_true(struct cpu *cpu, enum cond cc) {
-  if ( (cc == NZ && !cpu_flag(cpu, FLAG_Z)) ||
-       (cc == Z && cpu_flag(cpu, FLAG_Z)) ||
-       (cc == NC && !cpu_flag(cpu, FLAG_CY)) ||
-       (cc == YC && cpu_flag(cpu, FLAG_CY)))
+  if ( (cc == NZ && !flag_get(cpu, F_Z)) ||
+       (cc == Z && flag_get(cpu, F_Z)) ||
+       (cc == NC && !flag_get(cpu, F_CY)) ||
+       (cc == YC && flag_get(cpu, F_CY)))
     return 1;
 
   return 0;
@@ -198,10 +209,10 @@ static u8 alu_add(struct cpu *cpu, u8 op1, u8 op2, u8 in_carry) {
   u8 upper4 = alu_4bit_add(op1 >> 4, op2 >> 4, h_carry, &cy_carry);
   u8 result = lower4+(upper4 << 4);
 
-  result == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
-  cpu_clear_flag(cpu, FLAG_N);
-  h_carry > 0 ? cpu_set_flag(cpu, FLAG_H) : cpu_clear_flag(cpu, FLAG_H);
-  cy_carry > 0 ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+  flag_set(cpu, F_Z, !result);
+  flag_off(cpu, F_N);
+  flag_set(cpu, F_H, h_carry);
+  flag_set(cpu, F_CY, cy_carry);
 
   return result;
 }
@@ -214,10 +225,10 @@ static u8 alu_sub(struct cpu *cpu, u8 op1, u8 op2) {
   u8 upper4 = alu_4bit_add(op1 >> 4, op2 >> 4, h_carry, &cy_carry);
   u8 result = lower4+(upper4 << 4);
 
-  result == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
-  cpu_set_flag(cpu, FLAG_N);
-  h_carry > 0 ? cpu_clear_flag(cpu, FLAG_H) : cpu_set_flag(cpu, FLAG_H);
-  cy_carry > 0 ? cpu_clear_flag(cpu, FLAG_CY) : cpu_set_flag(cpu, FLAG_CY);
+  flag_set(cpu, F_Z, !result);
+  flag_on(cpu, F_N);
+  flag_set(cpu, F_H, !h_carry);
+  flag_set(cpu, F_CY, !cy_carry);
 
   return result;
 }
@@ -330,13 +341,13 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   case ADC:
     switch (inst->form) {
     case 0:
-      cpu->A = alu_add(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)), cpu_flag(cpu, FLAG_CY));
+      cpu->A = alu_add(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)), flag_get(cpu, F_CY));
       break;
     case 1:
-      cpu->A = alu_add(cpu, cpu->A, inst->args[0].value.byte, cpu_flag(cpu, FLAG_CY));
+      cpu->A = alu_add(cpu, cpu->A, inst->args[0].value.byte, flag_get(cpu, F_CY));
       break;
     case 2:
-      cpu->A = alu_add(cpu, cpu->A, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)), cpu_flag(cpu, FLAG_CY));
+      cpu->A = alu_add(cpu, cpu->A, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)), flag_get(cpu, F_CY));
       break;
     }
     break;
@@ -355,19 +366,19 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       e = (s8) inst->args[0].value.byte;
       alu_add(cpu, lower_8(cpu->SP), e, 0);
 
-      cpu_clear_flag(cpu, FLAG_Z);
-      cpu_clear_flag(cpu, FLAG_N);
+      flag_off(cpu, F_Z);
+      flag_off(cpu, F_N);
       cpu->SP += e;
       break;
     case 4:
-      flag_z = cpu_flag(cpu, FLAG_Z); // store before to set back at end
+      flag_z = flag_get(cpu, F_Z); // store before to set back at end
       word = get_dd_or_ss(cpu, inst->args[0].value.byte);
 
       cpu->L = alu_add(cpu, cpu->L, lower_8(word), 0);
-      cpu->H = alu_add(cpu, cpu->H, upper_8(word), cpu_flag(cpu, FLAG_CY));
+      cpu->H = alu_add(cpu, cpu->H, upper_8(word), flag_get(cpu, F_CY));
 
-      cpu_clear_flag(cpu, FLAG_N);
-      flag_z ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
+      flag_off(cpu, F_N);
+      flag_set(cpu, F_Z, flag_z);
       break;
     }
     break;
@@ -385,7 +396,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     }
     break;
   case SBC:
-    flag_cy = cpu_flag(cpu, FLAG_CY);
+    flag_cy = flag_get(cpu, F_CY);
     switch (inst->form) {
     case 0:
       cpu->A = alu_sub(cpu, cpu->A, *(reg(cpu, inst->args[0].value.byte)));
@@ -398,59 +409,59 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       break;
     }
     if (flag_cy) { // if initial carry bit on, subtract 1
-      flag_cy = cpu_flag(cpu, FLAG_CY);
-      flag_h = cpu_flag(cpu, FLAG_H);
+      flag_cy = flag_get(cpu, F_CY);
+      flag_h = flag_get(cpu, F_H);
 
       cpu->A = alu_sub(cpu, cpu->A, 1);
 
-      flag_cy |= cpu_flag(cpu, FLAG_CY);
-      flag_h |= cpu_flag(cpu, FLAG_H);
+      flag_cy |= flag_get(cpu, F_CY);
+      flag_h |= flag_get(cpu, F_H);
 
-      flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
-      flag_h ? cpu_set_flag(cpu, FLAG_H) : cpu_clear_flag(cpu, FLAG_H);
+      flag_set(cpu, F_CY, flag_cy);
+      flag_set(cpu, F_H, flag_h);
     }
     break;
   case SCF:
     // TODO: test
-    cpu_clear_flag(cpu, FLAG_N);
-    cpu_clear_flag(cpu, FLAG_H);
-    cpu_set_flag(cpu, FLAG_CY);
+    flag_off(cpu, F_N);
+    flag_off(cpu, F_H);
+    flag_on(cpu, F_CY);
     break;
   case INC:
     switch (inst->form) {
     case 0:
-      flag_cy = cpu_flag(cpu, FLAG_CY);
+      flag_cy = flag_get(cpu, F_CY);
       *(reg(cpu, inst->args[0].value.byte)) = alu_add(cpu, *(reg(cpu, inst->args[0].value.byte)), 1, 0);
-      flag_cy == 0 ? cpu_clear_flag(cpu, FLAG_CY) : cpu_set_flag(cpu, FLAG_CY);
+      flag_set(cpu, F_CY, flag_cy);
       break;
     case 1:
       dd_or_ss = inst->args[0].value.byte;
       set_dd_or_ss(cpu, dd_or_ss, get_dd_or_ss(cpu, dd_or_ss) + 1);
       break;
     case 2:
-      flag_cy = cpu_flag(cpu, FLAG_CY);
+      flag_cy = flag_get(cpu, F_CY);
       mem_write(cpu->memory_c, regs_to_word(cpu, rH, rL),
 		alu_add(cpu, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)), 1, 0));
-      flag_cy == 0 ? cpu_clear_flag(cpu, FLAG_CY) : cpu_set_flag(cpu, FLAG_CY);
+      flag_set(cpu, F_CY, flag_cy);
       break;
     }
     break;
   case DEC:
     switch (inst->form) {
     case 0:
-      flag_cy = cpu_flag(cpu, FLAG_CY);
+      flag_cy = flag_get(cpu, F_CY);
       *(reg(cpu, inst->args[0].value.byte)) = alu_sub(cpu, *(reg(cpu, inst->args[0].value.byte)), 1);
-      flag_cy == 0 ? cpu_clear_flag(cpu, FLAG_CY) : cpu_set_flag(cpu, FLAG_CY);
+      flag_set(cpu, F_CY, flag_cy);
       break;
     case 1:
       dd_or_ss = inst->args[0].value.byte;
       set_dd_or_ss(cpu, dd_or_ss, get_dd_or_ss(cpu, dd_or_ss) - 1);
       break;
     case 2:
-      flag_cy = cpu_flag(cpu, FLAG_CY);
+      flag_cy = flag_get(cpu, F_CY);
       mem_write(cpu->memory_c, regs_to_word(cpu, rH, rL),
 		alu_sub(cpu, mem_read(cpu->memory_c, regs_to_word(cpu, rH, rL)), 1));
-      flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+      flag_set(cpu, F_CY, flag_cy);
       break;
     }
     break;
@@ -466,10 +477,10 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       cpu->A &= inst->args[0].value.byte;
       break;
     }
-    cpu->A ? cpu_clear_flag(cpu, FLAG_Z) : cpu_set_flag(cpu, FLAG_Z);
-    cpu_clear_flag(cpu, FLAG_N);
-    cpu_set_flag(cpu, FLAG_H);
-    cpu_clear_flag(cpu, FLAG_CY);
+    cpu->A ? flag_off(cpu, F_Z) : flag_on(cpu, F_Z);
+    flag_off(cpu, F_N);
+    flag_on(cpu, F_H);
+    flag_off(cpu, F_CY);
     break;
   case OR:
     switch (inst->form) {
@@ -483,10 +494,10 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       cpu->A |= inst->args[0].value.byte;
       break;
     }
-    cpu->A ? cpu_clear_flag(cpu, FLAG_Z) : cpu_set_flag(cpu, FLAG_Z); // TODO: create another macro to set/unset based on value?
-    cpu_clear_flag(cpu, FLAG_N);
-    cpu_clear_flag(cpu, FLAG_H);
-    cpu_clear_flag(cpu, FLAG_CY);
+    cpu->A ? flag_off(cpu, F_Z) : flag_on(cpu, F_Z); // TODO: create another macro to set/unset based on value?
+    flag_off(cpu, F_N);
+    flag_off(cpu, F_H);
+    flag_off(cpu, F_CY);
     break;
   case XOR:
     switch (inst->form) {
@@ -500,10 +511,10 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       cpu->A ^= inst->args[0].value.byte;
       break;
     }
-    cpu->A ? cpu_clear_flag(cpu, FLAG_Z) : cpu_set_flag(cpu, FLAG_Z);
-    cpu_clear_flag(cpu, FLAG_N);
-    cpu_clear_flag(cpu, FLAG_H);
-    cpu_clear_flag(cpu, FLAG_CY);
+    cpu->A ? flag_off(cpu, F_Z) : flag_on(cpu, F_Z);
+    flag_off(cpu, F_N);
+    flag_off(cpu, F_H);
+    flag_off(cpu, F_CY);
     break;
   case CP:
     switch (inst->form) {
@@ -520,16 +531,16 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     break;
   case CPL:
     cpu->A = ~cpu->A;
-    cpu_set_flag(cpu, FLAG_N);
-    cpu_set_flag(cpu, FLAG_H);
+    flag_on(cpu, F_N);
+    flag_on(cpu, F_H);
     break;
   case RLCA:
     flag_cy = (cpu->A & 0x80) != 0;
     cpu->A = (cpu->A << 1) | flag_cy;
-    cpu_clear_flag(cpu, FLAG_Z);
-    cpu_clear_flag(cpu, FLAG_N);
-    cpu_clear_flag(cpu, FLAG_H);
-    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_off(cpu, F_Z);
+    flag_off(cpu, F_N);
+    flag_off(cpu, F_H);
+    flag_set(cpu, F_CY, flag_cy);
     break;
   case RLC:
     switch (inst->form) {
@@ -544,18 +555,18 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     flag_cy = (byte & 0x80) != 0;
     byte = (byte << 1) | flag_cy;
     dst_assign(&dst, byte);
-    cpu_clear_flag(cpu, FLAG_N);
-    cpu_clear_flag(cpu, FLAG_H);
-    byte == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
-    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_off(cpu, F_N);
+    flag_off(cpu, F_H);
+    flag_set(cpu, F_Z, !byte);
+    flag_set(cpu, F_CY, flag_cy);
     break;
   case RLA:
     flag_cy = (cpu->A & 0x80) != 0;
-    cpu->A = (cpu->A << 1) | cpu_flag(cpu, FLAG_CY);
-    cpu_clear_flag(cpu, FLAG_Z); // TODO: be able to set/clear multiple flags on a single line?
-    cpu_clear_flag(cpu, FLAG_N);
-    cpu_clear_flag(cpu, FLAG_H);
-    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    cpu->A = (cpu->A << 1) | flag_get(cpu, F_CY);
+    flag_off(cpu, F_Z); // TODO: be able to set/clear multiple flags on a single line?
+    flag_off(cpu, F_N);
+    flag_off(cpu, F_H);
+    flag_set(cpu, F_CY, flag_cy);
     break;
   case RL:
     switch (inst->form) {
@@ -568,29 +579,29 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     }
     byte = dst_val(&dst);
     flag_cy = (byte & 0x80) != 0;
-    byte = (byte << 1) | cpu_flag(cpu, FLAG_CY);
+    byte = (byte << 1) | flag_get(cpu, F_CY);
     dst_assign(&dst, byte);
 
-    cpu_clear_flag(cpu, FLAG_N);
-    cpu_clear_flag(cpu, FLAG_H);
-    byte == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
-    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_off(cpu, F_N);
+    flag_off(cpu, F_H);
+    flag_set(cpu, F_Z, !byte);
+    flag_set(cpu, F_CY, flag_cy);
     break;
   case RRCA:
     flag_cy = cpu->A & 1;
     cpu->A = (cpu->A >> 1) | (flag_cy << 7);
-    cpu_clear_flag(cpu, FLAG_Z);
-    cpu_clear_flag(cpu, FLAG_N);
-    cpu_clear_flag(cpu, FLAG_H);
-    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_off(cpu, F_Z);
+    flag_off(cpu, F_N);
+    flag_off(cpu, F_H);
+    flag_set(cpu, F_CY, flag_cy);
     break;
   case RRA:
     flag_cy = cpu->A & 1;
-    cpu->A = (cpu->A >> 1) | (cpu_flag(cpu, FLAG_CY) << 7);
-    cpu_clear_flag(cpu, FLAG_Z);
-    cpu_clear_flag(cpu, FLAG_N);
-    cpu_clear_flag(cpu, FLAG_H);
-    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    cpu->A = (cpu->A >> 1) | (flag_get(cpu, F_CY) << 7);
+    flag_off(cpu, F_Z);
+    flag_off(cpu, F_N);
+    flag_off(cpu, F_H);
+    flag_set(cpu, F_CY, flag_cy);
     break;
   case RRC:
     switch (inst->form) {
@@ -606,10 +617,10 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     byte = (byte >> 1) | (flag_cy << 7);
     dst_assign(&dst, byte);
 
-    cpu_clear_flag(cpu, FLAG_N);
-    cpu_clear_flag(cpu, FLAG_H);
-    byte == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
-    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_off(cpu, F_N);
+    flag_off(cpu, F_H);
+    flag_set(cpu, F_Z, !byte);
+    flag_set(cpu, F_CY, flag_cy);
     break;
   case RR:
     switch (inst->form) {
@@ -622,13 +633,13 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     }
     byte = dst_val(&dst);
     flag_cy = byte & 1;
-    byte = (byte >> 1) | (cpu_flag(cpu, FLAG_CY) << 7);
+    byte = (byte >> 1) | (flag_get(cpu, F_CY) << 7);
     dst_assign(&dst, byte);
 
-    cpu_clear_flag(cpu, FLAG_N);
-    cpu_clear_flag(cpu, FLAG_H);
-    byte == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
-    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_off(cpu, F_N);
+    flag_off(cpu, F_H);
+    flag_set(cpu, F_Z, !byte);
+    flag_set(cpu, F_CY, flag_cy);
     break;
   case SLA:
     switch (inst->form) {
@@ -644,10 +655,10 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     byte <<= 1;
     dst_assign(&dst, byte);
 
-    cpu_clear_flag(cpu, FLAG_N);
-    cpu_clear_flag(cpu, FLAG_H);
-    byte == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
-    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_off(cpu, F_N);
+    flag_off(cpu, F_H);
+    flag_set(cpu, F_Z, !byte);
+    flag_set(cpu, F_CY, flag_cy);
     break;
   case SRA:
     switch (inst->form) {
@@ -663,10 +674,10 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     byte = (byte >> 1) | (byte & 0x80);
     dst_assign(&dst, byte);
 
-    cpu_clear_flag(cpu, FLAG_N);
-    cpu_clear_flag(cpu, FLAG_H);
-    byte == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
-    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_off(cpu, F_N);
+    flag_off(cpu, F_H);
+    flag_set(cpu, F_Z, !byte);
+    flag_set(cpu, F_CY, flag_cy);
     break;
   case SRL:
     switch (inst->form) {
@@ -682,10 +693,10 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     byte >>= 1;
     dst_assign(&dst, byte);
 
-    cpu_clear_flag(cpu, FLAG_N);
-    cpu_clear_flag(cpu, FLAG_H);
-    byte == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
-    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
+    flag_off(cpu, F_N);
+    flag_off(cpu, F_H);
+    flag_set(cpu, F_Z, !byte);
+    flag_set(cpu, F_CY, flag_cy);
     break;
   case SWAP:
     switch (inst->form) {
@@ -700,10 +711,10 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     byte = (byte << 4) | (byte >> 4);
     dst_assign(&dst, byte);
 
-    cpu_clear_flag(cpu, FLAG_N);
-    cpu_clear_flag(cpu, FLAG_H);
-    cpu_clear_flag(cpu, FLAG_CY);
-    byte == 0 ? cpu_set_flag(cpu, FLAG_Z) : cpu_clear_flag(cpu, FLAG_Z);
+    flag_off(cpu, F_N);
+    flag_off(cpu, F_H);
+    flag_off(cpu, F_CY);
+    flag_set(cpu, F_Z, !byte);
     break;
   case BIT:
     switch (inst->form) {
@@ -715,9 +726,9 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       break;
     }
     byte = dst_val(&dst);
-    (byte & (1 << inst->args[0].value.byte)) ? cpu_clear_flag(cpu, FLAG_Z): cpu_set_flag(cpu, FLAG_Z);
-    cpu_clear_flag(cpu, FLAG_N);
-    cpu_set_flag(cpu, FLAG_H);
+    flag_set(cpu, F_Z, !(byte & (1 << inst->args[0].value.byte)));
+    flag_off(cpu, F_N);
+    flag_on(cpu, F_H);
     break;
   case SET:
     switch (inst->form) {
@@ -803,9 +814,9 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     break;
   case CCF:
     // TODO: test
-    cpu_clear_flag(cpu, FLAG_N);
-    cpu_clear_flag(cpu, FLAG_H);
-    cpu_flag(cpu, FLAG_CY) ? cpu_clear_flag(cpu, FLAG_CY) : cpu_set_flag(cpu, FLAG_CY);
+    flag_off(cpu, F_N);
+    flag_off(cpu, F_H);
+    flag_set(cpu, F_CY, !flag_get(cpu, F_CY));
     break;
   case RET:
     switch (inst->form) {
@@ -943,8 +954,8 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     e = (s8) inst->args[0].value.byte;
     alu_add(cpu, lower_8(cpu->SP), e, 0);
 
-    cpu_clear_flag(cpu, FLAG_Z);
-    cpu_clear_flag(cpu, FLAG_N);
+    flag_off(cpu, F_Z);
+    flag_off(cpu, F_N);
     word_to_regs(cpu, cpu->SP + e, rH, rL);
     break;
   case DAA:
@@ -952,9 +963,9 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     daa_adj = 0;
     lower_nib = cpu->A & 0x0F;
     upper_nib = (cpu->A>>4) & 0x0F;
-    if (!cpu_flag(cpu, FLAG_N)) {
-      if (!cpu_flag(cpu, FLAG_CY)) {
-	if (!cpu_flag(cpu, FLAG_H)) {
+    if (!flag_get(cpu, F_N)) {
+      if (!flag_get(cpu, F_CY)) {
+	if (!flag_get(cpu, F_H)) {
 	  if (upper_nib <= 9 && lower_nib <= 9) {
 	    daa_adj = 0;
 	    flag_cy = 0;
@@ -978,7 +989,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
 	  }
 	}
       } else {
-	if (!cpu_flag(cpu, FLAG_H)) {
+	if (!flag_get(cpu, F_H)) {
 	  if (upper_nib <= 2 && lower_nib <= 9) {
 	    daa_adj = 0x60;
 	    flag_cy = 1;
@@ -994,29 +1005,29 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
 	}
       }
     } else {
-      if (!cpu_flag(cpu, FLAG_CY)) {
-	if (!cpu_flag(cpu, FLAG_H) && upper_nib <=9 && lower_nib <= 9) {
+      if (!flag_get(cpu, F_CY)) {
+	if (!flag_get(cpu, F_H) && upper_nib <=9 && lower_nib <= 9) {
 	  daa_adj = 0;
 	  flag_cy =0;
-	} else if (cpu_flag(cpu, FLAG_H) && upper_nib <= 8 && lower_nib >= 6) {
+	} else if (flag_get(cpu, F_H) && upper_nib <= 8 && lower_nib >= 6) {
 	  daa_adj = 0xFA;
 	  flag_cy = 0;
 	}
       } else {
-	if (!cpu_flag(cpu, FLAG_H) && upper_nib >= 7 && lower_nib <= 9) {
+	if (!flag_get(cpu, F_H) && upper_nib >= 7 && lower_nib <= 9) {
 	  daa_adj = 0xA0;
 	  flag_cy = 1;
-	} else if (cpu_flag(cpu, FLAG_H) && upper_nib >= 6 && lower_nib >= 6) {
+	} else if (flag_get(cpu, F_H) && upper_nib >= 6 && lower_nib >= 6) {
 	  daa_adj = 0x9A;
 	  flag_cy = 1;
 	}
       }
     }
-    flag_n = cpu_flag(cpu, FLAG_N);
+    flag_n = flag_get(cpu, F_N);
     cpu->A = alu_add(cpu, cpu->A, daa_adj, 0);
-    cpu_clear_flag(cpu, FLAG_H);
-    flag_cy ? cpu_set_flag(cpu, FLAG_CY) : cpu_clear_flag(cpu, FLAG_CY);
-    flag_n ? cpu_set_flag(cpu, FLAG_N) : cpu_clear_flag(cpu, FLAG_N);
+    flag_off(cpu, F_H);
+    flag_set(cpu, F_CY, flag_cy);
+    flag_set(cpu, F_N, flag_n);
     break;
   case PUSH:
     word = get_qq(cpu, inst->args[0].value.byte);
