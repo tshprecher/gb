@@ -142,10 +142,9 @@ static void lcd_put_chr(struct lcd_controller *lcd_c,
 static void lcd_refresh_tiles_by_line(struct lcd_controller *lcd_c,
 				      int code_select_addr,
 				      int char_select_addr) {
-  // TODO: priorities, SCY and SCX
+  // TODO: don't pass the literal address, just use the lcd reg bits?
 
-  // TODO: fix
-  //char_select_addr = 0x8000;
+  // TODO: priorities, SCY and SCX
 
   // tiles are each 8x8, but show the full tile once a new one is seen, forgo
   // perfect line refresh accuracy in favor of simplicity.
@@ -161,7 +160,10 @@ static void lcd_refresh_tiles_by_line(struct lcd_controller *lcd_c,
 
     // get character code
     int tile_addr = code_select_addr + tile_idx;
-    u16 chr_code = mem_read(lcd_c->memory_c, tile_addr);
+    u8 chr_code = mem_read(lcd_c->memory_c, tile_addr);
+    if (char_select_addr == 0x8800) {
+      chr_code = (chr_code + 128) % 256;
+    }
     for (int c = 0; c < 16; c++) {
       chr[c] = mem_read(lcd_c->memory_c, char_select_addr + (chr_code<<4) + c);
     }
