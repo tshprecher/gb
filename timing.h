@@ -2,6 +2,7 @@
 #define TIMING_H
 
 #include "cpu.h"
+#include "types.h"
 #include <stdint.h>
 
 enum timing_reg {
@@ -9,10 +10,8 @@ enum timing_reg {
 };
 
 struct timing_controller {
-  // registers
   u8 regs[4];
-  u16 timer_t_cycles;
-  uint32_t div_t_cycles; // for DIV psuedoregister
+  u32 t_cycles;
 
   struct interrupt_controller * interrupt_c;
 };

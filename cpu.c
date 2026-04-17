@@ -747,6 +747,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu->IME = 0;
     break;
   case EI:
+    printf("DEBUG: enabling interrupts with IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
     cpu->IME = 1;
     break;
   case RES:
