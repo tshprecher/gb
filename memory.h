@@ -25,7 +25,7 @@ void rom_write(struct rom *, u16, u8); // used by some memory banked controllers
 struct mem_controller {
   // general memory space mapping
   struct rom *rom; // lower 32K is rom
-  u8 ram[0x8000]; // upper 32K is ram (including VRAM, memory mapped registers)
+  u8 ram[0x10000-0xA000]; // ram, excluding rom and vram
 
   // memory mapped registers routed to controllers
   struct interrupt_controller *interrupt_c;

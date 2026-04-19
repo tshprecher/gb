@@ -167,7 +167,9 @@ char * mmapped_reg_to_str(u16 addr) {
 u8 mem_read(struct mem_controller * mc, u16 addr) {
   if (addr < 0x8000) { // route to rom
     return rom_read(mc->rom, addr);
-  } else if (addr == 0xFF00) { // try memory mapped registers
+  } else if (addr < 0xA000 || (addr >= 0xFE00 && addr < 0xFEA0)) {
+    return lcd_vram_read(mc->lcd_c, addr);
+  } else if (addr == 0xFF00) { // check memory mapped registers
     u8 inputs = 0;
     input_read_P1(mc->input_c, &inputs);
     return inputs;
@@ -192,14 +194,16 @@ u8 mem_read(struct mem_controller * mc, u16 addr) {
     return sound_reg_read(mc->sound_c,  map_index_to_sound_reg[reg_index]);
   }
 
-  // if not in rom or memory mapped address space, go to ram
-  return mc->ram[addr-0x8000];
+  // if not in rom, vram, or memory mapped address space, go to ram
+  return mc->ram[addr-0xA000];
 }
 
 void mem_write(struct mem_controller *mc, u16 addr, u8 value) {
   if (addr < 0x8000) { // route to rom
     rom_write(mc->rom, addr, value);
-  } else if (addr == 0xFF00) { // try memory mapped registers
+  } else if (addr < 0xA000 || (addr >= 0xFE00 && addr < 0xFEA0)) {
+    lcd_vram_write(mc->lcd_c, addr, value);
+  } else if (addr == 0xFF00) { // check memory mapped registers
     input_write_P1(mc->input_c, value);
   } else if (addr >= 0xFF04 && addr <= 0xFF07) {
     int reg_index = addr - 0xFF04;
@@ -210,7 +214,13 @@ void mem_write(struct mem_controller *mc, u16 addr, u8 value) {
     mc->interrupt_c->IE = value;
   } else if (addr >= 0xFF40 && addr <= 0xFF4B) {
     // TODO: handle the permissioning here so no improper writes occur
-    lcd_reg_write(mc->lcd_c, map_index_to_lcd_reg[addr-0xFF40], value);
+    if (addr-0xFF40 == rDMA) {
+      for (int b = 0; b <= 0x9F; b++) {
+	lcd_vram_write(mc->lcd_c, 0xFE00 + b, mem_read(mc, (value<<8)+b));
+      }
+    } else {
+      lcd_reg_write(mc->lcd_c, map_index_to_lcd_reg[addr-0xFF40], value);
+    }
   } else if (addr >= 0xFF10 && addr <= 0xFF26 &&
 	     addr != 0xFF15 && addr != 0xFF1F) {
     int reg_index = addr - 0xFF10;
@@ -223,7 +233,7 @@ void mem_write(struct mem_controller *mc, u16 addr, u8 value) {
     sound_reg_write(mc->sound_c,  map_index_to_sound_reg[reg_index], value);
   } else {
     // if not in rom or memory mapped address space, go to ram
-    mc->ram[addr-0x8000] = value;
+    mc->ram[addr-0xA000] = value;
   }
 }
 
@@ -241,7 +251,7 @@ struct inst* mem_read_inst(struct mem_controller *mc, u16 addr) {
     return &mc->rom->cached_insts[addr];
   } else {
     // TODO: why does this branch exist again? Explain here
-    init_inst_from_bytes(&mc->_inst_in_ram, &mc->ram[addr-0x8000]);
+    init_inst_from_bytes(&mc->_inst_in_ram, &mc->ram[addr-0xA000]);
     return &mc->_inst_in_ram;
   }
 }

@@ -23,13 +23,13 @@ void timing_tick(struct timing_controller *tc) {
     return;
   }
 
-  printf("DEBUG (timing): incremented timer to %d\n", DIV(tc));
+  //  printf("DEBUG (timing): incremented timer to %d\n", DIV(tc));
 
   if (tc->t_cycles % clocks[tc->regs[rTAC] & 3] == 0) {
     tc->regs[rTIMA]++;
-    printf("debug: timing TIMA incremented to %d, freq: %d\n", tc->regs[rTIMA], clocks[tc->regs[rTAC] & 3]);
+    //    printf("debug: timing TIMA incremented to %d, freq: %d\n", tc->regs[rTIMA], clocks[tc->regs[rTAC] & 3]);
     if (tc->regs[rTIMA] == 0x00) { // overflow
-      printf("debug: timing overflow!\n");
+      //      printf("debug: timing overflow!\n");
       tc->regs[rTIMA] = tc->regs[rTMA];
       tc->t_cycles = 0;
       interrupt(tc->interrupt_c, TIMER_OVERFLOW);

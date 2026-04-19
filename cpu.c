@@ -270,12 +270,12 @@ void cpu_tick(struct cpu *cpu) {
   s8 exec_cycle = (cpu->next_inst->cycles << 2);
   cpu->t_cycles_since_last_inst++;
   if (cpu->t_cycles_since_last_inst == exec_cycle) {
-    char buf[128];
+    /*    char buf[128];
     inst_to_str(cpu->next_inst, buf);
-    printf("(DEBUG): [t: %d, f: %d]  0x%04X\t%s\n", cpu->next_inst->type, cpu->next_inst->form, cpu->PC, buf);
+    printf("(DEBUG): [t: %d, f: %d]  0x%04X\t%s\n", cpu->next_inst->type, cpu->next_inst->form, cpu->PC, buf);*/
     int cycles = cpu_exec_instruction(cpu, cpu->next_inst);
-    cpu_to_str(buf, cpu);
-    printf("\t(DEBUG): cpu -> %s\n", buf);
+    /*    cpu_to_str(buf, cpu);
+	  printf("\t(DEBUG): cpu -> %s\n", buf);*/
 
     if (cycles < 0) {
       char buf[16];

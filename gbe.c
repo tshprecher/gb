@@ -97,7 +97,6 @@ int main(int argc, char *argv[])
 
     input_c.interrupt_c = &interrupt_c;
 
-    lcd_c.memory_c = &memory_c;
     lcd_c.interrupt_c = &interrupt_c;
     lcd_c.regs[rLCDC] = 0x83; // TODO: put in an init?
 
