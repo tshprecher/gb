@@ -56,24 +56,13 @@ static inline int is_all_disabled(struct sound_controller *sc) {
   return (sc->regs[rNR52] & 0x80) == 0;
 }
 
-static inline int is_sound_type_enabled(struct sound_controller *sc,
-					u8 sound_type) {
-  return (sc->regs[rNR52] & (1 << (sound_type-1))) > 0;
-}
-
 static inline void disable_sound(struct sound_controller *sc,
 				u8 sound_type) {
   sc->regs[rNR52] &= ~(1 << (sound_type-1));
 }
 
 static inline int is_sound_enabled(struct sound_controller *sc, struct sound *sound) {
-  int is_continuous_or_incomplete = sound->is_continuous ||
-    is_sound_type_enabled(sc, sound->type);
-
-  if (sound->type == 3) {
-    return is_continuous_or_incomplete && ((sc->regs[rNR30] & 0x80) != 0);
-  }
-  return is_continuous_or_incomplete;
+  return (sc->regs[rNR52] & (1 << (sound->type-1))) > 0;
 }
 
 static inline int is_completed(struct sound *sound) {
@@ -81,17 +70,15 @@ static inline int is_completed(struct sound *sound) {
 	  sound->current_sample == sound->duration_samples;
 }
 
-static inline int calculate_frequency(u8 freq_high, u8 freq_low) {
-  int freq_X = ((freq_high & 7) << 8) + freq_low;
-  return (4194304 >> 5) / (2048 - freq_X);
+static inline int freq_to_hz(u8 freq_high, u8 freq_low) {
+  int freq = ((freq_high & 7) << 8) + freq_low;
+  return (4194304 >> 5) / (2048 - freq);
 }
 
-static int generate_square_wave_samples(struct sound *sound, s16 *buf, int len) {
+static int generate_square_wave_samples(struct sound_controller *sc, struct sound *sound, s16 *buf, int len) {
   // each square wave can be split into 8 time slices of high/low
   float samples_per_wave_slice = (float)sound->samples_per_wave / 8;
   int s = 0;
-  int current_sweep = sound->sweep_time_samples ?
-    (sound->current_sample / sound->sweep_time_samples) : 0;
   while (s < len && !is_completed(sound)) {
     u8 is_high = 0;
 
@@ -114,22 +101,31 @@ static int generate_square_wave_samples(struct sound *sound, s16 *buf, int len) 
     }
 
     // handle sweep
-    if (sound->sweep_shift && sound->sweep_time_samples &&
-	((sound->current_sample / sound->sweep_time_samples) > current_sweep))  {
-      current_sweep++;
-      int freq_step = sound->frequency >> sound->sweep_shift;
+    if (sound->sweep_time_samples &&
+	((sound->current_sample / sound->sweep_time_samples) >
+	 ((sound->current_sample-1) / sound->sweep_time_samples)))  { // TODO: can we avoid division?
+      int sweep_time = ((sc->regs[rNR10] >> 4) & 7);
+      sound->sweep_time_samples = (sweep_time ? (ss.rate * sweep_time / 128) : 0);
+
+      int sweep_freq = ((sc->regs[rNR14] & 7) << 8) + sc->regs[rNR13];
+      int freq_step = sweep_freq >> (sc->regs[rNR10] & 7);
+
       if (sound->is_sweep_decreasing) {
-	sound->frequency -= freq_step;
+	sweep_freq += freq_step;
       } else {
-	sound->frequency += freq_step;
+	sweep_freq -= freq_step;
       }
-      if (sound->frequency < (1 << 11)) {
-	// redefine samples per wave from new frequency
-	sound->samples_per_wave = ss.rate / sound->frequency;
-      } else { // if frequency is greater than 11 bits, turn off the sound
-	printf("debug: frequency > 11 bits, turning off sound\n");
-	return -s;
+      if (sweep_freq < 0 || sweep_freq >= 2048) {
+       disable_sound(sc, sound->type);
+       return 0;
       }
+
+      sc->regs[rNR14] &= ~7;
+      sc->regs[rNR14] |= (sweep_freq >> 8) & 7;
+      sc->regs[rNR13] = sweep_freq & 0xFF;
+      sound->samples_per_wave = ss.rate / freq_to_hz(sc->regs[rNR14], sc->regs[rNR13]);
+
+      sweep_freq = ((sc->regs[rNR14] & 7) << 8) + sc->regs[rNR13];
     }
 
     // handle envelope
@@ -163,6 +159,7 @@ static int generate_defined_wave_samples(struct sound *sound, s16 *buf, int len)
       buf[s] = 0;
     }
 
+    buf[s] <<= 5;
     s++;
     sound->current_sample++;
     if (sound->is_continuous && sound->current_sample >= sound->duration_samples) {
@@ -190,9 +187,9 @@ static int generate_white_noise_wave_samples(struct sound *sound, s16 *buf, int 
     buf[s] *= sound->env_value;
 
     // TODO: handle case where sound->frequency < ss.rate?
-    int noise_cycle_before = sound->current_sample * sound->frequency / ss.rate;
+    int noise_cycle_before = sound->current_sample * sound->freq_hz / ss.rate;
     sound->current_sample++;
-    int noise_cycle_after = sound->current_sample * sound->frequency / ss.rate;
+    int noise_cycle_after = sound->current_sample * sound->freq_hz / ss.rate;
 
     while (noise_cycle_before < noise_cycle_after) {
       int bit_0 = sound->lfsr_shift_register & 1;
@@ -213,11 +210,11 @@ static int generate_white_noise_wave_samples(struct sound *sound, s16 *buf, int 
   return s;
 }
 
-static int sound_generate_samples(struct sound *sound, s16 *buf, int len) {
+static int sound_generate_samples(struct sound_controller *sc, struct sound *sound, s16 *buf, int len) {
   switch (sound->type) {
   case 1:
   case 2:
-    return generate_square_wave_samples(sound, buf, len);
+    return generate_square_wave_samples(sc, sound, buf, len);
   case 3:
     return generate_defined_wave_samples(sound, buf, len);
   case 4:
@@ -238,21 +235,18 @@ void sound_tick(struct sound_controller *sc) {
     s16 sbuf[2];
     for (int s = 0; s < 4; s++) {
       struct sound *sound = &sc->sounds[s];
-      if (sound->type < 1 || sound->type > 4) { // invalid type
+      if (sound->type < 1 || sound->type > 4) {
+	//      if (sound->type != 3) {
 	continue;
       }
       if (!is_sound_enabled(sc, sound)) {
 	continue;
       }
       if (is_completed(sound)) {
-	sc->regs[rNR52] &= ~(1<<s); // done, turn sound off
+	disable_sound(sc, sound->type);
 	continue;
       }
-      int generated = sound_generate_samples(sound, sbuf, 2);
-      if (generated < 0) { // turn of the sound
-	disable_sound(sc, sound->type);
-	generated = -generated;
-      }
+      int generated = sound_generate_samples(sc, sound, sbuf, 2); // TODO: do we need to check for sound completion in functions called from here?
       for (int s = 0; s < generated; s++) {
 	if (is_on_stereo_left(sc, sound->type)) {
 	  accumulated_samples[s*2] += sbuf[s]*stereo_vol_left(sc);
@@ -279,11 +273,9 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, u8 value) 
   switch (reg) {
   case rNR14:
     if (initialize_on(sc->regs[rNR14])) {
-      int frequency = calculate_frequency(sc->regs[rNR14], sc->regs[rNR13]);
       int sweep_time = ((sc->regs[rNR10] >> 4) & 7);
       int duration_ms = (64-(sc->regs[rNR11] & 0x3F)) * 1000 / 256;
 
-      // define sound 1 wave
       sc->sounds[0] = (struct sound) {
 	.type = 1,
 	.current_sample = 0, // restart sound on initialize
@@ -292,11 +284,10 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, u8 value) 
 
 	// initial wave parameters
 	.waveform_duty_cycle = (sc->regs[rNR11] >> 6),
-	.frequency = frequency,
-	.samples_per_wave = ss.rate / frequency,
+	.samples_per_wave = ss.rate / freq_to_hz(sc->regs[rNR14], sc->regs[rNR13]),
 
 	// sweep parameters
-	.sweep_time_samples = (sweep_time ? (ss.rate * sweep_time / frequency) : 0),
+	.sweep_time_samples = (sweep_time ? (ss.rate * sweep_time / 128) : 0),
 	.sweep_shift = (sc->regs[rNR10] & 3),
 	.is_sweep_decreasing = ((sc->regs[rNR10] >> 3) & 1),
 
@@ -304,19 +295,13 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, u8 value) 
 	.samples_per_env_step = ss.rate * (sc->regs[rNR12] & 7) / 64,
 	.env_value = sc->regs[rNR12] >> 4,
 	.is_env_decreasing = !(sc->regs[rNR12] & 8),
-
       };
-      if (!sc->sounds[0].is_continuous) {
-	sc->regs[rNR52] |= 1;
-      }
+      sc->regs[rNR52] |= 1;
     }
     break;
   case rNR24:
     if (initialize_on(sc->regs[rNR24])) {
-      int frequency = calculate_frequency(sc->regs[rNR24], sc->regs[rNR23]);
       int duration_ms = (64-(sc->regs[rNR21] & 0x3F)) * 1000 / 256;
-
-      // define sound 2 wave (sound 1 but sweep off)
       sc->sounds[1] = (struct sound) {
 	.type = 2,
 	.current_sample = 0, // restart sound on initialize
@@ -325,8 +310,7 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, u8 value) 
 
 	// initial wave parameters
 	.waveform_duty_cycle = (sc->regs[rNR21] >> 6),
-	.frequency = frequency,
-	.samples_per_wave = ss.rate / frequency,
+	.samples_per_wave = ss.rate / freq_to_hz(sc->regs[rNR24], sc->regs[rNR23]),
 
 	// sweep parameters off
 	.sweep_time_samples = 0,
@@ -338,62 +322,55 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, u8 value) 
 	.env_value = sc->regs[rNR22] >> 4,
 	.is_env_decreasing = !(sc->regs[rNR22] & 8),
       };
-      if (!sc->sounds[1].is_continuous) {
-	sc->regs[rNR52] |= 2;
-      }
+      sc->regs[rNR52] |= 2;
     }
     break;
   case rNR30:
     if (sc->regs[rNR30] & 0x80) {
-      // TODO: restart sound
-      // may have to implement other sound 3 params changing while the waveform is playing
-      //      printf("warn: implement restart sound 3\n");
+      sc->regs[rNR52] |= 4;
+      sc->sounds[2].current_sample = 0;
+    } else {
+      sc->regs[rNR52] &= ~4;
     }
     break;
   case rNR34:
     if (initialize_on(sc->regs[rNR34])) {
-      int frequency = calculate_frequency(sc->regs[rNR34], sc->regs[rNR33]);
       int duration_ms = (256-(sc->regs[rNR31])) * 1000 / 256;
-
-      // define sound 3 wave
-      struct sound sound3 = {
+      struct sound sound = {
 	.type = 3,
 	.current_sample = 0, // restart sound on initialize
-	.frequency = frequency,
 	.duration_samples = ss.rate*duration_ms/1000,
-	.samples_per_wave = ss.rate / frequency,
+	.samples_per_wave = ss.rate / freq_to_hz(sc->regs[rNR34], sc->regs[rNR33]),
 	.is_continuous = (sc->regs[rNR34] & 0x40) == 0,
 	.output_level = (sc->regs[rNR32] >> 5) & 0x3,
       };
 
+      // TODO: sound should own wram instead of reading from memory_c
       for (int step = 0; step < 32; step+=2) {
 	u8 byte = mem_read(sc->memory_c, 0xFF30 + step/2);
-	sound3.waveform[step] = (byte >> 4) & 0x0F;
-	sound3.waveform[step+1] = byte & 0x0F;
+	sound.waveform[step] = (byte >> 4) & 0x0F;
+	sound.waveform[step+1] = byte & 0x0F;
       }
-
-      sc->sounds[2] = sound3;
-      if (!sc->sounds[2].is_continuous) {
-	sc->regs[rNR52] |= 4;
-      }
+      sc->sounds[2] = sound;
+      sc->regs[rNR52] |= 4;
     }
     break;
   case rNR44:
     if (initialize_on(sc->regs[rNR44])) {
       int duration_ms = (64-(sc->regs[rNR41] & 0x3F)) * 1000 / 256;
-      int frequency = (4194304 >> 3);
+      int freq_hz = (4194304 >> 3);
       int div_factor = sc->regs[rNR43] & 7;
       if (div_factor) {
-	frequency /= div_factor;
+	freq_hz /= div_factor;
       } else {
-	frequency *= 2;
+	freq_hz *= 2;
       }
 
       int shift_factor = (sc->regs[rNR43] >> 4) & 15;
       if (shift_factor > 14) {
 	printf("warn: invalid sound 4 shift factor: %d\n", shift_factor);
       } else {
-	frequency >>= (shift_factor+1);
+	freq_hz >>= (shift_factor+1);
       }
 
       int is_long_mode = !(sc->regs[rNR43] & 8);
@@ -401,7 +378,7 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, u8 value) 
       sc->sounds[3] = (struct sound) {
 	.type = 4,
 	.current_sample = 0,
-	.frequency = frequency,
+	.freq_hz = freq_hz,
 	.duration_samples = ss.rate*duration_ms/1000,
 	.is_continuous = (sc->regs[rNR44] & 0x40) == 0,
 	.lfsr_shift_register = is_long_mode ? 0x7FFF : 0x7F,
@@ -412,9 +389,7 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, u8 value) 
 
 	.is_long_mode = is_long_mode
       };
-      if (!sc->sounds[3].is_continuous) {
-	sc->regs[rNR52] |= 8;
-      }
+      sc->regs[rNR52] |= 8;
     }
     break;
   default:

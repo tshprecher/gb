@@ -217,7 +217,7 @@ static void load_wdw_line(struct lcd_controller *lcd_c) {
 
 
 static void load_oam(struct lcd_controller *lcd_c) {
-  printf("debug (display): inside load_oam\n");
+  //  printf("debug (display): inside load_oam\n");
   // TODO: skip if objects are unchanged
   lcd_c->oam[0] = 0;
 

@@ -16,30 +16,30 @@ struct sound {
   u8 type; // [1,2,3,4]
 
   // common fields
-  int frequency;
   int current_sample;
   int duration_samples;
   int samples_per_wave;
-  u8 is_continuous; // TODO: combine is_continuous with duration_samples?
+  u8 is_continuous;
 
   // for sounds 1, 2
   s8 waveform_duty_cycle;
 
   // for sound 1
-  s8 sweep_time_samples;
-  s8 sweep_shift;
-  s8 is_sweep_decreasing;
+  u16 sweep_time_samples;
+  u8 sweep_shift;
+  u8 is_sweep_decreasing;
 
   // for sounds 3, 4
   u8 env_value;
   int samples_per_env_step;
-  s8 is_env_decreasing;
+  u8 is_env_decreasing;
 
   // for sound 3
   u8 waveform[32];
   u8 output_level; // [0,1,2,3]
 
   // for sound 4
+  int freq_hz;
   int is_long_mode; // long: 15 bit shift register, short: 7 bit
   int lfsr_shift_register;
 };
