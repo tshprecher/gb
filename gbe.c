@@ -112,8 +112,6 @@ int main(int argc, char *argv[])
 
     timing_c.interrupt_c = &interrupt_c;
 
-    sound_c.memory_c = &memory_c;
-
     gb.cpu = &cpu;
     gb.memory_c = &memory_c;
     gb.lcd_c = &lcd_c;

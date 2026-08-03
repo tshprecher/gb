@@ -345,9 +345,8 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, u8 value) 
 	.output_level = (sc->regs[rNR32] >> 5) & 0x3,
       };
 
-      // TODO: sound should own wram instead of reading from memory_c
       for (int step = 0; step < 32; step+=2) {
-	u8 byte = mem_read(sc->memory_c, 0xFF30 + step/2);
+	u8 byte = sound_wram_read(sc, 0xFF30 + step/2);
 	sound.waveform[step] = (byte >> 4) & 0x0F;
 	sound.waveform[step+1] = byte & 0x0F;
       }
@@ -397,6 +396,14 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, u8 value) 
   };
 }
 
-u8 sound_reg_read(struct sound_controller* sc, enum sound_reg reg) {
+inline u8 sound_wram_read(struct sound_controller* sc, u16 addr) {
+  return sc->wram[addr-0xFF30];
+}
+
+inline void sound_wram_write(struct sound_controller* sc, u16 addr, u8 value) {
+  sc->wram[addr-0xFF30] = value;
+}
+
+inline u8 sound_reg_read(struct sound_controller* sc, enum sound_reg reg) {
   return sc->regs[reg];
 }

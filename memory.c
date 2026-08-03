@@ -192,6 +192,8 @@ u8 mem_read(struct mem_controller * mc, u16 addr) {
       reg_index--;
     }
     return sound_reg_read(mc->sound_c,  map_index_to_sound_reg[reg_index]);
+  } else if (addr >= 0xFF30 && addr <= 0xFF3F) {
+    return sound_wram_read(mc->sound_c, addr);
   }
 
   // if not in rom, vram, or memory mapped address space, go to ram
@@ -231,6 +233,8 @@ void mem_write(struct mem_controller *mc, u16 addr, u8 value) {
       reg_index--;
     }
     sound_reg_write(mc->sound_c,  map_index_to_sound_reg[reg_index], value);
+  } else if (addr >= 0xFF30 && addr <= 0xFF3F) {
+    sound_wram_write(mc->sound_c, addr, value);
   } else {
     // if not in rom or memory mapped address space, go to ram
     mc->ram[addr-0xA000] = value;

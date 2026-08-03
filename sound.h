@@ -48,7 +48,8 @@ struct sound_controller {
   // registers
   u8 regs[21];
 
-  struct mem_controller *memory_c;
+  // waveform ram for use in sound type 3
+  u8 wram[16];
 
   // at most four types of sounds playing concurrently
   struct sound sounds[4];
@@ -58,6 +59,8 @@ struct sound_controller {
 void init_sound();
 void sound_tick(struct sound_controller*);
 
+u8 sound_wram_read(struct sound_controller*, u16);
+void sound_wram_write(struct sound_controller*, u16, u8);
 u8 sound_reg_read(struct sound_controller*, enum sound_reg);
 void sound_reg_write(struct sound_controller*, enum sound_reg, u8);
 
