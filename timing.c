@@ -47,7 +47,6 @@ u8 timing_reg_read(struct timing_controller* tc, enum timing_reg reg) {
 }
 
 void timing_reg_write(struct timing_controller* tc, enum timing_reg reg, u8 value) {
-  //printf("debug (timing): writing 0x%02X to timing reg %d\n", value, reg);
   tc->regs[reg] = value;
   switch (reg) {
   case rDIV:
@@ -60,6 +59,8 @@ void timing_reg_write(struct timing_controller* tc, enum timing_reg reg, u8 valu
       tc->regs[rTIMA] = tc->regs[rTMA];
       tc->t_cycles = 0;
     }
+    break;
+  default:
     break;
   }
 }

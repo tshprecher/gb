@@ -320,7 +320,7 @@ inline void dst_assign(struct dst *dst, s8 byte) {
 int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   u16 hl, word;
   u8 flag_cy=0, flag_h=0, flag_n=0, flag_z=0, byte,
-    lower, upper, dd_or_ss, daa_adj, lower_nib, upper_nib;
+    dd_or_ss, daa_adj, lower_nib, upper_nib;
   struct dst dst = {0};
   s8 e;
   switch (inst->type) {

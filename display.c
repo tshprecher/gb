@@ -66,7 +66,7 @@ void init_lcd() {
       fb = malloc(SCALED_SCREEN_X * SCALED_SCREEN_Y * 4);
 
       image = XCreateImage(display, DefaultVisual(display, screen), DefaultDepth(display, screen),
-			   ZPixmap, 0, fb, SCALED_SCREEN_X, SCALED_SCREEN_Y, 32, 0);
+			   ZPixmap, 0, (char*)fb, SCALED_SCREEN_X, SCALED_SCREEN_Y, 32, 0);
 
 
       // create graphics context
