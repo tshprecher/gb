@@ -5,9 +5,6 @@
 #include "cpu.h"
 #include "memory.h"
 
-#define is_bit_set(v, b) ((v >> b) & 1)
-#define is_bit_eq(v1, v2, b) ((v1 >> b) == (v2 >> b))
-
 enum lcd_reg {
   rLCDC = 0, rSTAT, rSCY, rSCX, rLY, rLYC, rDMA,
   rBGP, rOBP0, rOBP1, rWY, rWX

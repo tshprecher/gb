@@ -243,39 +243,39 @@ static int _match_bit_pattern(struct inst* inst,  char *bytes, char *pattern)
 	  pattern += arglen+1;
 
 	  if (strcmp(arg, "r") == 0) {
- 	    u8 byte = (0b11100000 & si) >> 5;
+ 	    u8 byte = (si >> 5) & 7;
 	    if (byte == 6) // used in another instr to indicate (HL)
 	      return 0;
 	    struct inst_arg arg = { .type = R, .value.byte = byte };
 	    inst_add_arg(inst, arg);
 	    shift += 3;
 	  } else  if (strcmp(arg, "b") == 0) {
-	    u8 byte = (0b11100000 & si) >> 5;
+	    u8 byte = (si >> 5) & 7;
 	    struct inst_arg arg = { .type = B, .value.byte = byte };
 	    inst_add_arg(inst, arg);
 	    shift += 3;
 	  } else  if (strcmp(arg, "t") == 0) {
-	    u8 byte = (0b11100000 & si) >> 5;
+	    u8 byte = (si >> 5) & 7;
 	    struct inst_arg arg = { .type = T, .value.byte = byte };
 	    inst_add_arg(inst, arg);
 	    shift += 3;
 	  } else if (strcmp(arg, "cc") == 0) {
-	    u8 byte = (0b11000000 & si) >> 6;
+	    u8 byte = (si >> 6) & 3;
 	    struct inst_arg arg = { .type = CC, .value.byte = byte };
 	    inst_add_arg(inst, arg);
 	    shift += 2;
 	  } else if (strcmp(arg, "dd") == 0) {
-	    u8 byte = (0b11000000 & si) >> 6;
+	    u8 byte = (si >> 6) & 3;
 	    struct inst_arg arg = { .type = DD, .value.byte = byte };
 	    inst_add_arg(inst, arg);
 	    shift += 2;
 	  } else if (strcmp(arg, "qq") == 0) {
-	    u8 byte = (0b11000000 & si) >> 6;
+	    u8 byte = (si >> 6) & 3;
 	    struct inst_arg arg = { .type = QQ, .value.byte = byte };
 	    inst_add_arg(inst, arg);
 	    shift += 2;
 	  } else if (strcmp(arg, "ss") == 0) {
-	    u8 byte = (0b11000000 & si) >> 6;
+	    u8 byte = (si >> 6) & 3;
 	    struct inst_arg arg = { .type = SS, .value.byte = byte };
 	    inst_add_arg(inst, arg);
 	    shift += 2;
@@ -479,7 +479,7 @@ static int _match_txt_pattern(struct inst* inst, char *asmline, char *pattern) {
 
 	arg.type = NN;
 	arg.value.word[0] = parsed_hex & 0xFF;
-	arg.value.word[1] = (parsed_hex & 0xFF00) >> 8;
+	arg.value.word[1] = (parsed_hex >> 8) & 0xFF;
 
 	inst_add_arg(inst, arg);
 	a+=6;

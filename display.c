@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <X11/Xlib.h>
+#include "macros.h"
 #include "types.h"
 #include "display.h"
 
@@ -79,42 +80,40 @@ void init_lcd() {
 // TODO: do the modes properly
 
 static inline void set_mode(struct lcd_controller *lcd_c,  enum lcd_mode m) {
-  //  printf("debug (display) STAT before: 0x%02X\n", lcd_c->regs[rSTAT]);
   lcd_c->regs[rSTAT] &= 0xFC;
   lcd_c->regs[rSTAT] |= m;
-  //  printf("debug (display) STAT after: 0x%02X, mode set: %d\n", lcd_c->regs[rSTAT], m);
 }
 
 static inline int is_bg_on(struct lcd_controller *lcd_c) {
-  return is_bit_set(lcd_c->regs[rLCDC], 0);
+  return b_is_on(lcd_c->regs[rLCDC], 0);
 }
 
 static inline int is_obj_on(struct lcd_controller *lcd_c) {
-  return is_bit_set(lcd_c->regs[rLCDC], 1);
+  return b_is_on(lcd_c->regs[rLCDC], 1);
 }
 
 static inline int is_obj_8x8(struct lcd_controller *lcd_c) {
-  return !is_bit_set(lcd_c->regs[rLCDC], 2);
+  return !b_is_on(lcd_c->regs[rLCDC], 2);
 }
 
 static inline int is_bg_code_area_upper(struct lcd_controller *lcd_c) {
-  return is_bit_set(lcd_c->regs[rLCDC], 3);
+  return b_is_on(lcd_c->regs[rLCDC], 3);
 }
 
 static inline int is_char_area_upper(struct lcd_controller *lcd_c) {
-  return !is_bit_set(lcd_c->regs[rLCDC], 4);
+  return !b_is_on(lcd_c->regs[rLCDC], 4);
 }
 
 static inline int is_wdw_on(struct lcd_controller *lcd_c) {
-  return is_bit_set(lcd_c->regs[rLCDC], 5);
+  return b_is_on(lcd_c->regs[rLCDC], 5);
 }
 
 static inline int is_wdw_code_area_upper(struct lcd_controller *lcd_c) {
-  return is_bit_set(lcd_c->regs[rLCDC], 6);
+  return b_is_on(lcd_c->regs[rLCDC], 6);
 }
 
 static inline int is_on(struct lcd_controller *lcd_c) {
-  return is_bit_set(lcd_c->regs[rLCDC], 7);
+  return b_is_on(lcd_c->regs[rLCDC], 7);
 }
 
 static inline void clear_screen(struct lcd_controller *lcd_c) {
@@ -135,7 +134,7 @@ static void paint(struct lcd_controller *lcd_c) {
 static inline u16 get_chr_line(struct lcd_controller *lcd_c, u16 chr_addr, u8 y, u8 attributes) {
   int len = is_obj_8x8(lcd_c) ? 8 : 16;
   y &= (len-1);
-  if (is_bit_set(attributes, 6)) { // flip y
+  if (b_is_on(attributes, 6)) { // flip y
     y = len-1-y;
   }
   u16 chr_line = lcd_c->vram[chr_addr - 0x8000 + y*2] << 8;
@@ -145,7 +144,7 @@ static inline u16 get_chr_line(struct lcd_controller *lcd_c, u16 chr_addr, u8 y,
 
 static inline u8 get_chr_line_color_idx(u16 chr_line, u8 x, u8 attributes) {
   x &= 7;
-  if (!is_bit_set(attributes, 5)) {
+  if (!b_is_on(attributes, 5)) {
     x = 7-x;
   }
 
@@ -163,7 +162,6 @@ static void load_tiles_by_line(struct lcd_controller *lcd_c,
 			       u8 line,
 			       int is_upper_code_area,
 			       int is_upper_chr_area) {
-  //  printf("debug (display): load_tiles_by_line line -> %d\n", line);
   int code_select_addr = is_upper_code_area ? 0x9C00 : 0x9800;
   int char_select_addr = is_upper_chr_area ? 0x8800 : 0x8000;
 
@@ -172,12 +170,7 @@ static void load_tiles_by_line(struct lcd_controller *lcd_c,
     int tile_idx = (line/8*32) + x/8;
     int tile_addr = code_select_addr + tile_idx;
     u8 chr_code = lcd_c->vram[tile_addr-0x8000];
-    /*    printf("debug (display): tile index -> %d, char_sel_addr -> 0x%04X, line -> %d, x -> %d, chr_code -> %d\n",
-	   tile_idx,
-	   char_select_addr,
-	   line,
-	   x,
-	   chr_code);*/
+
     if (char_select_addr == 0x8800) { // NOTE: not documented in official dev manual
       chr_code = (chr_code + 128) % 256;
     }
@@ -196,7 +189,6 @@ static void load_tiles_by_line(struct lcd_controller *lcd_c,
 static void load_bg_line(struct lcd_controller *lcd_c) {
   // TODO: when off set the background to the proper null color, not always black
   if (is_bg_on(lcd_c)) {
-    //    printf("debug(display): load_bg_line\n");
     load_tiles_by_line(lcd_c,
 		       lcd_c->bg,
 		       (lcd_c->regs[rLY] + lcd_c->regs[rSCY]) % 256,
@@ -217,7 +209,6 @@ static void load_wdw_line(struct lcd_controller *lcd_c) {
 
 
 static void load_oam(struct lcd_controller *lcd_c) {
-  //  printf("debug (display): inside load_oam\n");
   // TODO: skip if objects are unchanged
   lcd_c->oam[0] = 0;
 
@@ -284,7 +275,6 @@ static void load_oam(struct lcd_controller *lcd_c) {
     obj[2] = oaddr[i+2];
     obj[3] = oaddr[i+3];
     filled_by_col[f]++;
-    //printf("debug (display): loaded object at y -> %d, x -> %d\n", y, x);
   }
 }
 
@@ -299,11 +289,9 @@ static void scan_line(struct lcd_controller *lcd_c) {
   int scy = lcd_c->regs[rSCY];
   int wx = lcd_c->regs[rWX];
   int wy = lcd_c->regs[rWY];
-  int fy = y; // TODO: not necessary variable
 
   u8 oam_pixels[160] = {0};
   if (is_obj_on(lcd_c)) { // compute oam line pixels
-    //printf("debug (display): obj on\n");
     int height = is_obj_8x8(lcd_c) ? 8 : 16;
     u8 *col = &lcd_c->oam[1];
     for (int c = 0; c < lcd_c->oam[0]; c++) {
@@ -313,19 +301,18 @@ static void scan_line(struct lcd_controller *lcd_c) {
 	  continue;
 
 	u8 attr = obj[3];
-	u8 palette = lcd_c->regs[is_bit_set(attr, 4) ? rOBP1 : rOBP0];
+	u8 palette = lcd_c->regs[b_is_on(attr, 4) ? rOBP1 : rOBP0];
 	u16 chr_line = get_chr_line(lcd_c, 0x8000 + (obj[2] * 16), y-(obj[1]-16) , attr);
 	for (int p = 0; p < 8; p++) {
 	  if (col[0]-8+p >= 0 && col[0]-8+p < 160) {
 	    int color_idx = get_chr_line_color_idx(chr_line, p, attr);
 	    if (!(oam_pixels[col[0]-8+p] & 0x80) ||
 		(!(oam_pixels[col[0]-8+p] & (0x3<<4)) && color_idx)) {
-	      //printf("debug (display): found object to display, attr -> 0x%02X, color_idx -> %d\n", attr, color_idx);
 
 	      int pixel = get_color_id_from_palette(color_idx, palette);
-	      pixel |= 0x80; // upper bit indicates value is set
-	      if (is_bit_set(attr, 7))
-		pixel |= 0x40;
+	      b_set_on(pixel, 7); // upper bit indicates value is set
+	      if (b_is_on(attr, 7))
+		b_set_on(pixel, 6);
 	      pixel |= color_idx << 4;
 
 	      oam_pixels[col[0]-8+p] = pixel;
@@ -338,8 +325,6 @@ static void scan_line(struct lcd_controller *lcd_c) {
     }
   }
 
-  //printf("debug (display): scy -> %d, scx -> %d, fy -> %d\n", scy, scx, fy);
-
   for (int x = scx; x < SCREEN_X + scx; x++) {
     int color_idx;
     int color_id;
@@ -349,24 +334,23 @@ static void scan_line(struct lcd_controller *lcd_c) {
     if (is_wdw_on(lcd_c) &&
 	y >= wy &&
 	fx >= wx-7) {
-      color_id = lcd_c->wdw[fy-wy][fx-(wx-7)];
+      color_id = lcd_c->wdw[y-wy][fx-(wx-7)];
     } else {
-      color_id = lcd_c->bg[(fy+scy)%256][x%256];
+      color_id = lcd_c->bg[(y+scy)%256][x%256];
     }
     color_idx = color_id >> 6;
     color_id &= 0x3;
 
     if (is_obj_on(lcd_c) &&
-	(oam_pixels[fx] & 0x80) &&
+	b_is_on(oam_pixels[fx], 7) &&
 	(oam_pixels[fx] & (0x3 << 4)) &&
-	!((oam_pixels[fx] & 0x40) && color_idx)) {
-      //printf("debug (display): writing object pixel\n");
+	!(b_is_on(oam_pixels[fx], 6) && color_idx)) {
       color_id = oam_pixels[fx] & 0x3;
     }
 
     // write pixel
     for (int dx = 0, sx = fx * PIXEL_SCALAR; dx < PIXEL_SCALAR; dx++) {
-      for (int dy = 0, sy = fy * PIXEL_SCALAR; dy < PIXEL_SCALAR; dy++) {
+      for (int dy = 0, sy = y * PIXEL_SCALAR; dy < PIXEL_SCALAR; dy++) {
 	fb[sy+dy][sx+dx] = colors[color_id];
       }
     }
@@ -395,7 +379,7 @@ void lcd_tick(struct lcd_controller *lcd_c) {
   if (lcd_c->regs[rLY] < 144){
     if (lcd_c->t_cycles_since_last_line_refresh == 0) {
       set_mode(lcd_c, MODE_OAM_IN_USE);
-      if (lcd_c->regs[rSTAT] & (1 << 5))
+      if (b_is_on(lcd_c->regs[rSTAT], 5))
 	interrupt(lcd_c->interrupt_c, LCDC_STAT);
       load_oam(lcd_c);
     } else if (lcd_c->t_cycles_since_last_line_refresh == 80) {
@@ -403,7 +387,7 @@ void lcd_tick(struct lcd_controller *lcd_c) {
       scan_line(lcd_c);
     } else if (lcd_c->t_cycles_since_last_line_refresh == 252) {
       set_mode(lcd_c, MODE_HBLANK);
-      if (lcd_c->regs[rSTAT] & (1 << 3))
+      if (b_is_on(lcd_c->regs[rSTAT], 3))
 	interrupt(lcd_c->interrupt_c, LCDC_STAT);
     }
   }
@@ -411,12 +395,12 @@ void lcd_tick(struct lcd_controller *lcd_c) {
   if (lcd_c->t_cycles_since_last_line_refresh == 457) {
     lcd_c->t_cycles_since_last_line_refresh = 0;
     lcd_c->regs[rLY]++;
-    if ((lcd_c->regs[rSTAT] & (1 << 6)) && lcd_c->regs[rLY] == lcd_c->regs[rLYC])
+    if (b_is_on(lcd_c->regs[rSTAT], 6) && lcd_c->regs[rLY] == lcd_c->regs[rLYC])
       interrupt(lcd_c->interrupt_c, LCDC_STAT);
     if (lcd_c->regs[rLY] == 144) {
       paint(lcd_c);
       set_mode(lcd_c, MODE_VBLANK);
-      if (lcd_c->regs[rSTAT] & (1 << 4))
+      if (b_is_on(lcd_c->regs[rSTAT], 4))
       	interrupt(lcd_c->interrupt_c, LCDC_STAT);
       interrupt(lcd_c->interrupt_c, VBLANK);
     } else if (lcd_c->regs[rLY] > 153) {
@@ -427,7 +411,6 @@ void lcd_tick(struct lcd_controller *lcd_c) {
 
 u8 inline lcd_vram_read(struct lcd_controller* lcd_c, u16 addr) {
   int mode = lcd_c->regs[rSTAT] & 3;
-  //  printf("debug (display): vram read mode -> %d\n", mode);
   if (addr < 0xA000) {
     return mode < 3 ? lcd_c->vram[addr-0x8000] : 0;
   } else {
@@ -437,7 +420,6 @@ u8 inline lcd_vram_read(struct lcd_controller* lcd_c, u16 addr) {
 
 void inline lcd_vram_write(struct lcd_controller* lcd_c, u16 addr, u8 value) {
   int mode = lcd_c->regs[rSTAT] & 3;
-  //  printf("debug (display): vram write mode -> %d\n", mode);
   if (addr < 0xA000 && mode < 3) {
     lcd_c->vram[addr-0x8000] = value;
   } else if (addr >= 0xA000 && mode < 2) {
@@ -454,21 +436,17 @@ void lcd_reg_write(struct lcd_controller* lcd_c, enum lcd_reg reg, u8 value) {
   switch (reg) {
   case rLCDC:
     lcd_c->regs[reg] = value;
-    if (!is_bit_eq(old_val, value, 7)) { // TODO: put this diff logic in macros
-      if (!is_bit_set(value, 7)) {
-	lcd_c->regs[rLY] = 0;
-	lcd_c->t_cycles_since_last_line_refresh = 0;
-	clear_screen(lcd_c);
-	set_mode(lcd_c, MODE_HBLANK);
-      }
+    if (!b_is_on(value, 7)) { // turned off
+      lcd_c->regs[rLY] = 0;
+      lcd_c->t_cycles_since_last_line_refresh = 0;
+      clear_screen(lcd_c);
+      set_mode(lcd_c, MODE_HBLANK);
     }
     break;
   case rSTAT:
-    //    printf("debug (display): tried to write 0x%02X to rSTAT\n", value);
     old_val &= 0x3;
     value &= 0xFC;
     lcd_c->regs[rSTAT] = old_val | value;
-    //printf("debug (display): completed write to rSTAT: %d\n", lcd_c->regs[rSTAT]);
     break;
   default:
     lcd_c->regs[reg] = value;

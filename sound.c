@@ -2,6 +2,7 @@
 #include <pulse/error.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "macros.h"
 #include "types.h"
 #include "sound.h"
 
@@ -31,7 +32,7 @@ void init_sound() {
 }
 
 static inline int initialize_on(u8 r) {
-  return (r & 0x80) > 0;
+  return b_is_on(r, 7);
 }
 
 static inline int stereo_vol_left(struct sound_controller *sc) {
@@ -44,25 +45,25 @@ static inline int stereo_vol_right(struct sound_controller *sc) {
 
 static inline int is_on_stereo_left(struct sound_controller *sc,
 				    u8 sound_type) {
-  return sc->regs[rNR51] & (1 << (sound_type-1));
+  return b_is_on(sc->regs[rNR51], (sound_type-1));
 }
 
 static inline int is_on_stereo_right(struct sound_controller *sc,
 				     u8 sound_type) {
-  return (sc->regs[rNR51] & (1 << (sound_type+3)));
+  return b_is_on(sc->regs[rNR51], (sound_type+3));
 }
 
 static inline int is_all_disabled(struct sound_controller *sc) {
-  return (sc->regs[rNR52] & 0x80) == 0;
+  return b_is_off(sc->regs[rNR52], 7);
 }
 
 static inline void disable_sound(struct sound_controller *sc,
 				u8 sound_type) {
-  sc->regs[rNR52] &= ~(1 << (sound_type-1));
+  b_set_off(sc->regs[rNR52], (sound_type-1));
 }
 
 static inline int is_sound_enabled(struct sound_controller *sc, struct sound *sound) {
-  return (sc->regs[rNR52] & (1 << (sound->type-1))) > 0;
+  return b_is_on(sc->regs[rNR52], (sound->type-1));
 }
 
 static inline int is_completed(struct sound *sound) {
@@ -172,7 +173,7 @@ static int generate_defined_wave_samples(struct sound *sound, s16 *buf, int len)
 static int generate_white_noise_wave_samples(struct sound *sound, s16 *buf, int len) {
   int s = 0;
   while (s < len && !is_completed(sound)) {
-    int is_high = sound->lfsr_shift_register & 1;
+    int is_high = b_is_on(sound->lfsr_shift_register, 0);
 
     // handle envelope
     if (sound->current_sample && sound->samples_per_env_step &&
@@ -192,8 +193,8 @@ static int generate_white_noise_wave_samples(struct sound *sound, s16 *buf, int 
     int noise_cycle_after = sound->current_sample * sound->freq_hz / ss.rate;
 
     while (noise_cycle_before < noise_cycle_after) {
-      int bit_0 = sound->lfsr_shift_register & 1;
-      int bit_1 = (sound->lfsr_shift_register >> 1) & 1;
+      int bit_0 = b_is_on(sound->lfsr_shift_register, 0);
+      int bit_1 = b_is_on(sound->lfsr_shift_register, 1);
       sound->lfsr_shift_register >>= 1;
 
       int xor_result = bit_0 ^ bit_1;
@@ -280,7 +281,7 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, u8 value) 
 	.type = 1,
 	.current_sample = 0, // restart sound on initialize
 	.duration_samples = ss.rate*duration_ms/1000,
-	.is_continuous = (sc->regs[rNR14] & 0x40) == 0,
+	.is_continuous = b_is_off(sc->regs[rNR14], 6),
 
 	// initial wave parameters
 	.waveform_duty_cycle = (sc->regs[rNR11] >> 6),
@@ -289,14 +290,14 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, u8 value) 
 	// sweep parameters
 	.sweep_time_samples = (sweep_time ? (ss.rate * sweep_time / 128) : 0),
 	.sweep_shift = (sc->regs[rNR10] & 3),
-	.is_sweep_decreasing = ((sc->regs[rNR10] >> 3) & 1),
+	.is_sweep_decreasing = b_is_on(sc->regs[rNR10], 3),
 
 	// envelope parameters
 	.samples_per_env_step = ss.rate * (sc->regs[rNR12] & 7) / 64,
 	.env_value = sc->regs[rNR12] >> 4,
-	.is_env_decreasing = !(sc->regs[rNR12] & 8),
+	.is_env_decreasing = b_is_off(sc->regs[rNR12], 3),
       };
-      sc->regs[rNR52] |= 1;
+      b_set_on(sc->regs[rNR52], 0);
     }
     break;
   case rNR24:
@@ -306,7 +307,7 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, u8 value) 
 	.type = 2,
 	.current_sample = 0, // restart sound on initialize
 	.duration_samples = ss.rate*duration_ms/1000,
-	.is_continuous = (sc->regs[rNR24] & 0x40) == 0,
+	.is_continuous = b_is_off(sc->regs[rNR24], 6),
 
 	// initial wave parameters
 	.waveform_duty_cycle = (sc->regs[rNR21] >> 6),
@@ -320,17 +321,17 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, u8 value) 
 	// envelope parameters
 	.samples_per_env_step = ss.rate * (sc->regs[rNR22] & 7) / 64,
 	.env_value = sc->regs[rNR22] >> 4,
-	.is_env_decreasing = !(sc->regs[rNR22] & 8),
+	.is_env_decreasing = b_is_off(sc->regs[rNR22], 3),
       };
-      sc->regs[rNR52] |= 2;
+      b_set_on(sc->regs[rNR52], 1);
     }
     break;
   case rNR30:
-    if (sc->regs[rNR30] & 0x80) {
-      sc->regs[rNR52] |= 4;
+    if (initialize_on(sc->regs[rNR30])) {
+      b_set_on(sc->regs[rNR52], 2);
       sc->sounds[2].current_sample = 0;
     } else {
-      sc->regs[rNR52] &= ~4;
+      b_set_off(sc->regs[rNR52], 2);
     }
     break;
   case rNR34:
@@ -341,7 +342,7 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, u8 value) 
 	.current_sample = 0, // restart sound on initialize
 	.duration_samples = ss.rate*duration_ms/1000,
 	.samples_per_wave = ss.rate / freq_to_hz(sc->regs[rNR34], sc->regs[rNR33]),
-	.is_continuous = (sc->regs[rNR34] & 0x40) == 0,
+	.is_continuous = b_is_off(sc->regs[rNR34], 6),
 	.output_level = (sc->regs[rNR32] >> 5) & 0x3,
       };
 
@@ -351,7 +352,7 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, u8 value) 
 	sound.waveform[step+1] = byte & 0x0F;
       }
       sc->sounds[2] = sound;
-      sc->regs[rNR52] |= 4;
+      b_set_on(sc->regs[rNR52], 2);
     }
     break;
   case rNR44:
@@ -372,23 +373,23 @@ void sound_reg_write(struct sound_controller *sc, enum sound_reg reg, u8 value) 
 	freq_hz >>= (shift_factor+1);
       }
 
-      int is_long_mode = !(sc->regs[rNR43] & 8);
+      int is_long_mode = b_is_off(sc->regs[rNR43], 3);
 
       sc->sounds[3] = (struct sound) {
 	.type = 4,
 	.current_sample = 0,
 	.freq_hz = freq_hz,
 	.duration_samples = ss.rate*duration_ms/1000,
-	.is_continuous = (sc->regs[rNR44] & 0x40) == 0,
+	.is_continuous = b_is_off(sc->regs[rNR44], 6),
 	.lfsr_shift_register = is_long_mode ? 0x7FFF : 0x7F,
 
 	.samples_per_env_step = ss.rate * (sc->regs[rNR42] & 7) / 64,
 	.env_value = sc->regs[rNR42] >> 4,
-	.is_env_decreasing = !(sc->regs[rNR42] & 8),
+	.is_env_decreasing = b_is_off(sc->regs[rNR42], 3),
 
 	.is_long_mode = is_long_mode
       };
-      sc->regs[rNR52] |= 8;
+      b_set_on(sc->regs[rNR52], 3);
     }
     break;
   default:

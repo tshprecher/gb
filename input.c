@@ -1,20 +1,12 @@
-#include "input.h"
-#include "cpu.h"
 #include <stdio.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/keysym.h>
+#include "input.h"
+#include "cpu.h"
+#include "macros.h"
 
 extern Display *display; // for X window button events
-
-static inline void input_btn_press(struct input_controller *ic, enum btn btn) {
-  ic->btns_pressed |= (1 << btn);
-  interrupt(ic->interrupt_c, PORT);
-}
-
-static inline void input_btn_release(struct input_controller *ic, enum btn btn) {
-  ic->btns_pressed &= ~(1 << btn);
-}
 
 static inline void input_poll(struct input_controller *ic) {
   // check if there are any button events pending
@@ -56,9 +48,10 @@ static inline void input_poll(struct input_controller *ic) {
       }
 
       if (event.type == KeyPress) {
-	input_btn_press(ic, btn);
+	b_set_on(ic->btns_pressed, btn);
+	interrupt(ic->interrupt_c, PORT);
       } else if (event.type == KeyRelease) {
-	input_btn_release(ic, btn);
+	b_set_off(ic->btns_pressed, btn);
       }
       break;
     default:
