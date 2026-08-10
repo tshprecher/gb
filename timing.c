@@ -2,8 +2,6 @@
 #include "macros.h"
 #include "timing.h"
 
-#define MAIN_CLOCK_FREQ 4194304
-
 static int clocks[] = {
   1024,
   16,
