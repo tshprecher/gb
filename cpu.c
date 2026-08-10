@@ -13,29 +13,35 @@
 #define F_H 5
 #define F_CY 4
 
-// TODO: make this functions
-#define upper_8(v) ((v >> 8) & 0xFF)
-#define lower_8(v) (v & 0xFF)
+static inline u8 upper(u16 word) {
+  return (word >> 8) & 0xFF;
+}
 
-#define nn_lower(i, a) (i->args[a].value.word[0])
-#define nn_upper(i, a) (i->args[a].value.word[1])
-#define bytes_to_word(l, u) ((u16) (u << 8 | l))
-#define nn_to_word(i, a) bytes_to_word(nn_lower(i,a),nn_upper(i,a))
+static inline u8 lower(u16 word) {
+  return word & 0xFF;
+}
+
+static inline u16 bytes_to_word(u8 l, u8 u) {
+  return (u16) (u << 8 | l);
+}
+
+static inline u16 nn_to_word(struct inst *i, int a) {
+  u8 l = i->args[a].value.word[0];
+  u8 u = i->args[a].value.word[1];
+  return bytes_to_word(l, u);
+}
 
 // hard coded interrupt handler addresses by interrupt priority
 static u16 interrupt_handlers[] = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060};
 
 // TODO: should all enums be capital?
 void interrupt(struct interrupt_controller *ic, enum Interrupt interrupt) {
-  //  printf("debug (cpu): interrupt %d\n", interrupt);
   b_set_on(ic->IF, interrupt);
 }
 
 static inline void check_interrupt(struct cpu *cpu) {
-  //printf("debug: t_cycles_since_last_inst: %d, is_halted: %d\n", cpu->t_cycles_since_last_inst, cpu->is_halted);
   if (cpu->t_cycles_since_last_inst == 0 &&
       (cpu->interrupt_c->IF & cpu->interrupt_c->IE)) {
-    //printf("\tdebug (cpu): noticed interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
 
     u16 *handler_addr = interrupt_handlers;
     u8 mask = 1;
@@ -46,36 +52,26 @@ static inline void check_interrupt(struct cpu *cpu) {
       handler_addr++;
     }
 
-    //printf("\tdebug (cpu): interrupt found mask 0x%02X\n", mask);
-
     if (cpu->IME) {
-      //printf("\tdebug (cpu): interrupt IME is true, so handle and mark unhalted\n");
 
       cpu->interrupt_c->IF ^= mask;
       cpu->is_halted = 0;
       cpu->IME = 0;
-      //printf("\tdebug (cpu): handling interrupt addr 0x%04X\n", *handler_addr);
 
       // TODO: consolidate PUSH into one operation?
-      //       printf("\tdebug: pushing interrupt return address: 0x%04X\n", cpu->PC);
-      mem_write(cpu->memory_c,cpu->SP-1,  upper_8(cpu->PC));
-      mem_write(cpu->memory_c,cpu->SP-2, lower_8(cpu->PC));
+      mem_write(cpu->memory_c,cpu->SP-1,  upper(cpu->PC));
+      mem_write(cpu->memory_c,cpu->SP-2, lower(cpu->PC));
       cpu->SP -= 2;
       cpu->PC = *handler_addr;
       cpu->interrupt_t_cycles = 6 << 2; // TODO: is this correct for every interrupt type?
 
-      //printf("\tdebug (cpu): exit interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
     } else {
-      //printf("\tdebug (cpu): interrupt IME is false\n");
-
       if (cpu->is_halted) {
-	//printf("\tdebug (cpu): interrupt is halted\n");
 	// PC is already set to the instruction after halt, just unhalt
 	cpu->is_halted = 0;
       } else {
        // do nothing here (TODO: remove this?)
       }
-      //printf("\tdebug (cpu): exit interrupt: IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
     }
   }
 }
@@ -100,16 +96,13 @@ static u8 * reg(struct cpu *cpu, u8 reg) {
   return NULL;
 }
 
-static u16 regs_to_word(struct cpu * cpu, u8 upper, u8 lower) {
-  u8 l, u;
-  l = *(reg(cpu, lower));
-  u = *(reg(cpu, upper));
-  return bytes_to_word(l, u);
+static u16 regs_to_word(struct cpu * cpu, u8 upper_reg, u8 lower_reg) {
+  return bytes_to_word(*(reg(cpu, lower_reg)), *(reg(cpu, upper_reg)));
 }
 
-static void word_to_regs(struct cpu * cpu, u16 word, u8 upper, u8 lower) {
-  *(reg(cpu, lower)) = lower_8(word);
-  *(reg(cpu, upper)) = upper_8(word);
+static void word_to_regs(struct cpu * cpu, u16 word, u8 upper_reg, u8 lower_reg) {
+  *(reg(cpu, lower_reg)) = lower(word);
+  *(reg(cpu, upper_reg)) = upper(word);
 }
 
 static u16 get_qq(struct cpu *cpu, u8 qq) {
@@ -130,20 +123,20 @@ static u16 get_qq(struct cpu *cpu, u8 qq) {
 static void set_qq(struct cpu *cpu, u8 qq, u16 word) {
   switch(qq) {
   case 0:
-    cpu->B = upper_8(word);
-    cpu->C = lower_8(word);
+    cpu->B = upper(word);
+    cpu->C = lower(word);
     break;
   case 1:
-    cpu->D = upper_8(word);
-    cpu->E = lower_8(word);
+    cpu->D = upper(word);
+    cpu->E = lower(word);
     break;
   case 2:
-    cpu->H = upper_8(word);
-    cpu->L = lower_8(word);
+    cpu->H = upper(word);
+    cpu->L = lower(word);
     break;
   case 3:
-    cpu->A = upper_8(word);
-    cpu->F = lower_8(word) & 0xF0; // flags register alyways has lower nibble 0
+    cpu->A = upper(word);
+    cpu->F = lower(word) & 0xF0; // flags register alyways has lower nibble 0
     break;
     }
 }
@@ -165,16 +158,16 @@ static u16 get_dd_or_ss(struct cpu *cpu, u8 dd_or_ss) {
 static void set_dd_or_ss(struct cpu *cpu, u8 dd_or_ss, u16 word) {
   switch(dd_or_ss) {
   case 0:
-    cpu->B = upper_8(word);
-    cpu->C = lower_8(word);
+    cpu->B = upper(word);
+    cpu->C = lower(word);
     break;
   case 1:
-    cpu->D = upper_8(word);
-    cpu->E = lower_8(word);
+    cpu->D = upper(word);
+    cpu->E = lower(word);
     break;
   case 2:
-    cpu->H = upper_8(word);
-    cpu->L = lower_8(word);
+    cpu->H = upper(word);
+    cpu->L = lower(word);
     break;
   case 3:
     cpu->SP = word;
@@ -346,7 +339,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       break;
     case 3:
       e = (s8) inst->args[0].value.byte;
-      alu_add(cpu, lower_8(cpu->SP), e, 0);
+      alu_add(cpu, lower(cpu->SP), e, 0);
 
       b_set_off(cpu->F, F_Z);
       b_set_off(cpu->F, F_N);
@@ -356,8 +349,8 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       flag_z = b_is_on(cpu->F, F_Z); // store before to set back at end
       word = get_dd_or_ss(cpu, inst->args[0].value.byte);
 
-      cpu->L = alu_add(cpu, cpu->L, lower_8(word), 0);
-      cpu->H = alu_add(cpu, cpu->H, upper_8(word), b_is_on(cpu->F, F_CY));
+      cpu->L = alu_add(cpu, cpu->L, lower(word), 0);
+      cpu->H = alu_add(cpu, cpu->H, upper(word), b_is_on(cpu->F, F_CY));
 
       b_set_off(cpu->F, F_N);
       b_set(cpu->F, F_Z, flag_z);
@@ -732,7 +725,6 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu->IME = 0;
     break;
   case EI:
-    //printf("debug (cpu): enabling interrupts with IF -> 0x%02X, IE -> 0x%02X\n", cpu->interrupt_c->IF, cpu->interrupt_c->IE);
     cpu->IME = 1;
     break;
   case RES:
@@ -782,15 +774,15 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   case CALL:
     switch (inst->form) {
     case 0:
-      mem_write(cpu->memory_c, cpu->SP-1, upper_8((cpu->PC + 3)));
-      mem_write(cpu->memory_c, cpu->SP-2, lower_8((cpu->PC + 3)));
+      mem_write(cpu->memory_c, cpu->SP-1, upper((cpu->PC + 3)));
+      mem_write(cpu->memory_c, cpu->SP-2, lower((cpu->PC + 3)));
       cpu->SP-=2;
       cpu->PC = nn_to_word(inst, 0);
       return inst->cycles;
     case 1:
       if (is_cond_true(cpu, inst->args[0].value.byte)) {
-	mem_write(cpu->memory_c, cpu->SP-1, upper_8((cpu->PC + 3)));
-	mem_write(cpu->memory_c, cpu->SP-2, lower_8((cpu->PC + 3)));
+	mem_write(cpu->memory_c, cpu->SP-1, upper((cpu->PC + 3)));
+	mem_write(cpu->memory_c, cpu->SP-2, lower((cpu->PC + 3)));
 	cpu->SP-=2;
 	cpu->PC = nn_to_word(inst, 1);
 	return 6;
@@ -825,8 +817,8 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu->SP+=2;
     return inst->cycles;
   case RST:
-    mem_write(cpu->memory_c, cpu->SP-1, upper_8((cpu->PC+1)));
-    mem_write(cpu->memory_c, cpu->SP-2, lower_8((cpu->PC+1)));
+    mem_write(cpu->memory_c, cpu->SP-1, upper((cpu->PC+1)));
+    mem_write(cpu->memory_c, cpu->SP-2, lower((cpu->PC+1)));
     cpu->SP-=2;
     switch (inst->args[0].value.byte) {
     case 0:
@@ -931,14 +923,14 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       break;
     case 21:
       word = nn_to_word(inst,0);
-      mem_write(cpu->memory_c, word, lower_8(cpu->SP));
-      mem_write(cpu->memory_c, word+1, upper_8(cpu->SP));
+      mem_write(cpu->memory_c, word, lower(cpu->SP));
+      mem_write(cpu->memory_c, word+1, upper(cpu->SP));
       break;
     }
     break;
   case LDHL:
     e = (s8) inst->args[0].value.byte;
-    alu_add(cpu, lower_8(cpu->SP), e, 0);
+    alu_add(cpu, lower(cpu->SP), e, 0);
 
     b_set_off(cpu->F, F_Z);
     b_set_off(cpu->F, F_N);
@@ -1018,8 +1010,8 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     break;
   case PUSH:
     word = get_qq(cpu, inst->args[0].value.byte);
-    mem_write(cpu->memory_c,cpu->SP-1,  upper_8(word));
-    mem_write(cpu->memory_c,cpu->SP-2, lower_8(word));
+    mem_write(cpu->memory_c,cpu->SP-1,  upper(word));
+    mem_write(cpu->memory_c,cpu->SP-2, lower(word));
     cpu->SP-=2;
     break;
   case POP:
@@ -1027,7 +1019,6 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu->SP+=2;
     break;
   case HALT:
-    //    printf("debug (cpu): IME -> 0x%02X, IF -> 0x%02X, IE -> 0x%02X\n", cpu->IME, cpu->interrupt_c->IF, cpu->interrupt_c->IE);
     cpu->is_halted = 1;
     break;
   case STOP:
