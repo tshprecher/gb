@@ -7,14 +7,11 @@
 #include "display.h"
 #include "sound.h"
 
-
 /**
- * ROM FUNCTIONS
+ * GAMEPAK
  */
-
-struct rom load_rom(char *filename)
-{
-  printf("info: loading rom '%s'...\n", filename);
+struct gamepak load_gamepak(char * filename) {
+  printf("info: loading gamepak '%s'...\n", filename);
   FILE *fin = fopen(filename, "rb");
   if (NULL == fin)
     {
@@ -22,42 +19,61 @@ struct rom load_rom(char *filename)
       exit(1);
     }
 
-  struct rom rom = {0};
-  rom.num_banks = 1;
-  rom.mem = (u8*) malloc(0x8000);
-  rom.cached_insts = (struct inst*) malloc(0x8000 * sizeof(struct inst));
-  rom.is_cached_bitmap = (u8*) malloc(0x8000 >> 3);
+  struct gamepak gpk = {0};
+  gpk.num_banks = 1;
+  int rom_size = 0x4000*(gpk.num_banks+1);
+  gpk.rom = malloc(rom_size);
+  gpk.cached_insts = (struct inst*) malloc(rom_size * sizeof(struct inst));
+  gpk.is_cached_bitmap = (u8*) malloc(rom_size >> 3);
+
   char b;
-  int addr = 0;
-  while (addr < 0x8000)
-    {
-      size_t c = fread(&b, 1, 1, fin);
-      if (c == 0)
-	break;
-      rom.mem[addr++] = b;
-    }
-  if (addr != 0x8000)
-    {
-      printf("error: reading ROM: cannot read full 32K of ROM: %x\n", addr);
-      exit(1);
-    }
-  printf("info: rom type: 0x%02X\n", rom.mem[0x147]);
-  printf("info: rom loaded.\n");
+  int count = 0;
+  while (count < rom_size) {
+    size_t c = fread(&b, 1, 1, fin);
+    if (c == 0)
+      break;
+    gpk.rom[count++] = b;
+  }
+  if (count != rom_size) {
+    printf("error: reading gamepak: expected 0x%04X bytes, read 0x%04X", rom_size, count);
+    exit(1);
+  }
+  printf("info: rom type: 0x%02X\n", gpk.rom[0x147]);
+  printf("info: gamepak loaded.\n");
   fclose(fin);
-  return rom;
+  return gpk;
 }
 
-u8 rom_read(struct rom * rom, u16 addr) {
-  return rom->mem[addr];
-};
+struct inst * gpk_read_inst(struct gamepak * gpk, u16 addr) {
+  if (addr < 0x8000) {
+    if (addr >= 0x4000) {
+      addr = gpk->cur_bank*0x4000+addr;
+    }
 
-void rom_write(struct rom * rom, u16 addr, u8 value) {
+    u8 byte_map = gpk->is_cached_bitmap[addr >> 3];
+    u8 bit_mask = 1 << (addr & 7);
+    if (!(byte_map & bit_mask)) {
+      if (!init_inst_from_bytes(&gpk->cached_insts[addr], &gpk->rom[addr]))
+	return NULL;
+      byte_map |= bit_mask;
+      gpk->is_cached_bitmap[addr >> 3] = byte_map;
+    }
+    return &gpk->cached_insts[addr];
+  }
+  return NULL;
+}
+
+u8 gpk_read(struct gamepak * gpk, u16 addr) {
+  return gpk->rom[addr];
+}
+
+void gpk_write(struct gamepak *gpk, u16 addr, u8 value) {
   // TODO: implement for later MBCs
   return;
-};
+}
 
 /**
- * MEMORY CONTROLLER DATA AND FUNCTIONS
+ * MEMORY CONTROLLER
  */
 
 static enum sound_reg map_index_to_sound_reg[] = {
@@ -166,7 +182,7 @@ char * mmapped_reg_to_str(u16 addr) {
 
 u8 mem_read(struct mem_controller * mc, u16 addr) {
   if (addr < 0x8000) { // route to rom
-    return rom_read(mc->rom, addr);
+    return gpk_read(mc->gpk, addr);
   } else if (addr < 0xA000 || (addr >= 0xFE00 && addr < 0xFEA0)) {
     return lcd_vram_read(mc->lcd_c, addr);
   } else if (addr == 0xFF00) { // check memory mapped registers
@@ -202,7 +218,7 @@ u8 mem_read(struct mem_controller * mc, u16 addr) {
 
 void mem_write(struct mem_controller *mc, u16 addr, u8 value) {
   if (addr < 0x8000) { // route to rom
-    rom_write(mc->rom, addr, value);
+    gpk_write(mc->gpk, addr, value);
   } else if (addr < 0xA000 || (addr >= 0xFE00 && addr < 0xFEA0)) {
     lcd_vram_write(mc->lcd_c, addr, value);
   } else if (addr == 0xFF00) { // check memory mapped registers
@@ -243,16 +259,7 @@ void mem_write(struct mem_controller *mc, u16 addr, u8 value) {
 
 struct inst* mem_read_inst(struct mem_controller *mc, u16 addr) {
   if (addr < 0x8000) {
-    u8 byte_map = mc->rom->is_cached_bitmap[addr >> 3];
-    u8 bit_mask = 1 << (7-(addr & 7));
-    if (!(byte_map & bit_mask)) {
-      int ok = init_inst_from_bytes(&mc->rom->cached_insts[addr], &mc->rom->mem[addr]);
-      if (!ok)
-	return NULL;
-      byte_map |= bit_mask;
-      mc->rom->is_cached_bitmap[addr >> 3] = byte_map;
-    }
-    return &mc->rom->cached_insts[addr];
+    return gpk_read_inst(mc->gpk, addr);
   } else {
     // TODO: why does this branch exist again? Explain here
     init_inst_from_bytes(&mc->_inst_in_ram, &mc->ram[addr-0xA000]);

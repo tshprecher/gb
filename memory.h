@@ -8,24 +8,30 @@
 
 char * mmapped_reg_to_str(u16);
 
-struct rom {
+struct gamepak {
   u8 mbc_type;
   u8 num_banks;
-  u8 *mem;
+  u8 cur_bank;
+
+  // stores all the rom starting with 16K of residence rom
+  // followed by 16K for each bank of rom. therefore, the length is
+  // 16K * (1 + num_banks)
+  u8 *rom;
+  u8 *rom_bank;   // pointer to beginning of current 16K bank, mapped to address 0x4000
 
   // cache for decoded instructions
-  struct inst *cached_insts;
-  u8 *is_cached_bitmap;
+  struct inst *cached_insts; // length 16K * (num_banks + 1)
+  u8 *is_cached_bitmap; // bit for each inst to see if already cached
 };
 
-struct rom load_rom(char *);
-u8 rom_read(struct rom *, u16);
-void rom_write(struct rom *, u16, u8); // used by some memory banked controllers (MBCs)
+struct gamepak load_gamepak(char *);
+struct inst * gpk_read_inst(struct gamepak *, u16);
+u8 gpk_read(struct gamepak *, u16);
+void gpk_write(struct gamepak *, u16, u8); // used by some memory banked controllers (MBCs)
 
 struct mem_controller {
-  // general memory space mapping
-  struct rom *rom; // lower 32K is rom
-  u8 ram[0x10000-0xA000]; // ram, excluding rom and vram
+  struct gamepak *gpk; // rom
+  u8 ram[0x10000-0xA000]; // ram, excluding vram
 
   // memory mapped registers routed to controllers
   struct interrupt_controller *interrupt_c;

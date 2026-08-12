@@ -620,17 +620,17 @@ int test_cpu_exec() {
     struct mem_controller mc = {0};
     memset(mc.ram, 0, sizeof(mc.ram)); // TODO: remove this line?
 
-    struct rom rom = {0};
+    struct gamepak gpk = {0};
 
-    rom.num_banks = 1;
-    u8 rom_mem[0x8000] = {0};
+    gpk.num_banks = 1;
+    u8 rom[0x8000] = {0};
     struct inst rom_cached_insts[0x8000] = {0};
     u8 rom_is_cached_bitmap[0x8000 >> 3] = {0};
-    rom.mem = rom_mem;
-    rom.cached_insts = rom_cached_insts;
-    rom.is_cached_bitmap = rom_is_cached_bitmap;
+    gpk.rom = rom;
+    gpk.cached_insts = rom_cached_insts;
+    gpk.is_cached_bitmap = rom_is_cached_bitmap;
 
-    mc.rom = &rom;
+    mc.gpk = &gpk;
     cpu.memory_c = &mc;
     char test_name[64] = {0};
     sprintf(test_name, "%s (init Flags = 0x%02X)", tst.asm_command, cpu.F);

@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
     fprintf(stderr, "error: missing arguments.\n");
     return 1;
   } else if (argc == 2) { // run game
-    struct rom rom = load_rom(argv[1]);
+    struct gamepak gpk = load_gamepak(argv[1]);
 
     struct cpu cpu = {0};
     init_cpu(&cpu);
@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
     lcd_c.interrupt_c = &interrupt_c;
     lcd_c.regs[rLCDC] = 0x83; // TODO: put in an init?
 
-    memory_c.rom = &rom;
+    memory_c.gpk = &gpk;
     memory_c.interrupt_c = &interrupt_c;
     memory_c.lcd_c = &lcd_c;
     memory_c.timing_c = &timing_c;
@@ -120,24 +120,24 @@ int main(int argc, char *argv[])
     gb.sound_c = &sound_c;
 
     gb_run(&gb);
-  } else if (argc == 3) { // disassemble
+  } else if (argc == 3) { // disassemble, TODO: handle MBCs
     if (strcmp(argv[1], "-d") != 0) {
       fprintf(stderr, "error: unknown argument %s, use '-d'.\n", argv[1]);
       return 1;
     }
-    struct rom rom = load_rom(argv[2]);
+    struct gamepak gpk = load_gamepak(argv[2]);
 
     int addr = 0x150;
     struct inst decoded;
     char buf[16];
     while (addr < 0x8000) {
-      int ok = init_inst_from_bytes(&decoded, &rom.mem[addr]);
+      int ok = init_inst_from_bytes(&decoded, &gpk.rom[addr]);
       if (ok) {
 	inst_to_str(&decoded, buf);
 	printf("0x%02X\t%s\n", addr, buf);
 	addr+=decoded.bytelen;
       } else {
-	printf("0x%02X\tDB 0x%02X\n", addr, rom.mem[addr]);
+	printf("0x%02X\tDB 0x%02X\n", addr, gpk.rom[addr]);
 	addr++;
       }
     }
