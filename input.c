@@ -36,10 +36,10 @@ static inline void input_poll(struct input_controller *ic) {
       case XK_Down:
 	btn = BTN_DOWN;
 	break;
-      case XK_a:
+      case XK_f:
 	btn = BTN_A;
 	break;
-      case XK_b:
+      case XK_d:
 	btn = BTN_B;
 	break;
       case XK_space:

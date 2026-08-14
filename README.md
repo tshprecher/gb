@@ -23,7 +23,7 @@ run: `$ ./gbe {rom_file}`
 ## Controls
 
 - arrow keys: arrow keys
-- A: "A" key
-- B: "B" key
+- A: "F" key
+- B: "D" key
 - Select: spacebar
 - Start: every other key
