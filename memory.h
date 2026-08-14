@@ -4,6 +4,7 @@
 #include "cpu.h"
 #include "display.h"
 #include "inst.h"
+#include "sound.h"
 #include "timing.h"
 
 char * mmapped_reg_to_str(u16);

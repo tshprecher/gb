@@ -615,9 +615,16 @@ int test_cpu_exec() {
   for (int t = 0; t < sizeof(tests) / sizeof(struct test); t++) {
     struct inst inst = {0};
     struct test tst = tests[t];
+
     struct cpu cpu = tst.initial_cpu;
     cpu.F = tst.initial_flags;
+
+    struct lcd_controller lcd_c = {0};
+    struct sound_controller sound_c = {0};
+
     struct mem_controller mc = {0};
+    mc.lcd_c = &lcd_c;
+    mc.sound_c = &sound_c;
     memset(mc.ram, 0, sizeof(mc.ram)); // TODO: remove this line?
 
     struct gamepak gpk = {0};
