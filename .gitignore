@@ -1,15 +1,11 @@
-a.out
-**vscode*
 *~
 *.o
 *.a
 *#
+.*
 *dSYM
-.#*
-*_test
 gbe
 tests
-dump*
 *DS_Store
 tmp/*
 TAGS
