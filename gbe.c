@@ -82,7 +82,8 @@ int main(int argc, char *argv[])
     fprintf(stderr, "error: missing arguments.\n");
     return 1;
   } else if (argc == 2) { // run game
-    struct gamepak gpk = load_gamepak(argv[1]);
+    struct gamepak gpk = {0};
+    init_gamepak(&gpk, argv[1]);
 
     struct cpu cpu = {0};
     init_cpu(&cpu);
@@ -125,7 +126,8 @@ int main(int argc, char *argv[])
       fprintf(stderr, "error: unknown argument %s, use '-d'.\n", argv[1]);
       return 1;
     }
-    struct gamepak gpk = load_gamepak(argv[2]);
+    struct gamepak gpk = {0};
+    init_gamepak(&gpk, argv[2]);
 
     int addr = 0x150;
     struct inst decoded;

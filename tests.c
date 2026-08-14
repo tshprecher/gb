@@ -621,8 +621,9 @@ int test_cpu_exec() {
     memset(mc.ram, 0, sizeof(mc.ram)); // TODO: remove this line?
 
     struct gamepak gpk = {0};
+    gpk.mbc = 0;
+    gpk.rom_size = 0x8000;
 
-    gpk.num_banks = 1;
     u8 rom[0x8000] = {0};
     struct inst rom_cached_insts[0x8000] = {0};
     u8 rom_is_cached_bitmap[0x8000 >> 3] = {0};

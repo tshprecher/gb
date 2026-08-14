@@ -10,7 +10,17 @@
 /**
  * GAMEPAK
  */
-struct gamepak load_gamepak(char * filename) {
+
+#define TYPES_LEN 2
+
+// TODO: fill in
+static u8 gpk_types[][2] = {
+  //type, mbc
+  {0, 0},
+  {1, 1},
+};
+
+void init_gamepak(struct gamepak *gpk, char * filename) {
   printf("info: loading gamepak '%s'...\n", filename);
   FILE *fin = fopen(filename, "rb");
   if (NULL == fin)
@@ -18,57 +28,115 @@ struct gamepak load_gamepak(char * filename) {
       printf("error: opening file: %s\n", filename);
       exit(1);
     }
+  u8 c;
 
-  struct gamepak gpk = {0};
-  gpk.num_banks = 1;
-  int rom_size = 0x4000*(gpk.num_banks+1);
-  gpk.rom = malloc(rom_size);
-  gpk.cached_insts = (struct inst*) malloc(rom_size * sizeof(struct inst));
-  gpk.is_cached_bitmap = (u8*) malloc(rom_size >> 3);
-
-  char b;
-  int count = 0;
-  while (count < rom_size) {
-    size_t c = fread(&b, 1, 1, fin);
-    if (c == 0)
-      break;
-    gpk.rom[count++] = b;
-  }
-  if (count != rom_size) {
-    printf("error: reading gamepak: expected 0x%04X bytes, read 0x%04X", rom_size, count);
+  // read metadata
+  if (fseek(fin, 0x147, SEEK_SET) || !fread(&c, 1, 1, fin))  {
+    printf("error: loading gamepak: could not read type @ 0x147\n");
     exit(1);
   }
-  printf("info: rom type: 0x%02X\n", gpk.rom[0x147]);
-  printf("info: gamepak loaded.\n");
+  if (c > 1) {
+    printf("error: loading gamepak: currently on supporing types 0 and 1\n");
+    exit(1);
+  }
+  printf("info: gamepak type: 0x%02X\n", c);
+  for (int t = 0; t < TYPES_LEN; t++) {
+    if (gpk_types[t][0] == c) {
+      gpk->mbc = gpk_types[t][1];
+    }
+  }
+  printf("info: gamepak mbc: %d\n", gpk->mbc);
+
+  if (!fread(&c, 1, 1, fin))  {
+    printf("error: loading gamepak: could not read ROM size @ 0x148\n");
+    exit(1);
+  }
+  if (c > 8) {
+    printf("error: loading gamepak: invalid ROM size code: %d\n", c);
+    exit(1);
+  }
+  int rom_mapping[] = {0x8000, 0x10000, 0x20000, 0x40000,
+		       0x80000, 0x100000, 0x200000, 0x400000, 0x800000};
+  gpk->rom_size = rom_mapping[c];
+  printf("info: gamepak ROM size: %d bytes\n", gpk->rom_size);
+
+  if (!fread(&c, 1, 1, fin))  {
+    printf("error: loading gamepak: could not read RAM size @ 0x149\n");
+    exit(1);
+  }
+  if (c > 4) {
+    printf("error: loading gamepak: invalid RAM size code: %d\n", c);
+    exit(1);
+  }
+  int ram_mapping[] = {0, 0, 0x2000, 0x8000, 0x20000};
+  gpk->ram_size = ram_mapping[c];
+  printf("info: gamepak RAM size: %d bytes\n", gpk->ram_size);
+
+  // build struct
+
+  fseek(fin, 0, SEEK_SET);
+  gpk->rom = malloc(gpk->rom_size);
+  gpk->cached_insts = (struct inst*) malloc(gpk->rom_size * sizeof(struct inst));
+  gpk->is_cached_bitmap = (u8*) malloc(gpk->rom_size >> 3);
+
+  gpk->cur_bank = 1;
+  gpk->rom_bank = gpk->rom+0x4000;
+
+  int count = 0;
+  while (count < gpk->rom_size) {
+    if (!fread(&c, 1, 1, fin))
+      break;
+    gpk->rom[count++] = c;
+  }
+  if (count != gpk->rom_size) {
+    printf("error: loading gamepak: expected 0x%04X bytes, read 0x%04X", gpk->rom_size, count);
+    exit(1);
+  }
+
+  printf("info: gamepak loaded, read %d bytes.\n", count);
   fclose(fin);
-  return gpk;
 }
 
 struct inst * gpk_read_inst(struct gamepak * gpk, u16 addr) {
-  if (addr < 0x8000) {
-    if (addr >= 0x4000) {
-      addr = gpk->cur_bank*0x4000+addr;
-    }
+  // TODO: handle unusual case where instruction may cut across banks
+  if (addr >= 0x8000) // TODO: print warning or error
+    return NULL;
 
-    u8 byte_map = gpk->is_cached_bitmap[addr >> 3];
-    u8 bit_mask = 1 << (addr & 7);
-    if (!(byte_map & bit_mask)) {
-      if (!init_inst_from_bytes(&gpk->cached_insts[addr], &gpk->rom[addr]))
-	return NULL;
-      byte_map |= bit_mask;
-      gpk->is_cached_bitmap[addr >> 3] = byte_map;
-    }
-    return &gpk->cached_insts[addr];
+  int banked_addr = addr < 0x4000 ? addr : (gpk->cur_bank-1)*0x4000+addr;
+  u8 byte_map = gpk->is_cached_bitmap[banked_addr >> 3];
+  u8 bit_mask = 1 << (banked_addr & 7);
+  if (!(byte_map & bit_mask)) {
+    u8 *base = addr < 0x4000 ? gpk->rom : gpk->rom_bank;
+    addr = addr < 0x4000 ? addr : addr-0x4000;
+    if (!init_inst_from_bytes(&gpk->cached_insts[banked_addr], &base[addr]))
+      return NULL;
+    byte_map |= bit_mask;
+    gpk->is_cached_bitmap[banked_addr >> 3] = byte_map;
   }
-  return NULL;
+  return &gpk->cached_insts[banked_addr];
 }
 
 u8 gpk_read(struct gamepak * gpk, u16 addr) {
-  return gpk->rom[addr];
+  switch (gpk->mbc) {
+  case 1:
+    return addr < 0x4000 ? gpk->rom[addr] : gpk->rom_bank[addr-0x4000];
+  default:
+    return gpk->rom[addr];
+  }
 }
 
 void gpk_write(struct gamepak *gpk, u16 addr, u8 value) {
   // TODO: implement for later MBCs
+  switch (gpk->mbc) {
+  case 1:
+    if (addr >= 0x2000 && addr < 0x4000) {
+      gpk->cur_bank = value;
+      gpk->rom_bank = gpk->rom+(0x4000*gpk->cur_bank);
+    }
+    break;
+  default:
+    break;
+  }
   return;
 }
 

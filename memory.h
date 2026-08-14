@@ -9,14 +9,17 @@
 char * mmapped_reg_to_str(u16);
 
 struct gamepak {
-  u8 mbc_type;
-  u8 num_banks;
+  u8 mbc;
+  int rom_size;
+  int ram_size;
+
   u8 cur_bank;
 
   // stores all the rom starting with 16K of residence rom
   // followed by 16K for each bank of rom. therefore, the length is
   // 16K * (1 + num_banks)
   u8 *rom;
+  // TODO: is rom_bank necessary?
   u8 *rom_bank;   // pointer to beginning of current 16K bank, mapped to address 0x4000
 
   // cache for decoded instructions
@@ -24,7 +27,7 @@ struct gamepak {
   u8 *is_cached_bitmap; // bit for each inst to see if already cached
 };
 
-struct gamepak load_gamepak(char *);
+void init_gamepak(struct gamepak *, char *);
 struct inst * gpk_read_inst(struct gamepak *, u16);
 u8 gpk_read(struct gamepak *, u16);
 void gpk_write(struct gamepak *, u16, u8); // used by some memory banked controllers (MBCs)
