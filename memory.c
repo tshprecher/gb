@@ -80,12 +80,13 @@ void init_gamepak(struct gamepak *gpk, char * filename) {
   // build struct
 
   fseek(fin, 0, SEEK_SET);
+
   gpk->rom = malloc(gpk->rom_size);
+  gpk->rom_bank = gpk->rom+0x4000;
+  gpk->rom_bank_id = 1;
+  gpk->ram = malloc(gpk->ram_size);
   gpk->cached_insts = (struct inst*) malloc(gpk->rom_size * sizeof(struct inst));
   gpk->is_cached_bitmap = (u8*) malloc(gpk->rom_size >> 3);
-
-  gpk->cur_bank = 1;
-  gpk->rom_bank = gpk->rom+0x4000;
 
   int count = 0;
   while (count < gpk->rom_size) {
@@ -104,21 +105,24 @@ void init_gamepak(struct gamepak *gpk, char * filename) {
 
 struct inst * gpk_read_inst(struct gamepak * gpk, u16 addr) {
   // TODO: handle unusual case where instruction may cut across banks
-  if (addr >= 0x8000) // TODO: print warning or error
-    return NULL;
-
-  int banked_addr = addr < 0x4000 ? addr : (gpk->cur_bank-1)*0x4000+addr;
-  u8 byte_map = gpk->is_cached_bitmap[banked_addr >> 3];
-  u8 bit_mask = 1 << (banked_addr & 7);
-  if (!(byte_map & bit_mask)) {
-    u8 *base = addr < 0x4000 ? gpk->rom : gpk->rom_bank;
-    addr = addr < 0x4000 ? addr : addr-0x4000;
-    if (!init_inst_from_bytes(&gpk->cached_insts[banked_addr], &base[addr]))
-      return NULL;
-    byte_map |= bit_mask;
-    gpk->is_cached_bitmap[banked_addr >> 3] = byte_map;
+  if (addr < 0x8000) {
+    int linear_addr = addr < 0x4000 ? addr : (gpk->rom_bank_id-1)*0x4000+addr;
+    u8 byte_map = gpk->is_cached_bitmap[linear_addr >> 3];
+    u8 bit_mask = 1 << (linear_addr & 7);
+    if (!(byte_map & bit_mask)) {
+      u8 *base = addr < 0x4000 ? gpk->rom : gpk->rom_bank;
+      addr = addr < 0x4000 ? addr : addr-0x4000;
+      if (!init_inst_from_bytes(&gpk->cached_insts[linear_addr], &base[addr]))
+	return NULL;
+      byte_map |= bit_mask;
+      gpk->is_cached_bitmap[linear_addr >> 3] = byte_map;
+    }
+    return &gpk->cached_insts[linear_addr];
+  } else {
+    // TODO: consolidate logic with mem_read_inst
+    init_inst_from_bytes(&gpk->_inst_in_ram, &gpk->ram[addr-0xA000]);
+    return &gpk->_inst_in_ram;
   }
-  return &gpk->cached_insts[banked_addr];
 }
 
 u8 gpk_read(struct gamepak * gpk, u16 addr) {
@@ -136,8 +140,8 @@ void gpk_write(struct gamepak *gpk, u16 addr, u8 value) {
   case 1:
     if (addr >= 0x2000 && addr < 0x4000) {
       printf("(debug): writing MBC reg 1:: 0x%02X\n", value);
-      gpk->cur_bank = value;
-      gpk->rom_bank = gpk->rom+(0x4000*gpk->cur_bank);
+      gpk->rom_bank_id = value;
+      gpk->rom_bank = gpk->rom+(0x4000*gpk->rom_bank_id);
     } else if (addr >= 0x0000 && addr < 0x1FFF) {
       printf("(debug): writing MBC reg 0: 0x%02X\n", value);
     } else if (addr >= 0x4000 && addr < 0x5FFF) {
@@ -261,9 +265,9 @@ char * mmapped_reg_to_str(u16 addr) {
 }
 
 u8 mem_read(struct mem_controller * mc, u16 addr) {
-  if (addr < 0x8000) { // route to rom
+  if (addr < 0x8000 || (addr >= 0xA000 && addr < 0xC000)) { // route to gamepak
     return gpk_read(mc->gpk, addr);
-  } else if (addr < 0xA000 || (addr >= 0xFE00 && addr < 0xFEA0)) {
+  } else if (addr < 0xA000 || (addr >= 0xFE00 && addr < 0xFEA0)) { // route to bg or oam vram
     return lcd_vram_read(mc->lcd_c, addr);
   } else if (addr == 0xFF00) { // check memory mapped registers
     u8 inputs = 0;
@@ -293,11 +297,11 @@ u8 mem_read(struct mem_controller * mc, u16 addr) {
   }
 
   // if not in rom, vram, or memory mapped address space, go to ram
-  return mc->ram[addr-0xA000];
+  return mc->ram[addr-0xC000];
 }
 
 void mem_write(struct mem_controller *mc, u16 addr, u8 value) {
-  if (addr < 0x8000) { // route to rom
+  if (addr < 0x8000 || (addr >= 0xA000 && addr < 0xC000)) { // route to gamepak
     gpk_write(mc->gpk, addr, value);
   } else if (addr < 0xA000 || (addr >= 0xFE00 && addr < 0xFEA0)) {
     lcd_vram_write(mc->lcd_c, addr, value);
@@ -333,16 +337,17 @@ void mem_write(struct mem_controller *mc, u16 addr, u8 value) {
     sound_wram_write(mc->sound_c, addr, value);
   } else {
     // if not in rom or memory mapped address space, go to ram
-    mc->ram[addr-0xA000] = value;
+    mc->ram[addr-0xC000] = value;
   }
 }
 
 struct inst* mem_read_inst(struct mem_controller *mc, u16 addr) {
-  if (addr < 0x8000) {
+  // TODO: this doesn't technically allow for instructions read in VRAM
+  if (addr < 0x8000 || (addr >= 0xA000 && addr < 0xC000)) { // route to gamepak
     return gpk_read_inst(mc->gpk, addr);
   } else {
     // TODO: why does this branch exist again? Explain here
-    init_inst_from_bytes(&mc->_inst_in_ram, &mc->ram[addr-0xA000]);
+    init_inst_from_bytes(&mc->_inst_in_ram, &mc->ram[addr-0xC000]);
     return &mc->_inst_in_ram;
   }
 }
