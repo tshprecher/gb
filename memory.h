@@ -21,7 +21,7 @@ struct gamepak {
   // 16K * (1 + num_banks)
   u8 *rom;
   // TODO: is rom_bank necessary?
-  u8 *rom_bank;   // pointer to beginning of current 16K bank, mapped to address 0x4000
+  u8 *rom_bank; // pointer to beginning of current 16K bank, mapped to address 0x4000
 
   // cache for decoded instructions
   struct inst *cached_insts; // length 16K * (num_banks + 1)
@@ -45,7 +45,7 @@ struct mem_controller {
   struct sound_controller *sound_c;
 
   // used as the location for return values to mem_read_inst
-  // where the address is in writable ram, not rom.
+  // where the address is in writable ram.
   struct inst _inst_in_ram;
 };
 

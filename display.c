@@ -32,9 +32,9 @@ static u32 (*fb)[SCALED_SCREEN_X];
 static GC gc;
 static int screen;
 
-static uint64_t colors[4] = {0xFFFFFF, 0xa9a9a9, 0x545454, 0x000000};
+//static uint64_t colors[4] = {0xFFFFFF, 0xa9a9a9, 0x545454, 0x000000};
 //static uint64_t colors[4] = {0x000000, 0x545454, 0xa9a9a9, 0xFFFFFF};
-//static uint64_t colors[4] = {0x9bbc0f, 0x8bac0f, 0x306230, 0x0f380f};
+static uint64_t colors[4] = {0x9bbc0f, 0x8bac0f, 0x306230, 0x0f380f};
 //static uint64_t colors[4] = {0xb5af42, 0x919b3a, 0x5d782e, 0x5d782e};
 
 void init_lcd() {

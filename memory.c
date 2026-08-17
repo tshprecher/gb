@@ -11,13 +11,15 @@
  * GAMEPAK
  */
 
-#define TYPES_LEN 2
+#define TYPES_LEN 4
 
 // TODO: fill in
-static u8 gpk_types[][2] = {
-  //type, mbc
-  {0, 0},
-  {1, 1},
+static u8 gpk_types[][4] = {
+  //type, mbc, SRAM, backup battery
+  {0, 0, 0, 0},
+  {1, 1, 0, 0},
+  {2, 1, 1, 0},
+  {3, 1, 1, 1},
 };
 
 void init_gamepak(struct gamepak *gpk, char * filename) {
@@ -35,13 +37,16 @@ void init_gamepak(struct gamepak *gpk, char * filename) {
     printf("error: loading gamepak: could not read type @ 0x147\n");
     exit(1);
   }
-  if (c > 1) {
-    printf("error: loading gamepak: currently on supporing types 0 and 1\n");
+
+  if (c > 3) {
+    printf("error: loading gamepak: unsuppported gamepak type %d\n", c);
     exit(1);
   }
+
   printf("info: gamepak type: 0x%02X\n", c);
   for (int t = 0; t < TYPES_LEN; t++) {
     if (gpk_types[t][0] == c) {
+      printf("(debug): found type record {%d, %d, %d, %d}\n", gpk_types[t][0], gpk_types[t][1], gpk_types[t][2], gpk_types[t][3]);
       gpk->mbc = gpk_types[t][1];
     }
   }
@@ -130,8 +135,15 @@ void gpk_write(struct gamepak *gpk, u16 addr, u8 value) {
   switch (gpk->mbc) {
   case 1:
     if (addr >= 0x2000 && addr < 0x4000) {
+      printf("(debug): writing MBC reg 1:: 0x%02X\n", value);
       gpk->cur_bank = value;
       gpk->rom_bank = gpk->rom+(0x4000*gpk->cur_bank);
+    } else if (addr >= 0x0000 && addr < 0x1FFF) {
+      printf("(debug): writing MBC reg 0: 0x%02X\n", value);
+    } else if (addr >= 0x4000 && addr < 0x5FFF) {
+      printf("(debug): writing MBC reg 2: 0x%02X\n", value);
+    } else if (addr >= 0x6000 && addr < 0x7FFF) {
+      printf("(debug): writing MBC reg 3: 0x%02X\n", value);
     }
     break;
   default:
