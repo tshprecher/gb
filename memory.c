@@ -1,6 +1,10 @@
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <unistd.h>
 #include "input.h"
 #include "inst.h"
 #include "memory.h"
@@ -15,7 +19,7 @@
 
 // TODO: fill in
 static u8 gpk_types[][4] = {
-  //type, mbc, SRAM, backup battery
+  //type, mbc, sram, backup battery
   {0, 0, 0, 0},
   {1, 1, 0, 0},
   {2, 1, 1, 0},
@@ -32,61 +36,67 @@ void init_gamepak(struct gamepak *gpk, char * filename) {
     }
   u8 c;
 
-  // read metadata
+  // read and validate metadata
+  if (fseek(fin, 0x143, SEEK_SET) || !fread(&c, 1, 1, fin))  {
+    printf("error: loading gamepak: could not read support code @ 0x143\n");
+    exit(1);
+  }
+  if (c == 0xC0) {
+    printf("error: loading gamepak: invalid support code 0x%02X. GBC games not supported.\n", c);
+    exit(1);
+  }
   if (fseek(fin, 0x147, SEEK_SET) || !fread(&c, 1, 1, fin))  {
     printf("error: loading gamepak: could not read type @ 0x147\n");
     exit(1);
   }
-
   if (c > 3) {
     printf("error: loading gamepak: unsuppported gamepak type %d\n", c);
     exit(1);
   }
-
   printf("info: gamepak type: 0x%02X\n", c);
+
+  u8 *gpk_type;
   for (int t = 0; t < TYPES_LEN; t++) {
     if (gpk_types[t][0] == c) {
-      printf("(debug): found type record {%d, %d, %d, %d}\n", gpk_types[t][0], gpk_types[t][1], gpk_types[t][2], gpk_types[t][3]);
-      gpk->mbc = gpk_types[t][1];
+      //      printf("(debug): found type record {%d, %d, %d, %d}\n", gpk_types[t][0], gpk_types[t][1], gpk_types[t][2], gpk_types[t][3]);
+      gpk_type = gpk_types[t];
+      gpk->mbc_type = gpk_type[1];
     }
   }
-  printf("info: gamepak mbc: %d\n", gpk->mbc);
+  printf("info: gamepak mbc: %d\n", gpk->mbc_type);
 
   if (!fread(&c, 1, 1, fin))  {
-    printf("error: loading gamepak: could not read ROM size @ 0x148\n");
+    printf("error: loading gamepak: could not read rom size @ 0x148\n");
     exit(1);
   }
   if (c > 8) {
-    printf("error: loading gamepak: invalid ROM size code: %d\n", c);
+    printf("error: loading gamepak: invalid rom size code: %d\n", c);
     exit(1);
   }
   int rom_mapping[] = {0x8000, 0x10000, 0x20000, 0x40000,
 		       0x80000, 0x100000, 0x200000, 0x400000, 0x800000};
   gpk->rom_size = rom_mapping[c];
-  printf("info: gamepak ROM size: %d bytes\n", gpk->rom_size);
+  printf("info: gamepak rom size: %d bytes\n", gpk->rom_size);
 
   if (!fread(&c, 1, 1, fin))  {
-    printf("error: loading gamepak: could not read RAM size @ 0x149\n");
+    printf("error: loading gamepak: could not read ram size @ 0x149\n");
     exit(1);
   }
   if (c > 4) {
-    printf("error: loading gamepak: invalid RAM size code: %d\n", c);
+    printf("error: loading gamepak: invalid ram size code: %d\n", c);
     exit(1);
   }
   int ram_mapping[] = {0, 0, 0x2000, 0x8000, 0x20000};
   gpk->ram_size = ram_mapping[c];
-  printf("info: gamepak RAM size: %d bytes\n", gpk->ram_size);
+  printf("info: gamepak ram size: %d bytes\n", gpk->ram_size);
 
-  // build struct
-
+  // read rom into gamepak
   fseek(fin, 0, SEEK_SET);
-
   gpk->rom = malloc(gpk->rom_size);
   gpk->rom_bank = gpk->rom+0x4000;
-  gpk->rom_bank_id = 1;
-  gpk->ram = malloc(gpk->ram_size);
-  gpk->cached_insts = (struct inst*) malloc(gpk->rom_size * sizeof(struct inst));
-  gpk->is_cached_bitmap = (u8*) malloc(gpk->rom_size >> 3);
+  gpk->mbc_regs[1] = 1; // TODO: remove this, put in a mbc-related logic
+  gpk->cached_insts = malloc(gpk->rom_size * sizeof(struct inst));
+  gpk->is_cached_bitmap = malloc(gpk->rom_size >> 3);
 
   int count = 0;
   while (count < gpk->rom_size) {
@@ -99,14 +109,42 @@ void init_gamepak(struct gamepak *gpk, char * filename) {
     exit(1);
   }
 
-  printf("info: gamepak loaded, read %d bytes.\n", count);
+  // initialize ram
+  if (gpk->ram_size) {
+    if (gpk_type[3]) {
+      char sav_filename[40];
+      strncpy(sav_filename, filename, 40);
+      strncpy(sav_filename+strlen(sav_filename), ".sav", 4);
+
+      int fd = open(sav_filename, O_RDWR|O_CREAT, 0666);
+      if (fd == -1) {
+	perror("error opening .sav file");
+	exit(1);
+      }
+      if (ftruncate(fd, gpk->ram_size) == -1) {
+	perror("error: truncating .sav file");
+	exit(1);
+      }
+      gpk->ram = mmap(NULL, gpk->ram_size, PROT_READ|PROT_WRITE, MAP_FILE|MAP_SHARED, fd, 0);
+      if (gpk->ram == MAP_FAILED) {
+	perror("error: memory mapping .sav file");
+	exit(1);
+      }
+      printf("info: initialized persistent ram backed by %s\n", sav_filename);
+    } else {
+      gpk->ram = malloc(gpk->ram_size);
+      printf("info: initialized ram\n");
+    }
+    gpk->ram_bank = gpk->ram;
+  }
   fclose(fin);
+  printf("info: gamepak loaded!\n");
 }
 
 struct inst * gpk_read_inst(struct gamepak * gpk, u16 addr) {
   // TODO: handle unusual case where instruction may cut across banks
   if (addr < 0x8000) {
-    int linear_addr = addr < 0x4000 ? addr : (gpk->rom_bank_id-1)*0x4000+addr;
+    int linear_addr = addr < 0x4000 ? addr : (gpk->mbc_regs[1]-1)*0x4000+addr;
     u8 byte_map = gpk->is_cached_bitmap[linear_addr >> 3];
     u8 bit_mask = 1 << (linear_addr & 7);
     if (!(byte_map & bit_mask)) {
@@ -126,33 +164,47 @@ struct inst * gpk_read_inst(struct gamepak * gpk, u16 addr) {
 }
 
 u8 gpk_read(struct gamepak * gpk, u16 addr) {
-  switch (gpk->mbc) {
-  case 1:
-    return addr < 0x4000 ? gpk->rom[addr] : gpk->rom_bank[addr-0x4000];
-  default:
-    return gpk->rom[addr];
+  if (addr >= 0xA000) { // ram
+    return gpk->ram ? gpk->ram_bank[addr-0xA000] : 0;
+  } else if (addr < 0x8000) {
+    switch (gpk->mbc_type) { // rom
+    case 1:
+      return addr < 0x4000 ? gpk->rom[addr] : gpk->rom_bank[addr-0x4000];
+    default:
+      return gpk->rom[addr];
+    }
   }
+  abort(); // improper memory routing
 }
 
 void gpk_write(struct gamepak *gpk, u16 addr, u8 value) {
   // TODO: implement for later MBCs
-  switch (gpk->mbc) {
-  case 1:
-    if (addr >= 0x2000 && addr < 0x4000) {
-      printf("(debug): writing MBC reg 1:: 0x%02X\n", value);
-      gpk->rom_bank_id = value;
-      gpk->rom_bank = gpk->rom+(0x4000*gpk->rom_bank_id);
-    } else if (addr >= 0x0000 && addr < 0x1FFF) {
-      printf("(debug): writing MBC reg 0: 0x%02X\n", value);
-    } else if (addr >= 0x4000 && addr < 0x5FFF) {
-      printf("(debug): writing MBC reg 2: 0x%02X\n", value);
-    } else if (addr >= 0x6000 && addr < 0x7FFF) {
-      printf("(debug): writing MBC reg 3: 0x%02X\n", value);
+  if (addr >= 0xA000 && gpk->ram) { // ram
+    gpk->ram_bank[addr-0xA000] = value;
+    return;
+  } else if (addr < 0x8000) {
+    switch (gpk->mbc_type) {
+    case 1:
+      if (addr < 0x2000) {
+	//	printf("(debug): writing MBC reg 0: 0x%02X\n", value);
+	gpk->mbc_regs[0] = value;
+      } else if (addr < 0x4000) {
+	//	printf("(debug): writing MBC reg 1: 0x%02X\n", value);
+	gpk->mbc_regs[1] = value;
+	gpk->rom_bank = gpk->rom+(0x4000*(gpk->mbc_regs[1]));
+      } else if (addr < 0x6000) {
+	//	printf("(debug): writing MBC reg 2: 0x%02X\n", value);
+	gpk->mbc_regs[2] = value;
+      } else if (addr < 0x8000) {
+	//	printf("(debug): writing MBC reg 3: 0x%02X\n", value);
+	gpk->mbc_regs[3] = value;
+      }
+      return;
+    default:
+      return;
     }
-    break;
-  default:
-    break;
   }
+  // NOTE: should abort but some games write to ram that doesn't exist (bug)
   return;
 }
 
@@ -342,7 +394,7 @@ void mem_write(struct mem_controller *mc, u16 addr, u8 value) {
 }
 
 struct inst* mem_read_inst(struct mem_controller *mc, u16 addr) {
-  // TODO: this doesn't technically allow for instructions read in VRAM
+  // TODO: this doesn't technically allow for instructions read in vram
   if (addr < 0x8000 || (addr >= 0xA000 && addr < 0xC000)) { // route to gamepak
     return gpk_read_inst(mc->gpk, addr);
   } else {
