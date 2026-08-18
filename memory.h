@@ -10,22 +10,22 @@
 char * mmapped_reg_to_str(u16);
 
 struct gamepak {
-  u8 mbc;
+  u8 mbc_type;
+  u8 mbc_regs[4];
+
   int rom_size;
   int ram_size;
 
   // stores all the rom starting with 16K of residence rom
-  // followed by 16K for each bank of rom. therefore, the length is
-  // 16K * (1 + num_banks)
+  // followed by 16K for each bank of rom.
   u8 *rom;
   u8 *rom_bank;
-  u8 rom_bank_id;
 
   u8 *ram;
+  u8 *ram_bank;
 
-  // cache for decoded instructions
-  struct inst *cached_insts; // length 16K * (num_banks + 1)
-  u8 *is_cached_bitmap; // bit for each inst to see if already cached
+  struct inst *cached_insts;  // cache for decoded instructions
+  u8 *is_cached_bitmap; // bitmap to indicate if an instr is cached (TODO: can we remove in favor of peaking into the cached_inst struct type?)
 
   // used as the location for return values to gpk_read_inst
   // where the address is in writable ram.
@@ -36,7 +36,7 @@ struct gamepak {
 void init_gamepak(struct gamepak *, char *);
 struct inst * gpk_read_inst(struct gamepak *, u16);
 u8 gpk_read(struct gamepak *, u16);
-void gpk_write(struct gamepak *, u16, u8); // used by some memory banked controllers (MBCs)
+void gpk_write(struct gamepak *, u16, u8); // used by MBCs
 
 struct mem_controller {
   u8 ram[0x4000];
