@@ -24,8 +24,7 @@ struct gamepak {
   u8 *ram;
   u8 *ram_bank;
 
-  struct inst *cached_insts;  // cache for decoded instructions
-  u8 *is_cached_bitmap; // bitmap to indicate if an instr is cached (TODO: can we remove in favor of peaking into the cached_inst struct type?)
+  struct inst *cached_insts;  // cache decoded rom instructions
 
   // used as the location for return values to gpk_read_inst
   // where the address is in writable ram.
