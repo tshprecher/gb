@@ -621,22 +621,25 @@ int test_cpu_exec() {
 
     struct lcd_controller lcd_c = {0};
     struct sound_controller sound_c = {0};
-
     struct mem_controller mc = {0};
+
     mc.lcd_c = &lcd_c;
     mc.sound_c = &sound_c;
     memset(mc.ram, 0, sizeof(mc.ram)); // TODO: remove this line?
 
     struct gamepak gpk = {0};
-    gpk.mbc_type = 0;
+    gpk.mbc_type = 1;
     gpk.rom_size = 0x8000;
+    gpk.ram_size = 0x2000;
 
     u8 rom[0x8000] = {0};
     struct inst rom_cached_insts[0x8000] = {0};
-    u8 rom_is_cached_bitmap[0x8000 >> 3] = {0};
     gpk.rom = rom;
     gpk.cached_insts = rom_cached_insts;
-    gpk.is_cached_bitmap = rom_is_cached_bitmap;
+
+    u8 ram[0x2000] = {0};
+    gpk.ram = ram;
+    gpk.ram_bank = ram;
 
     mc.gpk = &gpk;
     cpu.memory_c = &mc;

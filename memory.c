@@ -96,7 +96,7 @@ void init_gamepak(struct gamepak *gpk, char * filename) {
   gpk->rom_bank = gpk->rom+0x4000;
   gpk->mbc_regs[1] = 1; // TODO: remove this, put in a mbc-related logic
   gpk->cached_insts = malloc(gpk->rom_size * sizeof(struct inst));
-  gpk->is_cached_bitmap = malloc(gpk->rom_size >> 3);
+  memset(gpk->cached_insts, 0, gpk->rom_size * sizeof(struct inst));
 
   int count = 0;
   while (count < gpk->rom_size) {
@@ -145,17 +145,14 @@ struct inst * gpk_read_inst(struct gamepak * gpk, u16 addr) {
   // TODO: handle unusual case where instruction may cut across banks
   if (addr < 0x8000) {
     int linear_addr = addr < 0x4000 ? addr : (gpk->mbc_regs[1]-1)*0x4000+addr;
-    u8 byte_map = gpk->is_cached_bitmap[linear_addr >> 3];
-    u8 bit_mask = 1 << (linear_addr & 7);
-    if (!(byte_map & bit_mask)) {
+    struct inst *cached_inst = &gpk->cached_insts[linear_addr];
+    if (!cached_inst->type) { // no type means not seen
       u8 *base = addr < 0x4000 ? gpk->rom : gpk->rom_bank;
       addr = addr < 0x4000 ? addr : addr-0x4000;
-      if (!init_inst_from_bytes(&gpk->cached_insts[linear_addr], &base[addr]))
+      if (!init_inst_from_bytes(cached_inst, &base[addr]))
 	return NULL;
-      byte_map |= bit_mask;
-      gpk->is_cached_bitmap[linear_addr >> 3] = byte_map;
     }
-    return &gpk->cached_insts[linear_addr];
+    return cached_inst;
   } else {
     // TODO: consolidate logic with mem_read_inst
     init_inst_from_bytes(&gpk->_inst_in_ram, &gpk->ram[addr-0xA000]);
