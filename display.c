@@ -116,20 +116,17 @@ static inline int is_on(struct lcd_controller *lcd_c) {
   return b_is_on(lcd_c->regs[rLCDC], 7);
 }
 
-static inline void clear_screen(struct lcd_controller *lcd_c) {
-  memset((void*)fb, 0, SCALED_SCREEN_X * SCALED_SCREEN_Y * 4);
-  // TODO: consolidate these x11 lines into helper
-  XPutImage(display, pixmap, gc, image, 0, 0, 0, 0, SCALED_SCREEN_X, SCALED_SCREEN_Y);
-  XCopyArea(display, pixmap, window, gc, 0, 0, SCALED_SCREEN_X, SCALED_SCREEN_Y, 0, 0);
-  XFlush(display);
-}
-
 static void paint(struct lcd_controller *lcd_c) {
   XPutImage(display, pixmap, gc, image, 0, 0, 0, 0, SCALED_SCREEN_X, SCALED_SCREEN_Y);
   XCopyArea(display, pixmap, window, gc, 0, 0, SCALED_SCREEN_X, SCALED_SCREEN_Y, 0, 0);
   XFlush(display);
 }
 
+static inline void clear_screen(struct lcd_controller *lcd_c) {
+  for (int p = 0; p < SCALED_SCREEN_X * SCALED_SCREEN_Y; p++)
+    ((int*)fb)[p] = colors[0];
+  paint(lcd_c);
+}
 
 static inline u16 get_chr_line(struct lcd_controller *lcd_c, u16 chr_addr, u8 y, u8 attributes) {
   int len = is_obj_8x8(lcd_c) ? 8 : 16;
@@ -436,11 +433,11 @@ void lcd_reg_write(struct lcd_controller* lcd_c, enum lcd_reg reg, u8 value) {
   switch (reg) {
   case rLCDC:
     lcd_c->regs[reg] = value;
-    if (!b_is_on(value, 7)) { // turned off
+    if (!b_is_on(value, 7)) { // turning off
       lcd_c->regs[rLY] = 0;
       lcd_c->t_cycles_since_last_line_refresh = 0;
       clear_screen(lcd_c);
-      set_mode(lcd_c, MODE_HBLANK);
+      set_mode(lcd_c, MODE_HBLANK); // TODO: is this necessary?
     }
     break;
   case rSTAT:
