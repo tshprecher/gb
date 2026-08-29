@@ -116,6 +116,11 @@ static inline int is_on(struct lcd_controller *lcd_c) {
   return b_is_on(lcd_c->regs[rLCDC], 7);
 }
 
+// TODO: formalize triggers on register updates
+static inline void update_LYC_condition(struct lcd_controller *lcd_c) {
+  b_set(lcd_c->regs[rSTAT], 2, lcd_c->regs[rLY] == lcd_c->regs[rLYC]);
+}
+
 static void paint(struct lcd_controller *lcd_c) {
   XPutImage(display, pixmap, gc, image, 0, 0, 0, 0, SCALED_SCREEN_X, SCALED_SCREEN_Y);
   XCopyArea(display, pixmap, window, gc, 0, 0, SCALED_SCREEN_X, SCALED_SCREEN_Y, 0, 0);
@@ -328,12 +333,33 @@ void lcd_tick(struct lcd_controller *lcd_c) {
   if (!is_on(lcd_c))
     return;
 
+  lcd_c->t_cycles_since_last_line_refresh++;
+
+  if (lcd_c->t_cycles_since_last_line_refresh == 457) {
+    lcd_c->t_cycles_since_last_line_refresh = 0;
+    lcd_c->regs[rLY]++;
+    if (lcd_c->regs[rLY] > 153) {
+      lcd_c->regs[rLY] = 0;
+    }
+    update_LYC_condition(lcd_c);
+    if (b_is_on(lcd_c->regs[rSTAT], 6) && lcd_c->regs[rLY] == lcd_c->regs[rLYC]) {
+      interrupt(lcd_c->interrupt_c, LCDC_STAT);
+    }
+    if (lcd_c->regs[rLY] == 144) {
+      paint(lcd_c);
+      set_mode(lcd_c, MODE_VBLANK);
+      //      if (b_is_on(lcd_c->regs[rSTAT], 4))
+      //      	interrupt(lcd_c->interrupt_c, LCDC_STAT);
+      interrupt(lcd_c->interrupt_c, VBLANK);
+    }
+  }
+
   if (lcd_c->regs[rLY] < 144){
     if (lcd_c->t_cycles_since_last_line_refresh == 0) {
       set_mode(lcd_c, MODE_OAM_IN_USE);
       if (b_is_on(lcd_c->regs[rSTAT], 5))
 	interrupt(lcd_c->interrupt_c, LCDC_STAT);
-      load_oam(lcd_c);
+      //      load_oam(lcd_c);
     } else if (lcd_c->t_cycles_since_last_line_refresh == 80) {
       set_mode(lcd_c, MODE_OAM_AND_VRAM_IN_USE);
       scan_line(lcd_c);
@@ -343,22 +369,9 @@ void lcd_tick(struct lcd_controller *lcd_c) {
 	interrupt(lcd_c->interrupt_c, LCDC_STAT);
     }
   }
-  lcd_c->t_cycles_since_last_line_refresh++;
-  if (lcd_c->t_cycles_since_last_line_refresh == 457) {
-    lcd_c->t_cycles_since_last_line_refresh = 0;
-    lcd_c->regs[rLY]++;
-    if (b_is_on(lcd_c->regs[rSTAT], 6) && lcd_c->regs[rLY] == lcd_c->regs[rLYC])
-      interrupt(lcd_c->interrupt_c, LCDC_STAT);
-    if (lcd_c->regs[rLY] == 144) {
-      paint(lcd_c);
-      set_mode(lcd_c, MODE_VBLANK);
-      if (b_is_on(lcd_c->regs[rSTAT], 4))
-      	interrupt(lcd_c->interrupt_c, LCDC_STAT);
-      interrupt(lcd_c->interrupt_c, VBLANK);
-    } else if (lcd_c->regs[rLY] > 153) {
-      lcd_c->regs[rLY] = 0;
-    }
-  }
+
+
+
 }
 
 u8 inline lcd_vram_read(struct lcd_controller* lcd_c, u16 addr) {
@@ -373,8 +386,10 @@ u8 inline lcd_vram_read(struct lcd_controller* lcd_c, u16 addr) {
 void inline lcd_vram_write(struct lcd_controller* lcd_c, u16 addr, u8 value) {
   int mode = lcd_c->regs[rSTAT] & 3;
   if (addr < 0xA000 && mode < 3) {
+    // bg/window tiles
     lcd_c->vram[addr-0x8000] = value;
   } else if (addr >= 0xA000 && mode < 2) {
+    // oam
     lcd_c->vram[addr-0xFE00+0x2000] = value;
   }
 }
@@ -386,20 +401,25 @@ u8 inline lcd_reg_read(struct lcd_controller* lcd_c, enum lcd_reg reg) {
 void lcd_reg_write(struct lcd_controller* lcd_c, enum lcd_reg reg, u8 value) {
   u8 old_val = lcd_c->regs[reg];
   switch (reg) {
+  case rLYC:
+    lcd_c->regs[reg] = value;
+    update_LYC_condition(lcd_c);
+    break;
   case rLCDC:
     lcd_c->regs[reg] = value;
-    if (!b_is_on(value, 7)) { // turning off
-      lcd_c->regs[rLY] = 0;
+    if (b_is_off(value, 7)) { // turning off
+      lcd_c->regs[rLY] = 0; // TODO: unify changes to LY with it's condition
+      update_LYC_condition(lcd_c);
       lcd_c->t_cycles_since_last_line_refresh = 0;
       clear_screen(lcd_c);
-      set_mode(lcd_c, MODE_HBLANK); // TODO: is this necessary?
+      set_mode(lcd_c, MODE_HBLANK);
     }
     break;
   case rSTAT:
+    // TODO: unify read/write permissions for all registers
     old_val &= 0x3;
-    value &= 0xFC;
+    value &= ~0x3;
     lcd_c->regs[rSTAT] = old_val | value;
-    break;
   default:
     lcd_c->regs[reg] = value;
     break;
