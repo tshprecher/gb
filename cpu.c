@@ -53,7 +53,6 @@ static inline void check_interrupt(struct cpu *cpu) {
     }
 
     if (cpu->IME) {
-
       cpu->interrupt_c->IF ^= mask;
       cpu->is_halted = 0;
       cpu->IME = 0;
@@ -64,13 +63,10 @@ static inline void check_interrupt(struct cpu *cpu) {
       cpu->SP -= 2;
       cpu->PC = *handler_addr;
       cpu->interrupt_t_cycles = 6 << 2; // TODO: is this correct for every interrupt type?
-
     } else {
       if (cpu->is_halted) {
 	// PC is already set to the instruction after halt, just unhalt
 	cpu->is_halted = 0;
-      } else {
-       // do nothing here (TODO: remove this?)
       }
     }
   }
@@ -938,6 +934,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     break;
   case DAA:
     // direct implementation from the table defined in the Nintendo/Z80 manual.
+    printf("debug (cpu): ran DAA\n");
     daa_adj = 0;
     lower_nib = cpu->A & 0x0F;
     upper_nib = (cpu->A>>4) & 0x0F;
@@ -1023,7 +1020,6 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     break;
   case STOP:
     // TODO: implement
-    printf("debug (cpu): read STOP instruction\n");
     return -1;
   default:
     return -1;
