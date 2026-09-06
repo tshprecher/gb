@@ -177,14 +177,13 @@ static void load_tiles_by_line(struct lcd_controller *lcd_c,
 
     for (int p = 0; p < 8; p++) {
       int color_idx = get_chr_line_color_idx(chr_line, p, 0);
-      layer[line][tx+p] = get_color_id_from_palette(color_idx, palette) | (color_idx << 6);
+      layer[line][tx+p] = get_color_id_from_palette(color_idx, palette) | (color_idx << 2);
     }
     x+=8;
   }
 }
 
 static void load_bg_line(struct lcd_controller *lcd_c) {
-  // TODO: when off set the background to the proper null color, not always black
   if (is_bg_on(lcd_c)) {
     load_tiles_by_line(lcd_c,
 		       lcd_c->bg,
@@ -300,21 +299,20 @@ static void scan_line(struct lcd_controller *lcd_c) {
 	u8 attr = obj[3];
 	u8 palette = lcd_c->regs[b_is_on(attr, 4) ? rOBP1 : rOBP0];
 	u16 chr_line = get_chr_line(lcd_c, 0x8000 + (obj[2] * 16), y-(obj[1]-16) , attr);
-	for (int p = 0; p < 8; p++) {
-	  if (col[0]-8+p >= 0 && col[0]-8+p < 160) {
+	for (int p = 0, p_idx = col[0]-8; p < 8; p++, p_idx++) {
+	  if (p_idx >= 0 && p_idx < 160) {
 	    int color_idx = get_chr_line_color_idx(chr_line, p, attr);
-	    if (!(oam_pixels[col[0]-8+p] & 0x80) ||
-		(!(oam_pixels[col[0]-8+p] & (0x3<<4)) && color_idx)) {
+	    if (b_is_off(oam_pixels[p_idx], 5) /* first time written */ ||
+		(!(oam_pixels[col[0]-8+p] & (0x3<<2)) && color_idx) /* pixel already written but we override color index when 0 */ ) {
 
 	      int pixel = get_color_id_from_palette(color_idx, palette);
-	      b_set_on(pixel, 7); // upper bit indicates value is set
+	      pixel |= (color_idx << 2);
+	      b_set_on(pixel, 5); // indicate color has been set by a previous obj
 	      if (b_is_on(attr, 7))
-		b_set_on(pixel, 6);
-	      pixel |= color_idx << 4;
+		b_set_on(pixel, 4); // non-zero bg/wdw color indices drawn over this obj
 
-	      oam_pixels[col[0]-8+p] = pixel;
+	      oam_pixels[p_idx] = pixel;
 	    }
-
 	  }
 	}
       }
@@ -335,13 +333,13 @@ static void scan_line(struct lcd_controller *lcd_c) {
     } else {
       color_id = lcd_c->bg[(y+scy)%256][x%256];
     }
-    color_idx = color_id >> 6;
+    color_idx = color_id >> 2;
     color_id &= 0x3;
 
     if (is_obj_on(lcd_c) &&
-	b_is_on(oam_pixels[fx], 7) &&
-	(oam_pixels[fx] & (0x3 << 4)) &&
-	!(b_is_on(oam_pixels[fx], 6) && color_idx)) {
+	b_is_on(oam_pixels[fx], 5) && // oam pixel exists
+	(oam_pixels[fx] & (0x3<<2)) && // color index is not zero
+	!(b_is_on(oam_pixels[fx], 4) && color_idx)) {
       color_id = oam_pixels[fx] & 0x3;
     }
 
