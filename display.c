@@ -128,10 +128,10 @@ static inline void clear_screen(struct lcd_controller *lcd_c) {
   paint(lcd_c);
 }
 
-static inline u16 get_chr_line(struct lcd_controller *lcd_c, u16 chr_addr, u8 y, u8 attributes) {
+static inline u16 get_chr_line(struct lcd_controller *lcd_c, u16 chr_addr, u8 y, u8 attr) {
   int len = is_obj_8x8(lcd_c) ? 8 : 16;
   y &= (len-1);
-  if (b_is_on(attributes, 6)) { // flip y
+  if (b_is_on(attr, 6)) { // flip y
     y = len-1-y;
   }
   u16 chr_line = lcd_c->vram[chr_addr - 0x8000 + y*2] << 8;
@@ -139,9 +139,9 @@ static inline u16 get_chr_line(struct lcd_controller *lcd_c, u16 chr_addr, u8 y,
   return chr_line;
 }
 
-static inline u8 get_chr_line_color_idx(u16 chr_line, u8 x, u8 attributes) {
+static inline u8 get_chr_line_color_idx(u16 chr_line, u8 x, u8 attr) {
   x &= 7;
-  if (!b_is_on(attributes, 5)) {
+  if (!b_is_on(attr, 5)) {
     x = 7-x;
   }
 
@@ -205,72 +205,29 @@ static void load_wdw_line(struct lcd_controller *lcd_c) {
 
 
 static void load_oam(struct lcd_controller *lcd_c) {
-  // TODO: skip if objects are unchanged
-  lcd_c->oam[0] = 0;
-
-  u8 active_cols[40] = {0};
-  u8 num_per_col[40] = {0};
-  u8 num_per_line[256] = {0}; // TODO: nit, make this a bitfield?
-  int is_8x8 = is_obj_8x8(lcd_c);
+  lcd_c->oam.length = 0;
   u8 *oaddr = &lcd_c->vram[0x2000];
+  int is_8x8 = is_obj_8x8(lcd_c);
+  u8 num_per_line[256] = {0}; // TODO: nit, make this a bitfield?
   for (int i = 0; i < 160; i+=4) {
     int y = oaddr[i];
     if ((is_8x8 && y < 8) || (!is_8x8 && y == 0) || num_per_line[y] == 10)
       continue;
     num_per_line[y]++;
 
-    int x = oaddr[i+1];
-    int a = 0;
-    while (a < lcd_c->oam[0] && active_cols[a] != x)
-      a++;
-    num_per_col[a]++;
+    struct obj obj = {
+      .y = y,
+      .x = oaddr[i+1],
+      .chr_code = oaddr[i+2],
+      .attr =  oaddr[i+3],
+    };
 
-    if (a == lcd_c->oam[0]) { // insertion sort descending
-      active_cols[lcd_c->oam[0]] = x;
-      for (int s = lcd_c->oam[0]; s > 0 && active_cols[s] > active_cols[s-1]; s--) {
-	// swap col
-	active_cols[s] ^= active_cols[s-1];
-	active_cols[s-1] ^= active_cols[s];
-	active_cols[s] ^= active_cols[s-1];
-
-	// swap num per col
-	num_per_col[s] ^= num_per_col[s-1];
-	num_per_col[s-1] ^= num_per_col[s];
-	num_per_col[s] ^= num_per_col[s-1];
-      }
-      lcd_c->oam[0]++;
+    lcd_c->oam.objs[lcd_c->oam.length++] = obj;
+    for (int l = lcd_c->oam.length-1; l > 0 && (lcd_c->oam.objs[l].x < lcd_c->oam.objs[l-1].x); l--) {
+      struct obj temp = lcd_c->oam.objs[l-1];
+      lcd_c->oam.objs[l-1] = lcd_c->oam.objs[l];
+      lcd_c->oam.objs[l] = temp;
     }
-  }
-
-  u8 *cur_col = &lcd_c->oam[1];
-  for (int a = 0; a < lcd_c->oam[0]; a++) {
-    cur_col[0] = active_cols[a];
-    cur_col[1] = num_per_col[a];
-    cur_col += (2 + num_per_col[a]*4);
-  }
-
-  u8 filled_by_col[40] = {0};
-  memset(num_per_line, 0, 256);
-  for (int i = 0; i < 160; i+=4) {
-    int y = oaddr[i];
-    if ((is_8x8 && y < 8) || (!is_8x8 && y == 0) || num_per_line[y] == 10)
-      continue;
-    num_per_line[y]++;
-
-    int x = oaddr[i+1];
-    int f = 0;
-    cur_col = &lcd_c->oam[1];
-    while (cur_col[0] != x) {
-      cur_col += 2 + cur_col[1]*4;
-      f++;
-    }
-
-    u8 *obj = cur_col + 2 + filled_by_col[f]*4;
-    obj[0] = i>>2;
-    obj[1] = oaddr[i];
-    obj[2] = oaddr[i+2];
-    obj[3] = oaddr[i+3];
-    filled_by_col[f]++;
   }
 }
 
@@ -287,36 +244,36 @@ static void scan_line(struct lcd_controller *lcd_c) {
   int wy = lcd_c->regs[rWY];
 
   u8 oam_pixels[160] = {0};
-  if (is_obj_on(lcd_c)) { // compute oam line pixels
+  int obj_on = is_obj_on(lcd_c);
+  if (obj_on) { // compute oam line pixels
     int height = is_obj_8x8(lcd_c) ? 8 : 16;
-    u8 *col = &lcd_c->oam[1];
-    for (int c = 0; c < lcd_c->oam[0]; c++) {
-      for (int b = 0; b < col[1]; b++) {
-	u8 *obj = &col[2+b*4];
-	if (obj[1]-16+height <= y || obj[1]-16 > y)
-	  continue;
+    for (int oi = 0; oi < lcd_c->oam.length; oi++) {
+      struct obj *obj  = &lcd_c->oam.objs[oi];
+      if (obj->y-16+height <= y || obj->y-16 > y)
+	continue;
 
-	u8 attr = obj[3];
-	u8 palette = lcd_c->regs[b_is_on(attr, 4) ? rOBP1 : rOBP0];
-	u16 chr_line = get_chr_line(lcd_c, 0x8000 + (obj[2] * 16), y-(obj[1]-16) , attr);
-	for (int p = 0, p_idx = col[0]-8; p < 8; p++, p_idx++) {
-	  if (p_idx >= 0 && p_idx < 160) {
-	    int color_idx = get_chr_line_color_idx(chr_line, p, attr);
-	    if (b_is_off(oam_pixels[p_idx], 5) /* first time written */ ||
-		(!(oam_pixels[col[0]-8+p] & (0x3<<2)) && color_idx) /* pixel already written but we override color index when 0 */ ) {
+      u8 palette = lcd_c->regs[b_is_on(obj->attr, 4) ? rOBP1 : rOBP0];
+      u16 chr_line = get_chr_line(lcd_c,
+				  0x8000 + (obj->chr_code * 16),
+				  y-(obj->y-16),
+				  obj->attr);
 
-	      int pixel = get_color_id_from_palette(color_idx, palette);
-	      pixel |= (color_idx << 2);
-	      b_set_on(pixel, 5); // indicate color has been set by a previous obj
-	      if (b_is_on(attr, 7))
-		b_set_on(pixel, 4); // non-zero bg/wdw color indices drawn over this obj
+      for (int p = 0, x = obj->x-8; p < 8; p++, x++) {
+	if (x >= 0 && x < 160) {
+	  int color_idx = get_chr_line_color_idx(chr_line, p, obj->attr);
+	  if (b_is_off(oam_pixels[x], 5) /* first time written */ ||
+	      (!(oam_pixels[x] & (0x3<<2)) && color_idx) /* pixel already written but we override color index when 0 */ ) {
 
-	      oam_pixels[p_idx] = pixel;
-	    }
+	    int pixel = get_color_id_from_palette(color_idx, palette);
+	    pixel |= (color_idx << 2);
+	    b_set_on(pixel, 5); // indicate color has been set by a previous obj
+	    if (b_is_on(obj->attr, 7))
+	      b_set_on(pixel, 4); // non-zero bg/wdw color indices drawn over this obj
+
+	    oam_pixels[x] = pixel;
 	  }
 	}
       }
-      col += 2 + col[1]*4;
     }
   }
 
@@ -336,7 +293,7 @@ static void scan_line(struct lcd_controller *lcd_c) {
     color_idx = color_id >> 2;
     color_id &= 0x3;
 
-    if (is_obj_on(lcd_c) &&
+    if (obj_on &&
 	b_is_on(oam_pixels[fx], 5) && // oam pixel exists
 	(oam_pixels[fx] & (0x3<<2)) && // color index is not zero
 	!(b_is_on(oam_pixels[fx], 4) && color_idx)) {

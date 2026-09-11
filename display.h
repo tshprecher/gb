@@ -10,6 +10,18 @@ enum lcd_reg {
   rBGP, rOBP0, rOBP1, rWY, rWX
 };
 
+struct obj {
+  u8 y;
+  u8 x;
+  u8 chr_code;
+  u8 attr;
+};
+
+struct oam {
+  int length;
+  struct obj objs[40];
+};
+
 struct lcd_controller {
   u8 vram[0x2000 /* bg/char data*/ + 0xA0 /* oam data */];
 
@@ -21,12 +33,7 @@ struct lcd_controller {
   u8 bg[256][256];
   u8 wdw[256][256]; // TODO: revisit resizing to 144x160
 
-  // compact format for oam objects
-  u8 oam[1 + // num active columns
-	  2*40 + // 2 bytes overhead per column (x, # elements), max 40
-	  40*4 // 4 bytes per (id, y, chr_code, attr) tuple, max 40 tuples
-	  ];
-
+  struct oam oam;
   struct interrupt_controller *interrupt_c;
 };
 
