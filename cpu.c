@@ -264,35 +264,27 @@ void cpu_tick(struct cpu *cpu) {
   }
 }
 
-
 struct dst {
   u8 *reg;
   u16 addr;
   struct mem_controller *mc;
 };
 
-
-// TODO: find out why removing these declarations craps out the linker
-void dst_init_reg(struct dst *dst, struct cpu * cpu, u8 r);
-void dst_init_addr(struct dst *dst, struct mem_controller *mc, u16 addr);
-u8 dst_val(struct dst *dst);
-void dst_assign(struct dst *dst, s8 byte);
-
-inline void dst_init_reg(struct dst *dst, struct cpu * cpu, u8 r) {
+static inline void dst_init_reg(struct dst *dst, struct cpu * cpu, u8 r) {
   dst->reg = reg(cpu, r);
 }
 
-inline void dst_init_addr(struct dst *dst, struct mem_controller *mc, u16 addr) {
+static inline void dst_init_addr(struct dst *dst, struct mem_controller *mc, u16 addr) {
   dst->reg = NULL;
   dst->addr = addr;
   dst->mc = mc;
 }
 
-inline u8 dst_val(struct dst *dst) {
+static inline u8 dst_val(struct dst *dst) {
   return dst->reg ? *dst->reg : mem_read(dst->mc, dst->addr);
 }
 
-inline void dst_assign(struct dst *dst, s8 byte) {
+static inline void dst_assign(struct dst *dst, s8 byte) {
   dst->reg ? *dst->reg = byte : mem_write(dst->mc, dst->addr, byte);
 }
 
@@ -302,9 +294,8 @@ inline void dst_assign(struct dst *dst, s8 byte) {
 // TODO: should this return 0 cycles on error instead? makes some sense
 int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
   u16 hl, word;
-  u8 flag_cy=0, flag_h=0, flag_n=0, flag_z=0, byte,
-    dd_or_ss, daa_adj, lower_nib, upper_nib;
-  struct dst dst = {0};
+  u8 flag_cy, flag_h,  flag_z, byte, dd_or_ss, daa_adj;
+  struct dst dst;
   s8 e;
   switch (inst->type) {
   case NOP:
@@ -933,77 +924,27 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     word_to_regs(cpu, cpu->SP + e, rH, rL);
     break;
   case DAA:
-    // direct implementation from the table defined in the Nintendo/Z80 manual.
-    printf("debug (cpu): ran DAA\n");
     daa_adj = 0;
-    lower_nib = cpu->A & 0x0F;
-    upper_nib = (cpu->A>>4) & 0x0F;
     if (b_is_off(cpu->F, F_N)) {
-      if (b_is_off(cpu->F, F_CY)) {
-	if (b_is_off(cpu->F, F_H)) {
-	  if (upper_nib <= 9 && lower_nib <= 9) {
-	    daa_adj = 0;
-	    flag_cy = 0;
-	  } else if (upper_nib <= 8 && lower_nib >= 0xA) {
-	    daa_adj = 0x06;
-	    flag_cy = 0;
-	  } else if (upper_nib >= 0xA && lower_nib <= 9) {
-	    daa_adj = 0x60;
-	    flag_cy = 1;
-	  } else if (upper_nib >= 0x9 && lower_nib >= 0xA) {
-	    daa_adj = 0x66;
-	    flag_cy = 1;
-	  }
-	} else {
-	  if (upper_nib <= 9 && lower_nib <= 3) {
-	    daa_adj = 0x06;
-	    flag_cy = 0;
-	  } else if (upper_nib >= 0xA  && lower_nib <= 3) {
-	    daa_adj = 0x66;
-	    flag_cy = 1;
-	  }
-	}
-      } else {
-	if (b_is_off(cpu->F, F_H)) {
-	  if (upper_nib <= 2 && lower_nib <= 9) {
-	    daa_adj = 0x60;
-	    flag_cy = 1;
-	  } else if (upper_nib <= 2 && lower_nib >= 0xA) {
-	    daa_adj = 0x66;
-	    flag_cy = 1;
-	  }
-	} else {
-	  if (upper_nib <= 3 && lower_nib <= 3) {
-	    daa_adj = 0x66;
-	    flag_cy = 1;
-	  }
-	}
+      if (b_is_on(cpu->F, F_H) || (cpu->A & 0x0F) > 0x9) {
+	daa_adj |= 0x06;
       }
+      if (b_is_on(cpu->F, F_CY) || cpu->A > 0x99) {
+	daa_adj |= 0x60;
+	b_set_on(cpu->F, F_CY);
+      }
+      cpu->A += daa_adj;
     } else {
-      if (b_is_off(cpu->F, F_CY)) {
-	if (b_is_off(cpu->F, F_H) && upper_nib <=9 && lower_nib <= 9) {
-	  daa_adj = 0;
-	  flag_cy =0;
-	} else if (b_is_on(cpu->F, F_H) && upper_nib <= 8 && lower_nib >= 6) {
-	  daa_adj = 0xFA;
-	  flag_cy = 0;
-	}
-      } else {
-	if (b_is_off(cpu->F, F_H) && upper_nib >= 7 && lower_nib <= 9) {
-	  daa_adj = 0xA0;
-	  flag_cy = 1;
-	} else if (b_is_on(cpu->F, F_H) && upper_nib >= 6 && lower_nib >= 6) {
-	  daa_adj = 0x9A;
-	  flag_cy = 1;
-	}
+      if (b_is_on(cpu->F, F_H)) {
+	daa_adj |= 0x06;
       }
+      if (b_is_on(cpu->F, F_CY)) {
+	daa_adj |= 0x60;
+      }
+      cpu->A -= daa_adj;
     }
-    flag_n = b_is_on(cpu->F, F_N);
-    cpu->A = alu_add(cpu, cpu->A, daa_adj, 0);
-
     b_set_off(cpu->F, F_H);
-    b_set(cpu->F, F_CY, flag_cy);
-    b_set(cpu->F, F_N, flag_n);
+    b_set(cpu->F, F_Z, !cpu->A);
     break;
   case PUSH:
     word = get_qq(cpu, inst->args[0].value.byte);
