@@ -20,7 +20,7 @@ struct inst_prototype {
   enum inst_type type;
   u8 form;
   u8 bytelen;
-  u8 cycles;
+  u8 m_cycles;
   char *bit_pattern;
   char *txt_pattern;
   struct inst_arg args[3];
@@ -193,7 +193,7 @@ static void inst_clear_args(struct inst *inst) {
 
 // Returns true iff the instruction byte matches the bit pattern.
 // If true, the instruction is filled with parsed args.
-static int _match_bit_pattern(struct inst* inst,  char *bytes, char *pattern)
+static int match_bit_pattern(struct inst* inst,  char *bytes, char *pattern)
 {
     int shift = 0;
     int c = 0;
@@ -317,9 +317,9 @@ int init_inst_from_bytes(struct inst* inst, void *bytes) {
     inst->type = ptype.type;
     inst->form = ptype.form;
     inst->bytelen = ptype.bytelen;
-    inst->cycles = ptype.cycles;
+    inst->m_cycles = ptype.m_cycles;
     inst->args_count = 0;
-    if (_match_bit_pattern(inst, bytes, ptype.bit_pattern)) {
+    if (match_bit_pattern(inst, bytes, ptype.bit_pattern)) {
       return 1;
     }
   }
@@ -328,7 +328,7 @@ int init_inst_from_bytes(struct inst* inst, void *bytes) {
 
 // Returns true if and only if the assembly line matches an instruction
 // text pattern. If true, the instruction is filled with parsed args.
-static int _match_txt_pattern(struct inst* inst, char *asmline, char *pattern) {
+static int match_txt_pattern(struct inst* inst, char *asmline, char *pattern) {
   int a = 0, p = 0;
   // remove leading whitespace before comparing
   while(asmline[a] == ' ')
@@ -506,9 +506,9 @@ int init_inst_from_asm(struct inst *inst, char *asmline) {
     inst->type = ptype.type;
     inst->form = ptype.form;
     inst->bytelen = ptype.bytelen;
-    inst->cycles = ptype.cycles;
+    inst->m_cycles = ptype.m_cycles;
     inst->args_count = 0;
-    if (_match_txt_pattern(inst, asmline, ptype.txt_pattern)) {
+    if (match_txt_pattern(inst, asmline, ptype.txt_pattern)) {
       return 1;
     }
   }

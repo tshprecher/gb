@@ -240,28 +240,20 @@ void cpu_tick(struct cpu *cpu) {
   if (!cpu->next_inst || cpu->t_cycles_since_last_inst == 0) // TODO: put this in the init?
     cpu->next_inst = mem_read_inst(cpu->memory_c, cpu->PC);
 
-  // 4 clock "t" cycles per machine "m" cycle
-  s8 exec_cycle = (cpu->next_inst->cycles << 2);
   cpu->t_cycles_since_last_inst++;
-  if (cpu->t_cycles_since_last_inst == exec_cycle) {
+  if (cpu->t_cycles_since_last_inst == (cpu->next_inst->m_cycles << 2)) { // 4 clock "t" cycles per machine "m" cycle
     /*    char buf[128];
     inst_to_str(cpu->next_inst, buf);
     printf("(DEBUG): [t: %d, f: %d]  0x%04X\t%s\n", cpu->next_inst->type, cpu->next_inst->form, cpu->PC, buf);*/
-    int cycles = cpu_exec_instruction(cpu, cpu->next_inst);
-    if (cycles < 0) {
+    int consumed_m_cycles = cpu_exec_instruction(cpu, cpu->next_inst);
+    if (consumed_m_cycles < 0) {
       char buf[16];
       inst_to_str(cpu->next_inst, buf);
       fprintf(stderr, "error: could not execute instr '%s' @ 0x%04X\n",
 	      buf, cpu->PC);
       exit(1);
     }
-
-    if (exec_cycle > cpu->t_cycles_since_last_inst) {
-      // go negative to catch up for variable timed instructions
-      cpu->t_cycles_since_last_inst -= exec_cycle;
-    } else {
-      cpu->t_cycles_since_last_inst = 0;
-    }
+    cpu->t_cycles_since_last_inst = (cpu->next_inst->m_cycles-consumed_m_cycles)<<2;
   }
 }
 
@@ -290,7 +282,7 @@ static inline void dst_assign(struct dst *dst, s8 byte) {
 }
 
 // cpu_exec_instruction takes a executes the instruction.
-// It returns the number of cycles run, -1 on error
+// it returns the number of m cycles run, -1 on error
 // TODO: could use a few more macros for clarity?
 // TODO: should this return 0 cycles on error instead? makes some sense
 int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
@@ -732,7 +724,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     switch (inst->form) {
     case 0:
       cpu->PC = nn_to_word(inst, 0);
-      return inst->cycles;
+      return inst->m_cycles;
     case 1:
       if (is_cond_true(cpu, inst->args[0].value.byte)) {
 	cpu->PC = nn_to_word(inst, 1);
@@ -741,7 +733,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       break;
     case 2:
       cpu->PC = regs_to_word(cpu, rH, rL);
-      return inst->cycles;
+      return inst->m_cycles;
     }
     break;
   case JR:
@@ -749,7 +741,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     case 0:
       e = (s8) inst->args[0].value.byte;
       cpu->PC = cpu->PC + e + 2;
-      return inst->cycles;
+      return inst->m_cycles;
     case 1:
       if (is_cond_true(cpu, inst->args[0].value.byte)) {
 	e = (s8) inst->args[1].value.byte;
@@ -766,7 +758,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       mem_write(cpu->memory_c, cpu->SP-2, lower((cpu->PC + 3)));
       cpu->SP-=2;
       cpu->PC = nn_to_word(inst, 0);
-      return inst->cycles;
+      return inst->m_cycles;
     case 1:
       if (is_cond_true(cpu, inst->args[0].value.byte)) {
 	mem_write(cpu->memory_c, cpu->SP-1, upper((cpu->PC + 3)));
@@ -789,7 +781,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     case 0:
       cpu->PC = bytes_to_word(mem_read(cpu->memory_c, cpu->SP), mem_read(cpu->memory_c, cpu->SP+1));
       cpu->SP+=2;
-      return inst->cycles;
+      return inst->m_cycles;
     case 1:
       if (is_cond_true(cpu, inst->args[0].value.byte)) {
 	cpu->PC = bytes_to_word(mem_read(cpu->memory_c, cpu->SP), mem_read(cpu->memory_c, cpu->SP+1));
@@ -803,7 +795,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu->IME = 1;
     cpu->PC = bytes_to_word(mem_read(cpu->memory_c, cpu->SP), mem_read(cpu->memory_c, cpu->SP+1));
     cpu->SP+=2;
-    return inst->cycles;
+    return inst->m_cycles;
   case RST:
     mem_write(cpu->memory_c, cpu->SP-1, upper((cpu->PC+1)));
     mem_write(cpu->memory_c, cpu->SP-2, lower((cpu->PC+1)));
@@ -834,7 +826,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       cpu->PC = 0x38;
       break;
     }
-    return inst->cycles;
+    return inst->m_cycles;
   case LD:
     switch (inst->form) {
     case 0:
@@ -974,5 +966,5 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
       cpu->IME = 1;
   }
 
-  return inst->cycles;
+  return inst->m_cycles;
 }

@@ -45,7 +45,7 @@ int test_cpu_exec() {
     struct cpu initial_cpu;
 
     // expected state after instruction exec
-    int cycles;
+    int m_cycles;
     struct cpu expected;
     u8 expected_flags;
     u16 modified_addrs[2];
@@ -651,9 +651,9 @@ int test_cpu_exec() {
       suite_test_end(&ts);
       continue;
     }
-    int cycles = cpu_exec_instruction(&cpu, &inst);
-    if (cycles != tst.cycles) {
-      suite_test_error(&ts, "\tfound cycles:\t%d\n\t\texpected:\t%d\n", cycles, tst.cycles);
+    int m_cycles = cpu_exec_instruction(&cpu, &inst);
+    if (m_cycles != tst.m_cycles) {
+      suite_test_error(&ts, "\tfound m_cycles:\t%d\n\t\texpected:\t%d\n", m_cycles, tst.m_cycles);
     }
     if (!cpu_equals_ignore_flags(cpu, tst.expected)) {
       cpu_to_str(buf1, &cpu);
