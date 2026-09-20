@@ -102,7 +102,7 @@ struct inst {
   // the number of machine cycles needed to execute. note, few
   // instructions take variable number of cycles. that's
   // delegated to the cpu at execution time.
-  u8 cycles;
+  u8 m_cycles;
 
   // store up to 3 args associated with the instruction
   struct inst_arg args[3];
