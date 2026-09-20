@@ -36,6 +36,7 @@ struct cpu {
 
   // interrupt master enable flag
   u8 IME;
+  u8 enable_interrupt_after_next_inst;
 
   // controllers to interface with other hardware
   struct mem_controller *memory_c;

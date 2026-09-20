@@ -257,7 +257,8 @@ void cpu_tick(struct cpu *cpu) {
     }
 
     if (exec_cycle > cpu->t_cycles_since_last_inst) {
-      cpu->t_cycles_since_last_inst -= exec_cycle; // go negative to catch up
+      // go negative to catch up for variable timed instructions
+      cpu->t_cycles_since_last_inst -= exec_cycle;
     } else {
       cpu->t_cycles_since_last_inst = 0;
     }
@@ -712,7 +713,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu->IME = 0;
     break;
   case EI:
-    cpu->IME = 1;
+    cpu->enable_interrupt_after_next_inst = 1;
     break;
   case RES:
     switch (inst->form) {
@@ -966,5 +967,12 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     return -1;
   }
   cpu->PC += inst->bytelen;
+
+  if (inst->type != EI && cpu->enable_interrupt_after_next_inst == 1) {
+    cpu->enable_interrupt_after_next_inst = 0;
+    if (inst->type != DI)
+      cpu->IME = 1;
+  }
+
   return inst->cycles;
 }
