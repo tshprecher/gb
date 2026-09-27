@@ -217,7 +217,7 @@ static u8 alu_sub(struct cpu *cpu, u8 op1, u8 op2) {
 }
 
 void init_cpu(struct cpu *cpu) {
-  cpu->PC = 0x150;
+  cpu->PC = 0x100;
   cpu->SP = 0xFFFE;
 }
 
@@ -244,7 +244,7 @@ void cpu_tick(struct cpu *cpu) {
   if (cpu->t_cycles_since_last_inst == (cpu->next_inst->m_cycles << 2)) { // 4 clock "t" cycles per machine "m" cycle
     /*    char buf[128];
     inst_to_str(cpu->next_inst, buf);
-    printf("(DEBUG): [t: %d, f: %d]  0x%04X\t%s\n", cpu->next_inst->type, cpu->next_inst->form, cpu->PC, buf);*/
+    printf("(debug): [t: %d, f: %d]  0x%04X\t%s\n", cpu->next_inst->type, cpu->next_inst->form, cpu->PC, buf);*/
     int consumed_m_cycles = cpu_exec_instruction(cpu, cpu->next_inst);
     if (consumed_m_cycles < 0) {
       char buf[16];
@@ -954,7 +954,8 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     break;
   case STOP:
     // TODO: implement
-    return -1;
+    //    return -1;
+    break;
   default:
     return -1;
   }
