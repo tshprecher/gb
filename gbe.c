@@ -129,7 +129,7 @@ int main(int argc, char *argv[])
     struct gamepak gpk = {0};
     init_gamepak(&gpk, argv[2]);
 
-    int addr = 0x150;
+    int addr = 0x100;
     struct inst decoded;
     char buf[16];
     while (addr < 0x8000) {
