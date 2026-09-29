@@ -53,8 +53,8 @@ static inline void check_interrupt(struct cpu *cpu) {
     }
 
     if (cpu->IME) {
+      cpu->state = CPU_STATE_RUNNING;
       cpu->interrupt_c->IF ^= mask;
-      cpu->is_halted = 0;
       cpu->IME = 0;
 
       // TODO: consolidate PUSH into one operation?
@@ -63,11 +63,9 @@ static inline void check_interrupt(struct cpu *cpu) {
       cpu->SP -= 2;
       cpu->PC = *handler_addr;
       cpu->interrupt_t_cycles = 6 << 2; // TODO: is this correct for every interrupt type?
-    } else {
-      if (cpu->is_halted) {
-	// PC is already set to the instruction after halt, just unhalt
-	cpu->is_halted = 0;
-      }
+    } else if (cpu->state == CPU_STATE_HALTED) {
+      // PC is already set to the instruction after halt, just unhalt
+      cpu->state = CPU_STATE_RUNNING;
     }
   }
 }
@@ -223,8 +221,8 @@ void init_cpu(struct cpu *cpu) {
 
 void cpu_tick(struct cpu *cpu) {
   if (cpu->t_cycles_since_last_inst < 0) { // catch up for variably timed instructions
-      cpu->t_cycles_since_last_inst++;
-      return;
+    cpu->t_cycles_since_last_inst++;
+    return;
   }
 
   if (cpu->interrupt_t_cycles) {
@@ -234,7 +232,7 @@ void cpu_tick(struct cpu *cpu) {
 
   check_interrupt(cpu);
 
-  if (cpu->is_halted)
+  if (cpu->state == CPU_STATE_HALTED)
     return;
 
   if (!cpu->next_inst || cpu->t_cycles_since_last_inst == 0) // TODO: put this in the init?
@@ -950,7 +948,7 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu->SP+=2;
     break;
   case HALT:
-    cpu->is_halted = 1;
+    cpu->state = CPU_STATE_HALTED;
     break;
   case STOP:
     // TODO: implement
