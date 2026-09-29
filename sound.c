@@ -258,10 +258,9 @@ void sound_tick(struct sound_controller *sc) {
     return;
 
   sc->t_cycles++;
-  // TODO: consider bundling more than one sample at a time
-  while (sc->t_cycles >= 760) { // TODO: compute this on init
-    s16 accumulated_samples[16] = {0}; // TODO: rename stereo samples?
-    s16 sbuf[8];
+  while (sc->t_cycles >= 380) { // TODO: compute this on init
+    s16 accumulated_samples[8] = {0}; // TODO: rename stereo samples?
+    s16 sbuf[4];
     for (int s = 0; s < 4; s++) {
       struct sound *sound = &sc->sounds[s];
       if (sound->type < 1 || sound->type > 4) {
@@ -274,7 +273,7 @@ void sound_tick(struct sound_controller *sc) {
 	disable_sound(sc, sound->type);
 	continue;
       }
-      int generated = sound_generate_samples(sc, sound, sbuf, 8); // TODO: do we need to check for sound completion in functions called from here?
+      int generated = sound_generate_samples(sc, sound, sbuf, 4); // TODO: do we need to check for sound completion in functions called from here?
       for (int s = 0; s < generated; s++) {
 	if (is_on_stereo_left(sc, sound->type)) {
 	  accumulated_samples[s*2] += sbuf[s]*stereo_vol_left(sc);
@@ -285,13 +284,13 @@ void sound_tick(struct sound_controller *sc) {
       }
     }
 
-    int error = pa_stream_write(stream, accumulated_samples, 16*sizeof(s16), NULL, 0, PA_SEEK_RELATIVE);
+    int error = pa_stream_write(stream, accumulated_samples, 8*sizeof(s16), NULL, 0, PA_SEEK_RELATIVE);
     if (error) {
       printf("error: writing samples, error code: %d\n", error);
       printf("error: writing samples, error str: %s\n", pa_strerror(error));
     }
     pa_mainloop_iterate(mainloop, 0, NULL);
-    sc->t_cycles -= 760;
+    sc->t_cycles -= 380;
   }
 }
 

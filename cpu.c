@@ -43,18 +43,18 @@ static inline void check_interrupt(struct cpu *cpu) {
   if (cpu->t_cycles_since_last_inst == 0 &&
       (cpu->interrupt_c->IF & cpu->interrupt_c->IE)) {
 
-    u16 *handler_addr = interrupt_handlers;
-    u8 mask = 1;
-    while (mask < (1<<5)) {
-      if ((cpu->interrupt_c->IF & mask) && (cpu->interrupt_c->IE & mask))
-       break;
-      mask <<= 1;
-      handler_addr++;
-    }
-
     if (cpu->IME) {
+      u16 *handler_addr = interrupt_handlers;
+      u8 mask = 1;
+      while (mask < (1<<5)) {
+	if ((cpu->interrupt_c->IF & mask) && (cpu->interrupt_c->IE & mask))
+	  break;
+	mask <<= 1;
+	handler_addr++;
+      }
+
+      cpu->state = CPU_STATE_RUNNING;
       cpu->interrupt_c->IF ^= mask;
-      cpu->is_halted = 0;
       cpu->IME = 0;
 
       // TODO: consolidate PUSH into one operation?
@@ -63,33 +63,34 @@ static inline void check_interrupt(struct cpu *cpu) {
       cpu->SP -= 2;
       cpu->PC = *handler_addr;
       cpu->interrupt_t_cycles = 6 << 2; // TODO: is this correct for every interrupt type?
-    } else {
-      if (cpu->is_halted) {
-	// PC is already set to the instruction after halt, just unhalt
-	cpu->is_halted = 0;
-      }
+    } else if (cpu->state == CPU_STATE_HALTED) {
+      // PC is already set to the instruction after halt, just unhalt
+      cpu->state = CPU_STATE_RUNNING;
     }
   }
 }
 
 static u8 * reg(struct cpu *cpu, u8 reg) {
-  if (reg == rA)
-      return &cpu->A;
-  if (reg == rB)
+  switch (reg) {
+  case rA:
+    return &cpu->A;
+  case rB:
     return &cpu->B;
-  if (reg == rC)
+  case rC:
     return &cpu->C;
-  if (reg == rD)
+  case rD:
     return &cpu->D;
-  if (reg == rE)
+  case rE:
     return &cpu->E;
-  if (reg == rF)
+  case rF:
     return &cpu->F;
-  if (reg == rH)
+  case rH:
     return &cpu->H;
-  if (reg == rL)
+  case rL:
     return &cpu->L;
-  return NULL;
+  default:
+    return NULL;
+  }
 }
 
 static u16 regs_to_word(struct cpu * cpu, u8 upper_reg, u8 lower_reg) {
@@ -112,8 +113,8 @@ static u16 get_qq(struct cpu *cpu, u8 qq) {
   case 3:
     return regs_to_word(cpu, rA, rF) & 0xFFF0; // flags register alyways has lower nibble 0
   }
-  // TODO: panic here
-  return 0;
+  printf("get_qq: invalid arg: %d\n", qq);
+  abort();
 }
 
 static void set_qq(struct cpu *cpu, u8 qq, u16 word) {
@@ -222,9 +223,22 @@ void init_cpu(struct cpu *cpu) {
 }
 
 void cpu_tick(struct cpu *cpu) {
-  if (cpu->t_cycles_since_last_inst < 0) { // catch up for variably timed instructions
-      cpu->t_cycles_since_last_inst++;
-      return;
+  // TODO: maybe we run and then always delay instead of this hack
+  // catch up cycles for:
+  //  - variable timed instructions where we need a delay
+  //  - delay of 217 cycles when going from STOPPED to RUNNING
+  if (cpu->t_cycles_since_last_inst < 0) {
+    cpu->t_cycles_since_last_inst++;
+    return;
+  }
+
+  if (cpu->state == CPU_STATE_STOPPED) {
+    //    printf("(debug): checking if to unstop)
+    if (cpu->interrupt_c->IF & (1<<PORT)) {
+      cpu->state = CPU_STATE_RUNNING;
+      cpu->t_cycles_since_last_inst = -217; // unstopping takes 217 cycles
+    }
+    return;
   }
 
   if (cpu->interrupt_t_cycles) {
@@ -234,7 +248,7 @@ void cpu_tick(struct cpu *cpu) {
 
   check_interrupt(cpu);
 
-  if (cpu->is_halted)
+  if (cpu->state == CPU_STATE_HALTED)
     return;
 
   if (!cpu->next_inst || cpu->t_cycles_since_last_inst == 0) // TODO: put this in the init?
@@ -950,11 +964,10 @@ int cpu_exec_instruction(struct cpu *cpu , struct inst *inst) {
     cpu->SP+=2;
     break;
   case HALT:
-    cpu->is_halted = 1;
+    cpu->state = CPU_STATE_HALTED;
     break;
   case STOP:
-    // TODO: implement
-    //    return -1;
+    cpu->state = CPU_STATE_STOPPED;
     break;
   default:
     return -1;

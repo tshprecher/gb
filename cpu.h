@@ -22,17 +22,22 @@ struct interrupt_controller {
   u8 IF, IE;
 };
 
+enum CpuState {
+  CPU_STATE_RUNNING,
+  CPU_STATE_HALTED,
+  CPU_STATE_STOPPED
+};
+
 void interrupt(struct interrupt_controller *, enum Interrupt);
 
 struct cpu {
+  enum CpuState state;
+
   // 8 bit registers
   u8 A, B, C, D, E, F /*flags register*/, H, L;
 
   // 16 bit registers
   u16 PC, SP;
-
-  // flag for halted
-  u8 is_halted;
 
   // interrupt master enable flag
   u8 IME;
@@ -43,12 +48,13 @@ struct cpu {
   struct interrupt_controller *interrupt_c;
 
   // the number of t_cycles since last instruction execution
-  s8 t_cycles_since_last_inst;
+  s16 t_cycles_since_last_inst;
 
   // the next instruction to execute
   struct inst *next_inst;
 
   // the number of t_cycles to count down after an interrupt
+  // TODO: put in the interrupt controller?
   s8 interrupt_t_cycles;
 };
 

@@ -83,12 +83,14 @@ void gb_run(struct gb *gb)
 
   while (1) {
     clock_tick(gb->clock);
-
-    cpu_tick(gb->cpu);
-    lcd_tick(gb->lcd_c);
     input_tick(gb->input_c);
-    timing_tick(gb->timing_c);
+    cpu_tick(gb->cpu); // handles STOPPED and HALTED states internally
     sound_tick(gb->sound_c);
+
+    if (gb->cpu->state != CPU_STATE_STOPPED) {
+      lcd_tick(gb->lcd_c);
+      timing_tick(gb->timing_c);
+    }
   }
 }
 
@@ -114,7 +116,7 @@ int main(int argc, char *argv[])
     struct timing_controller timing_c = {0};
     struct sound_controller sound_c = {0};
 
-    init_clock(&clock, CLOCK_FREQ, 128);
+    init_clock(&clock, CLOCK_FREQ, 256);
 
     input_c.interrupt_c = &interrupt_c;
 
