@@ -12,28 +12,61 @@
 #include "memory.h"
 
 #define CLOCK_FREQ 4194304
+#define BILLION 1000000000
 
-static void sleep_ns(int64_t ns) {
-  const struct timespec ts = {.tv_nsec = ns};
-  struct timespec rem;
-  int res;
-  if ((res = nanosleep(&ts, &rem))) {
-    perror("nanosleep() failed");
-    exit(1);
-  }
-}
-
-static int64_t get_time_ns() {
-  struct timespec ts = {0};
+static s64 get_time() {
+  struct timespec ts;
   if (clock_gettime(CLOCK_MONOTONIC, &ts)) {
-    perror("clock_gettime() failed");
+    perror("error: clock_gettime() failed");
     exit(1);
   }
-  return ts.tv_nsec;
+  return (ts.tv_sec * BILLION) + ts.tv_nsec;
 }
+
+struct clock {
+  int freq;
+  int ticks_per_period;
+  int ticks_remaining;
+
+  s64 period_ns;
+  s64 period_start_time_ns;
+};
+
+static void init_clock(struct clock *c, int freq, int freq_slices) {
+  c->freq = freq;
+  c->ticks_per_period = freq / freq_slices;
+  c->period_ns = BILLION / freq * c->ticks_per_period;
+  c->ticks_remaining = c->ticks_per_period;
+  c->period_start_time_ns = get_time();
+}
+
+static inline void clock_tick(struct clock *c) {
+  c->ticks_remaining--;
+  if (!c->ticks_remaining) {
+    s64 runtime_ns = get_time() - c->period_start_time_ns;
+    if (c->period_ns > runtime_ns) {
+      s64 wait_time_ns = c->period_ns - runtime_ns;
+      struct timespec ts = {.tv_nsec = .9*wait_time_ns};
+      struct timespec rem;
+      if (nanosleep(&ts, &rem)) {
+       perror("error: clock failed sleep");
+       exit(1);
+      }
+      s64 awake_time_ns = c->period_start_time_ns + runtime_ns + wait_time_ns;
+      while (get_time() < awake_time_ns) {} // naive polling
+    } else {
+      // increase the period and ticks by 1/16
+      c->period_ns += (c->period_ns >> 4);
+      c->ticks_per_period += (c->ticks_per_period >> 4);
+    }
+    c->ticks_remaining = c->ticks_per_period;
+    c->period_start_time_ns = get_time();
+  }
+};
 
 struct gb
 {
+  struct clock *clock;
   struct cpu *cpu;
   struct mem_controller *memory_c;
   struct interrupt_controller *interrupt_c;
@@ -48,30 +81,14 @@ void gb_run(struct gb *gb)
   init_lcd();
   init_sound();
 
-  int t_cycles = 0;
-  int64_t last_cycle_time_ns = get_time_ns();
-
   while (1) {
-    t_cycles++;
+    clock_tick(gb->clock);
 
     cpu_tick(gb->cpu);
     lcd_tick(gb->lcd_c);
     input_tick(gb->input_c);
     timing_tick(gb->timing_c);
-    sound_tick(gb->sound_c);
-    if (t_cycles % ((1<<16) + 1) == 0) {
-      int64_t cur_cycle_time_ns = get_time_ns();
-      int64_t cur_period_time_ns;
-      if (cur_cycle_time_ns > last_cycle_time_ns) {
-	 cur_period_time_ns = cur_cycle_time_ns - last_cycle_time_ns;
-      } else {
-	cur_period_time_ns = 999999999 - last_cycle_time_ns + cur_cycle_time_ns;
-     }
-
-      last_cycle_time_ns = cur_cycle_time_ns;
-      int sleep_time_ns = 15625000 > cur_period_time_ns ? (15625000 - cur_period_time_ns) : 0;
-      sleep_ns(sleep_time_ns);
-    }
+    //    sound_tick(gb->sound_c);
   }
 }
 
@@ -89,12 +106,15 @@ int main(int argc, char *argv[])
     init_cpu(&cpu);
 
     struct gb gb = {0};
+    struct clock clock = {0};
     struct mem_controller memory_c = {0};
     struct input_controller input_c = {0};
     struct interrupt_controller interrupt_c = {0};
     struct lcd_controller lcd_c = {0};
     struct timing_controller timing_c = {0};
     struct sound_controller sound_c = {0};
+
+    init_clock(&clock, CLOCK_FREQ, 128);
 
     input_c.interrupt_c = &interrupt_c;
 
@@ -113,6 +133,7 @@ int main(int argc, char *argv[])
 
     timing_c.interrupt_c = &interrupt_c;
 
+    gb.clock = &clock;
     gb.cpu = &cpu;
     gb.memory_c = &memory_c;
     gb.lcd_c = &lcd_c;
