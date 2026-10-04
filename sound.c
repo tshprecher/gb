@@ -1,5 +1,4 @@
-#include <pulse/simple.h>
-#include <pulse/error.h>
+#include <pulse/pulseaudio.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "macros.h"
@@ -8,27 +7,56 @@
 
 #define SAMPLING_RATE 44100
 
-pa_simple *s;
-pa_sample_spec ss;
-
 // TODO: for all sounds make sure they operate properly as parameters
 //       change between initializations.
 
-void init_sound() {
-  ss.format = PA_SAMPLE_S16NE;
-  ss.channels = 2;
-  ss.rate = SAMPLING_RATE;
+pa_mainloop *mainloop = NULL;
+pa_stream *stream = NULL;
+pa_sample_spec ss;
 
-  s = pa_simple_new(NULL,               // Use the default server.
-		    "gameboy",          // Our application's name.
-		    PA_STREAM_PLAYBACK,
-		    NULL,               // Use the default device.
-		    "test",             // Description of our stream.
-		    &ss,                // Our sample format.
-		    NULL,               // Use default channel map
-		    NULL,               // Use default buffering attributes.
-		    NULL
-		    );
+// triggered when the connection context state updates
+void context_state_callback(pa_context *context, void *userdata) {
+  switch (pa_context_get_state(context)) {
+  case PA_CONTEXT_READY: {
+    // data format
+    ss.format = PA_SAMPLE_S16NE;
+    ss.channels = 2;
+    ss.rate = SAMPLING_RATE;
+
+    // init stream
+    stream = pa_stream_new(context, "gbe sound", &ss, NULL);
+
+    // connect the stream onto the default output
+    pa_stream_connect_playback(stream, NULL, NULL, PA_STREAM_NOFLAGS, NULL, NULL);
+    break;
+  }
+  case PA_CONTEXT_FAILED:
+  case PA_CONTEXT_TERMINATED:
+    printf("error: pulseaudio context connection disconnected or failed.\n");
+    exit(1);
+  default:
+    break;
+  }
+}
+
+void init_sound() {
+  mainloop = pa_mainloop_new();
+  pa_mainloop_api *mainloop_api = pa_mainloop_get_api(mainloop);
+
+  // create the base client communications context
+  pa_context *context = pa_context_new(mainloop_api, "Async API Demo Client");
+
+  // register the event handler to track the lifecycle of our context connection
+  pa_context_set_state_callback(context, context_state_callback, mainloop_api);
+
+  // connect the context
+  if (pa_context_connect(context, NULL, PA_CONTEXT_NOFLAGS, NULL) < 0) {
+    fprintf(stderr, "sound: failed to execute pulseaudio context connect.\n");
+    exit(1);
+  }
+
+  while (!stream || pa_stream_get_state(stream) != PA_STREAM_READY)
+    pa_mainloop_iterate(mainloop, 0, NULL);
 }
 
 static inline int initialize_on(u8 r) {
@@ -231,13 +259,12 @@ void sound_tick(struct sound_controller *sc) {
 
   sc->t_cycles++;
   // TODO: consider bundling more than one sample at a time
-  while (sc->t_cycles >= 190) { // TODO: compute this on init
-    s16 accumulated_samples[4] = {0}; // TODO: rename stereo samples?
-    s16 sbuf[2];
+  while (sc->t_cycles >= 760) { // TODO: compute this on init
+    s16 accumulated_samples[16] = {0}; // TODO: rename stereo samples?
+    s16 sbuf[8];
     for (int s = 0; s < 4; s++) {
       struct sound *sound = &sc->sounds[s];
       if (sound->type < 1 || sound->type > 4) {
-	//      if (sound->type != 3) {
 	continue;
       }
       if (!is_sound_enabled(sc, sound)) {
@@ -247,7 +274,7 @@ void sound_tick(struct sound_controller *sc) {
 	disable_sound(sc, sound->type);
 	continue;
       }
-      int generated = sound_generate_samples(sc, sound, sbuf, 2); // TODO: do we need to check for sound completion in functions called from here?
+      int generated = sound_generate_samples(sc, sound, sbuf, 8); // TODO: do we need to check for sound completion in functions called from here?
       for (int s = 0; s < generated; s++) {
 	if (is_on_stereo_left(sc, sound->type)) {
 	  accumulated_samples[s*2] += sbuf[s]*stereo_vol_left(sc);
@@ -258,13 +285,13 @@ void sound_tick(struct sound_controller *sc) {
       }
     }
 
-    int error = 0;
-    pa_simple_write(s, accumulated_samples, 4*sizeof(s16), &error);
+    int error = pa_stream_write(stream, accumulated_samples, 16*sizeof(s16), NULL, 0, PA_SEEK_RELATIVE);
     if (error) {
       printf("error: writing samples, error code: %d\n", error);
       printf("error: writing samples, error str: %s\n", pa_strerror(error));
     }
-    sc->t_cycles -= 190;
+    pa_mainloop_iterate(mainloop, 0, NULL);
+    sc->t_cycles -= 760;
   }
 }
 

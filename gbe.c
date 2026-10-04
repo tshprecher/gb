@@ -46,7 +46,7 @@ static inline void clock_tick(struct clock *c) {
     s64 runtime_ns = get_time() - c->period_start_time_ns;
     if (c->period_ns > runtime_ns) {
       s64 wait_time_ns = c->period_ns - runtime_ns;
-      struct timespec ts = {.tv_nsec = .9*wait_time_ns};
+      struct timespec ts = {.tv_nsec = .8*wait_time_ns};
       struct timespec rem;
       if (nanosleep(&ts, &rem)) {
        perror("error: clock failed sleep");
@@ -88,7 +88,7 @@ void gb_run(struct gb *gb)
     lcd_tick(gb->lcd_c);
     input_tick(gb->input_c);
     timing_tick(gb->timing_c);
-    //    sound_tick(gb->sound_c);
+    sound_tick(gb->sound_c);
   }
 }
 
