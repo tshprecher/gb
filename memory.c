@@ -1,14 +1,16 @@
+#include "memory.h"
+
 #include <fcntl.h>
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
+
+#include "display.h"
 #include "input.h"
 #include "inst.h"
-#include "memory.h"
-#include "display.h"
 #include "sound.h"
 
 /**
@@ -19,33 +21,35 @@
 
 // TODO: fill in
 static u8 gpk_types[][4] = {
-  //type, mbc, sram, backup battery
-  {0, 0, 0, 0},
-  {1, 1, 0, 0},
-  {2, 1, 1, 0},
-  {3, 1, 1, 1},
+    // type, mbc, sram, backup battery
+    {0, 0, 0, 0},
+    {1, 1, 0, 0},
+    {2, 1, 1, 0},
+    {3, 1, 1, 1},
 };
 
-void init_gamepak(struct gamepak *gpk, char * filename) {
+void init_gamepak(struct gamepak* gpk, char* filename) {
   printf("info: loading gamepak '%s'...\n", filename);
-  FILE *fin = fopen(filename, "rb");
-  if (NULL == fin)
-    {
-      printf("error: opening file: %s\n", filename);
-      exit(1);
-    }
+  FILE* fin = fopen(filename, "rb");
+  if (NULL == fin) {
+    printf("error: opening file: %s\n", filename);
+    exit(1);
+  }
   u8 c;
 
   // read and validate metadata
-  if (fseek(fin, 0x143, SEEK_SET) || !fread(&c, 1, 1, fin))  {
+  if (fseek(fin, 0x143, SEEK_SET) || !fread(&c, 1, 1, fin)) {
     printf("error: loading gamepak: could not read support code @ 0x143\n");
     exit(1);
   }
   if (c == 0xC0) {
-    printf("error: loading gamepak: invalid support code 0x%02X. GBC games not supported.\n", c);
+    printf(
+        "error: loading gamepak: invalid support code 0x%02X. GBC games not "
+        "supported.\n",
+        c);
     exit(1);
   }
-  if (fseek(fin, 0x147, SEEK_SET) || !fread(&c, 1, 1, fin))  {
+  if (fseek(fin, 0x147, SEEK_SET) || !fread(&c, 1, 1, fin)) {
     printf("error: loading gamepak: could not read type @ 0x147\n");
     exit(1);
   }
@@ -55,17 +59,19 @@ void init_gamepak(struct gamepak *gpk, char * filename) {
   }
   printf("info: gamepak type: 0x%02X\n", c);
 
-  u8 *gpk_type;
+  u8* gpk_type;
   for (int t = 0; t < TYPES_LEN; t++) {
     if (gpk_types[t][0] == c) {
-      //      printf("(debug): found type record {%d, %d, %d, %d}\n", gpk_types[t][0], gpk_types[t][1], gpk_types[t][2], gpk_types[t][3]);
+      //      printf("(debug): found type record {%d, %d, %d, %d}\n",
+      //      gpk_types[t][0], gpk_types[t][1], gpk_types[t][2],
+      //      gpk_types[t][3]);
       gpk_type = gpk_types[t];
       gpk->mbc_type = gpk_type[1];
     }
   }
   printf("info: gamepak mbc: %d\n", gpk->mbc_type);
 
-  if (!fread(&c, 1, 1, fin))  {
+  if (!fread(&c, 1, 1, fin)) {
     printf("error: loading gamepak: could not read rom size @ 0x148\n");
     exit(1);
   }
@@ -73,12 +79,12 @@ void init_gamepak(struct gamepak *gpk, char * filename) {
     printf("error: loading gamepak: invalid rom size code: %d\n", c);
     exit(1);
   }
-  int rom_mapping[] = {0x8000, 0x10000, 0x20000, 0x40000,
-		       0x80000, 0x100000, 0x200000, 0x400000, 0x800000};
+  int rom_mapping[] = {0x8000,   0x10000,  0x20000,  0x40000, 0x80000,
+                       0x100000, 0x200000, 0x400000, 0x800000};
   gpk->rom_size = rom_mapping[c];
   printf("info: gamepak rom size: %d bytes\n", gpk->rom_size);
 
-  if (!fread(&c, 1, 1, fin))  {
+  if (!fread(&c, 1, 1, fin)) {
     printf("error: loading gamepak: could not read ram size @ 0x149\n");
     exit(1);
   }
@@ -93,19 +99,19 @@ void init_gamepak(struct gamepak *gpk, char * filename) {
   // read rom into gamepak
   fseek(fin, 0, SEEK_SET);
   gpk->rom = malloc(gpk->rom_size);
-  gpk->rom_bank = gpk->rom+0x4000;
-  gpk->mbc_regs[1] = 1; // TODO: remove this, put in a mbc-related logic
+  gpk->rom_bank = gpk->rom + 0x4000;
+  gpk->mbc_regs[1] = 1;  // TODO: remove this, put in a mbc-related logic
   gpk->cached_insts = malloc(gpk->rom_size * sizeof(struct inst));
   memset(gpk->cached_insts, 0, gpk->rom_size * sizeof(struct inst));
 
   int count = 0;
   while (count < gpk->rom_size) {
-    if (!fread(&c, 1, 1, fin))
-      break;
+    if (!fread(&c, 1, 1, fin)) break;
     gpk->rom[count++] = c;
   }
   if (count != gpk->rom_size) {
-    printf("error: loading gamepak: expected 0x%04X bytes, read 0x%04X", gpk->rom_size, count);
+    printf("error: loading gamepak: expected 0x%04X bytes, read 0x%04X",
+           gpk->rom_size, count);
     exit(1);
   }
 
@@ -114,21 +120,22 @@ void init_gamepak(struct gamepak *gpk, char * filename) {
     if (gpk_type[3]) {
       char sav_filename[40];
       strncpy(sav_filename, filename, 40);
-      strncpy(sav_filename+strlen(sav_filename), ".sav", 4);
+      strncpy(sav_filename + strlen(sav_filename), ".sav", 4);
 
-      int fd = open(sav_filename, O_RDWR|O_CREAT, 0666);
+      int fd = open(sav_filename, O_RDWR | O_CREAT, 0666);
       if (fd == -1) {
-	perror("error opening .sav file");
-	exit(1);
+        perror("error opening .sav file");
+        exit(1);
       }
       if (ftruncate(fd, gpk->ram_size) == -1) {
-	perror("error: truncating .sav file");
-	exit(1);
+        perror("error: truncating .sav file");
+        exit(1);
       }
-      gpk->ram = mmap(NULL, gpk->ram_size, PROT_READ|PROT_WRITE, MAP_FILE|MAP_SHARED, fd, 0);
+      gpk->ram = mmap(NULL, gpk->ram_size, PROT_READ | PROT_WRITE,
+                      MAP_FILE | MAP_SHARED, fd, 0);
       if (gpk->ram == MAP_FAILED) {
-	perror("error: memory mapping .sav file");
-	exit(1);
+        perror("error: memory mapping .sav file");
+        exit(1);
       }
       printf("info: initialized persistent ram backed by %s\n", sav_filename);
     } else {
@@ -141,64 +148,64 @@ void init_gamepak(struct gamepak *gpk, char * filename) {
   printf("info: gamepak loaded!\n");
 }
 
-struct inst * gpk_read_inst(struct gamepak * gpk, u16 addr) {
+struct inst* gpk_read_inst(struct gamepak* gpk, u16 addr) {
   // TODO: handle unusual case where instruction may cut across banks
   if (addr < 0x8000) {
-    int linear_addr = addr < 0x4000 ? addr : (gpk->mbc_regs[1]-1)*0x4000+addr;
-    struct inst *cached_inst = &gpk->cached_insts[linear_addr];
-    if (!cached_inst->type) { // no type means not seen
-      u8 *base = addr < 0x4000 ? gpk->rom : gpk->rom_bank;
-      addr = addr < 0x4000 ? addr : addr-0x4000;
-      if (!init_inst_from_bytes(cached_inst, &base[addr]))
-	return NULL;
+    int linear_addr =
+        addr < 0x4000 ? addr : (gpk->mbc_regs[1] - 1) * 0x4000 + addr;
+    struct inst* cached_inst = &gpk->cached_insts[linear_addr];
+    if (!cached_inst->type) {  // no type means not seen
+      u8* base = addr < 0x4000 ? gpk->rom : gpk->rom_bank;
+      addr = addr < 0x4000 ? addr : addr - 0x4000;
+      if (!init_inst_from_bytes(cached_inst, &base[addr])) return NULL;
     }
     return cached_inst;
   } else {
     // TODO: consolidate logic with mem_read_inst
-    init_inst_from_bytes(&gpk->_inst_in_ram, &gpk->ram[addr-0xA000]);
+    init_inst_from_bytes(&gpk->_inst_in_ram, &gpk->ram[addr - 0xA000]);
     return &gpk->_inst_in_ram;
   }
 }
 
-u8 gpk_read(struct gamepak * gpk, u16 addr) {
-  if (addr >= 0xA000) { // ram
-    return gpk->ram ? gpk->ram_bank[addr-0xA000] : 0;
+u8 gpk_read(struct gamepak* gpk, u16 addr) {
+  if (addr >= 0xA000) {  // ram
+    return gpk->ram ? gpk->ram_bank[addr - 0xA000] : 0;
   } else if (addr < 0x8000) {
-    switch (gpk->mbc_type) { // rom
-    case 1:
-      return addr < 0x4000 ? gpk->rom[addr] : gpk->rom_bank[addr-0x4000];
-    default:
-      return gpk->rom[addr];
+    switch (gpk->mbc_type) {  // rom
+      case 1:
+        return addr < 0x4000 ? gpk->rom[addr] : gpk->rom_bank[addr - 0x4000];
+      default:
+        return gpk->rom[addr];
     }
   }
-  abort(); // improper memory routing
+  abort();  // improper memory routing
 }
 
-void gpk_write(struct gamepak *gpk, u16 addr, u8 value) {
+void gpk_write(struct gamepak* gpk, u16 addr, u8 value) {
   // TODO: implement for later MBCs
-  if (addr >= 0xA000 && gpk->ram) { // ram
-    gpk->ram_bank[addr-0xA000] = value;
+  if (addr >= 0xA000 && gpk->ram) {  // ram
+    gpk->ram_bank[addr - 0xA000] = value;
     return;
   } else if (addr < 0x8000) {
     switch (gpk->mbc_type) {
-    case 1:
-      if (addr < 0x2000) {
-	//	printf("(debug): writing MBC reg 0: 0x%02X\n", value);
-	gpk->mbc_regs[0] = value;
-      } else if (addr < 0x4000) {
-	//	printf("(debug): writing MBC reg 1: 0x%02X\n", value);
-	gpk->mbc_regs[1] = value;
-	gpk->rom_bank = gpk->rom+(0x4000*(gpk->mbc_regs[1]));
-      } else if (addr < 0x6000) {
-	//	printf("(debug): writing MBC reg 2: 0x%02X\n", value);
-	gpk->mbc_regs[2] = value;
-      } else if (addr < 0x8000) {
-	//	printf("(debug): writing MBC reg 3: 0x%02X\n", value);
-	gpk->mbc_regs[3] = value;
-      }
-      return;
-    default:
-      return;
+      case 1:
+        if (addr < 0x2000) {
+          //	printf("(debug): writing MBC reg 0: 0x%02X\n", value);
+          gpk->mbc_regs[0] = value;
+        } else if (addr < 0x4000) {
+          //	printf("(debug): writing MBC reg 1: 0x%02X\n", value);
+          gpk->mbc_regs[1] = value;
+          gpk->rom_bank = gpk->rom + (0x4000 * (gpk->mbc_regs[1]));
+        } else if (addr < 0x6000) {
+          //	printf("(debug): writing MBC reg 2: 0x%02X\n", value);
+          gpk->mbc_regs[2] = value;
+        } else if (addr < 0x8000) {
+          //	printf("(debug): writing MBC reg 3: 0x%02X\n", value);
+          gpk->mbc_regs[3] = value;
+        }
+        return;
+      default:
+        return;
     }
   }
   // NOTE: should abort but some games write to ram that doesn't exist (bug)
@@ -210,115 +217,108 @@ void gpk_write(struct gamepak *gpk, u16 addr, u8 value) {
  */
 
 static enum sound_reg map_index_to_sound_reg[] = {
-  rNR10, rNR11, rNR12, rNR13, rNR14,
-  rNR21, rNR22, rNR23, rNR24,
-  rNR30, rNR31, rNR32, rNR33, rNR34,
-  rNR41, rNR42, rNR43, rNR44,
-  rNR50, rNR51, rNR52
-};
+    rNR10, rNR11, rNR12, rNR13, rNR14, rNR21, rNR22, rNR23, rNR24, rNR30, rNR31,
+    rNR32, rNR33, rNR34, rNR41, rNR42, rNR43, rNR44, rNR50, rNR51, rNR52};
 
 static enum lcd_reg map_index_to_lcd_reg[] = {
-  rLCDC, rSTAT, rSCY, rSCX, rLY, rLYC, rDMA, rBGP,
-  rOBP0, rOBP1, rWY, rWX
-};
+    rLCDC, rSTAT, rSCY, rSCX, rLY, rLYC, rDMA, rBGP, rOBP0, rOBP1, rWY, rWX};
 
-static enum timing_reg map_index_to_timing_reg[] = {
-  rDIV, rTIMA, rTMA, rTAC
-};
+static enum timing_reg map_index_to_timing_reg[] = {rDIV, rTIMA, rTMA, rTAC};
 
 // DO NOT CHANGE ORDER WITHOUT CHANGING mem_read() AND mem_write()
 static char* mmapped_registers[] = {
-  // 0xFE00
-  "$OAM",
+    // 0xFE00
+    "$OAM",
 
-  // [0xFF00, 0xFF02]
-  "$P1",
-  "$SB",
-  "$SC",
+    // [0xFF00, 0xFF02]
+    "$P1",
+    "$SB",
+    "$SC",
 
-  // [0xFF04, 0xFF07]
-  "$DIV",
-  "$TIMA",
-  "$TMA",
-  "$TAC",
+    // [0xFF04, 0xFF07]
+    "$DIV",
+    "$TIMA",
+    "$TMA",
+    "$TAC",
 
-  // 0xFF0F
-  "$IF",
-  // 0xFFFF
-  "$IE",
+    // 0xFF0F
+    "$IF",
+    // 0xFFFF
+    "$IE",
 
-  // [0xFF40, 0xFF4B]
-  "$LCDC",
-  "$STAT",
-  "$SCY",
-  "$SCX",
-  "$LY",
-  "$LYC",
-  "$DMA",
-  "$BGP",
-  "$OBP0",
-  "$OBP1",
-  "$WY",
-  "$WX",
+    // [0xFF40, 0xFF4B]
+    "$LCDC",
+    "$STAT",
+    "$SCY",
+    "$SCX",
+    "$LY",
+    "$LYC",
+    "$DMA",
+    "$BGP",
+    "$OBP0",
+    "$OBP1",
+    "$WY",
+    "$WX",
 
-  // [0xFF10, 0xFF26]
-  "$NR10",
-  "$NR11",
-  "$NR12",
-  "$NR13",
-  "$NR14",
-  "_err_NR15", // does not exist, 0xFF15 isn't allocated
+    // [0xFF10, 0xFF26]
+    "$NR10",
+    "$NR11",
+    "$NR12",
+    "$NR13",
+    "$NR14",
+    "_err_NR15",  // does not exist, 0xFF15 isn't allocated
 
-  "$NR21",
-  "$NR22",
-  "$NR23",
-  "$NR24",
+    "$NR21",
+    "$NR22",
+    "$NR23",
+    "$NR24",
 
-  "$NR30",
-  "$NR31",
-  "$NR32",
-  "$NR33",
-  "$NR34",
-  "_err_NR35", // does not exist, 0xFF1F isn't allocated, TODO: find out why it's used
+    "$NR30",
+    "$NR31",
+    "$NR32",
+    "$NR33",
+    "$NR34",
+    "_err_NR35",  // does not exist, 0xFF1F isn't allocated, TODO: find out why
+                  // it's used
 
-  "$NR41",
-  "$NR42",
-  "$NR43",
-  "$NR44",
+    "$NR41",
+    "$NR42",
+    "$NR43",
+    "$NR44",
 
-  "$NR50",
-  "$NR51",
-  "$NR52",
+    "$NR50",
+    "$NR51",
+    "$NR52",
 };
 
-char * mmapped_reg_to_str(u16 addr) {
+char* mmapped_reg_to_str(u16 addr) {
   // fail fast in the commmon case
-  if (addr < 0xFE00)
-    return NULL;
+  if (addr < 0xFE00) return NULL;
 
   if (addr >= 0xFF00 && addr <= 0xFF02) {
-    return mmapped_registers[addr-0xFF00+1];
+    return mmapped_registers[addr - 0xFF00 + 1];
   } else if (addr >= 0xFF04 && addr <= 0xFF07) {
-    return mmapped_registers[addr-0xFF04+4];
+    return mmapped_registers[addr - 0xFF04 + 4];
   } else if (addr == 0xFF0F) {
     return "$IF";
   } else if (addr == 0xFFFF) {
     return "$IE";
   } else if (addr >= 0xFF40 && addr <= 0xFF4B) {
-    return mmapped_registers[addr-0xFF40+10];
+    return mmapped_registers[addr - 0xFF40 + 10];
   } else if (addr >= 0xFF10 && addr <= 0xFF26) {
-    return mmapped_registers[addr-0xFF10+22];
+    return mmapped_registers[addr - 0xFF10 + 22];
   }
 
   return NULL;
 }
 
-u8 mem_read(struct mem_controller * mc, u16 addr) {
-  if (addr < 0x8000 || (addr >= 0xA000 && addr < 0xC000)) { // route to gamepak
+u8 mem_read(struct mem_controller* mc, u16 addr) {
+  if (addr < 0x8000 || (addr >= 0xA000 && addr < 0xC000)) {  // route to gamepak
     return gpk_read(mc->gpk, addr);
-  } else if (addr < 0xA000 || (addr >= 0xFE00 && addr < 0xFEA0)) { // route to bg or oam vram
+  } else if (addr < 0xA000 ||
+             (addr >= 0xFE00 && addr < 0xFEA0)) {  // route to bg or oam vram
     return lcd_vram_read(mc->lcd_c, addr);
-  } else if (addr == 0xFF00) { // check memory mapped registers
+  } else if (addr == 0xFF00) {  // check memory mapped registers
     u8 inputs = 0;
     input_read_P1(mc->input_c, &inputs);
     return inputs;
@@ -330,73 +330,73 @@ u8 mem_read(struct mem_controller * mc, u16 addr) {
   } else if (addr == 0xFFFF) {
     return mc->interrupt_c->IE;
   } else if (addr >= 0xFF40 && addr <= 0xFF4B) {
-    return lcd_reg_read(mc->lcd_c, map_index_to_lcd_reg[addr-0xFF40]);
-  } else if (addr >= 0xFF10 && addr <= 0xFF26 &&
-	     addr != 0xFF15 && addr != 0xFF1F) {
+    return lcd_reg_read(mc->lcd_c, map_index_to_lcd_reg[addr - 0xFF40]);
+  } else if (addr >= 0xFF10 && addr <= 0xFF26 && addr != 0xFF15 &&
+             addr != 0xFF1F) {
     int reg_index = addr - 0xFF10;
-    if (addr > 0xFF15) { // first gap
+    if (addr > 0xFF15) {  // first gap
       reg_index--;
     }
-    if (addr > 0xFF1F) { // second gap
+    if (addr > 0xFF1F) {  // second gap
       reg_index--;
     }
-    return sound_reg_read(mc->sound_c,  map_index_to_sound_reg[reg_index]);
+    return sound_reg_read(mc->sound_c, map_index_to_sound_reg[reg_index]);
   } else if (addr >= 0xFF30 && addr <= 0xFF3F) {
     return sound_wram_read(mc->sound_c, addr);
   }
 
   // if not in rom, vram, or memory mapped address space, go to ram
-  return mc->ram[addr-0xC000];
+  return mc->ram[addr - 0xC000];
 }
 
-void mem_write(struct mem_controller *mc, u16 addr, u8 value) {
-  if (addr < 0x8000 || (addr >= 0xA000 && addr < 0xC000)) { // route to gamepak
+void mem_write(struct mem_controller* mc, u16 addr, u8 value) {
+  if (addr < 0x8000 || (addr >= 0xA000 && addr < 0xC000)) {  // route to gamepak
     gpk_write(mc->gpk, addr, value);
   } else if (addr < 0xA000 || (addr >= 0xFE00 && addr < 0xFEA0)) {
     lcd_vram_write(mc->lcd_c, addr, value);
-  } else if (addr == 0xFF00) { // check memory mapped registers
+  } else if (addr == 0xFF00) {  // check memory mapped registers
     input_write_P1(mc->input_c, value);
   } else if (addr >= 0xFF04 && addr <= 0xFF07) {
     int reg_index = addr - 0xFF04;
-    timing_reg_write(mc->timing_c,  map_index_to_timing_reg[reg_index], value);
+    timing_reg_write(mc->timing_c, map_index_to_timing_reg[reg_index], value);
   } else if (addr == 0xFF0F) {
     mc->interrupt_c->IF = value;
   } else if (addr == 0xFFFF) {
     mc->interrupt_c->IE = value;
   } else if (addr >= 0xFF40 && addr <= 0xFF4B) {
     // TODO: handle the permissioning here so no improper writes occur
-    if (addr-0xFF40 == rDMA) {
+    if (addr - 0xFF40 == rDMA) {
       for (int b = 0; b <= 0x9F; b++) {
-	lcd_vram_write(mc->lcd_c, 0xFE00 + b, mem_read(mc, (value<<8)+b));
+        lcd_vram_write(mc->lcd_c, 0xFE00 + b, mem_read(mc, (value << 8) + b));
       }
     } else {
-      lcd_reg_write(mc->lcd_c, map_index_to_lcd_reg[addr-0xFF40], value);
+      lcd_reg_write(mc->lcd_c, map_index_to_lcd_reg[addr - 0xFF40], value);
     }
-  } else if (addr >= 0xFF10 && addr <= 0xFF26 &&
-	     addr != 0xFF15 && addr != 0xFF1F) {
+  } else if (addr >= 0xFF10 && addr <= 0xFF26 && addr != 0xFF15 &&
+             addr != 0xFF1F) {
     int reg_index = addr - 0xFF10;
-    if (addr > 0xFF15) { // first gap
+    if (addr > 0xFF15) {  // first gap
       reg_index--;
     }
-    if (addr > 0xFF1F) { // second gap
+    if (addr > 0xFF1F) {  // second gap
       reg_index--;
     }
-    sound_reg_write(mc->sound_c,  map_index_to_sound_reg[reg_index], value);
+    sound_reg_write(mc->sound_c, map_index_to_sound_reg[reg_index], value);
   } else if (addr >= 0xFF30 && addr <= 0xFF3F) {
     sound_wram_write(mc->sound_c, addr, value);
   } else {
     // if not in rom or memory mapped address space, go to ram
-    mc->ram[addr-0xC000] = value;
+    mc->ram[addr - 0xC000] = value;
   }
 }
 
-struct inst* mem_read_inst(struct mem_controller *mc, u16 addr) {
+struct inst* mem_read_inst(struct mem_controller* mc, u16 addr) {
   // TODO: this doesn't technically allow for instructions read in vram
-  if (addr < 0x8000 || (addr >= 0xA000 && addr < 0xC000)) { // route to gamepak
+  if (addr < 0x8000 || (addr >= 0xA000 && addr < 0xC000)) {  // route to gamepak
     return gpk_read_inst(mc->gpk, addr);
   } else {
     // TODO: why does this branch exist again? Explain here
-    init_inst_from_bytes(&mc->_inst_in_ram, &mc->ram[addr-0xC000]);
+    init_inst_from_bytes(&mc->_inst_in_ram, &mc->ram[addr - 0xC000]);
     return &mc->_inst_in_ram;
   }
 }

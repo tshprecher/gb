@@ -1,13 +1,23 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
-#include "types.h"
 #include "cpu.h"
 #include "memory.h"
+#include "types.h"
 
 enum lcd_reg {
-  rLCDC = 0, rSTAT, rSCY, rSCX, rLY, rLYC, rDMA,
-  rBGP, rOBP0, rOBP1, rWY, rWX
+  rLCDC = 0,
+  rSTAT,
+  rSCY,
+  rSCX,
+  rLY,
+  rLYC,
+  rDMA,
+  rBGP,
+  rOBP0,
+  rOBP1,
+  rWY,
+  rWX
 };
 
 struct obj {
@@ -28,17 +38,17 @@ struct lcd_controller {
   // registers
   u8 regs[12];
 
-  u32 t_cycles_since_last_line_refresh; // TODO: rename
+  u32 t_cycles_since_last_line_refresh;  // TODO: rename
 
   u8 bg[256][256];
-  u8 wdw[256][256]; // TODO: revisit resizing to 144x160
+  u8 wdw[256][256];  // TODO: revisit resizing to 144x160
 
   struct oam oam;
-  struct interrupt_controller *interrupt_c;
+  struct interrupt_controller* interrupt_c;
 };
 
 void init_lcd();
-void lcd_tick(struct lcd_controller *);
+void lcd_tick(struct lcd_controller*);
 
 u8 lcd_vram_read(struct lcd_controller*, u16);
 void lcd_vram_write(struct lcd_controller*, u16, u8);

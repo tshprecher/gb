@@ -2,33 +2,24 @@
 #define CPU_H
 
 #include <stdint.h>
-#include "types.h"
+
 #include "inst.h"
+#include "types.h"
 
 #define FLAG_Z 7
 #define FLAG_N 6
 #define FLAG_H 5
 #define FLAG_CY 4
 
-enum Interrupt {
-  VBLANK = 0,
-  LCDC_STAT,
-  TIMER_OVERFLOW,
-  SERIAL_IO,
-  PORT
-};
+enum Interrupt { VBLANK = 0, LCDC_STAT, TIMER_OVERFLOW, SERIAL_IO, PORT };
 
 struct interrupt_controller {
   u8 IF, IE;
 };
 
-enum CpuState {
-  CPU_STATE_RUNNING,
-  CPU_STATE_HALTED,
-  CPU_STATE_STOPPED
-};
+enum CpuState { CPU_STATE_RUNNING, CPU_STATE_HALTED, CPU_STATE_STOPPED };
 
-void interrupt(struct interrupt_controller *, enum Interrupt);
+void interrupt(struct interrupt_controller*, enum Interrupt);
 
 struct cpu {
   enum CpuState state;
@@ -44,26 +35,26 @@ struct cpu {
   u8 enable_interrupt_after_next_inst;
 
   // controllers to interface with other hardware
-  struct mem_controller *memory_c;
-  struct interrupt_controller *interrupt_c;
+  struct mem_controller* memory_c;
+  struct interrupt_controller* interrupt_c;
 
   // the number of t_cycles since last instruction execution
   s16 t_cycles_since_last_inst;
 
   // the next instruction to execute
-  struct inst *next_inst;
+  struct inst* next_inst;
 
   // the number of t_cycles to count down after an interrupt
   // TODO: put in the interrupt controller?
   s8 interrupt_t_cycles;
 };
 
-void init_cpu(struct cpu *);
+void init_cpu(struct cpu*);
 
-void cpu_tick(struct cpu *);
+void cpu_tick(struct cpu*);
 
 // execute a specific instruction, return the number of cycles run
 // or -1 on error.
-int cpu_exec_instruction(struct cpu *, struct inst *);
+int cpu_exec_instruction(struct cpu*, struct inst*);
 
 #endif

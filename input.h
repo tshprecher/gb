@@ -21,11 +21,11 @@ struct input_controller {
   u8 btns_pressed;
   u8 t_cycles_to_read;
 
-  struct interrupt_controller *interrupt_c;
+  struct interrupt_controller* interrupt_c;
 };
 
-void input_tick(struct input_controller *);
-void input_write_P1(struct input_controller *, u8);
-int input_read_P1(struct input_controller *, u8 *);
+void input_tick(struct input_controller*);
+void input_write_P1(struct input_controller*, u8);
+int input_read_P1(struct input_controller*, u8*);
 
 #endif

@@ -5,77 +5,65 @@
 
 // enum value for each cpu instruction in lexicographic order
 // NOTE: DO NOT REORDER! Tests rely on ADC being first and XOR last.
-enum inst_type
-  {
-    ADC = 1,
-    ADD,
-    AND,
-    BIT,
-    CALL,
-    CCF,
-    CP,
-    CPA,
-    CPL,
-    DAA,
-    DB,
-    DEC,
-    DI,
-    EI,
-    HALT,
-    INC,
-    JP,
-    JR,
-    LD,
-    LDHL,
-    NOP,
-    OR,
-    POP,
-    PUSH,
-    RES,
-    RET,
-    RETI,
-    RL,
-    RLA,
-    RLC,
-    RLCA,
-    RR,
-    RRA,
-    RRC,
-    RRCA,
-    RST,
-    SBC,
-    SCF,
-    SET,
-    SLA,
-    SRA,
-    SRL,
-    STOP,
-    SUB,
-    SWAP,
-    XOR
+enum inst_type {
+  ADC = 1,
+  ADD,
+  AND,
+  BIT,
+  CALL,
+  CCF,
+  CP,
+  CPA,
+  CPL,
+  DAA,
+  DB,
+  DEC,
+  DI,
+  EI,
+  HALT,
+  INC,
+  JP,
+  JR,
+  LD,
+  LDHL,
+  NOP,
+  OR,
+  POP,
+  PUSH,
+  RES,
+  RET,
+  RETI,
+  RL,
+  RLA,
+  RLC,
+  RLCA,
+  RR,
+  RRA,
+  RRC,
+  RRCA,
+  RST,
+  SBC,
+  SCF,
+  SET,
+  SLA,
+  SRA,
+  SRL,
+  STOP,
+  SUB,
+  SWAP,
+  XOR
 };
 
-enum arg_type {
-  R = 1,
-  B,
-  T,
-  CC,
-  DD,
-  QQ,
-  SS,
-  E,
-  N,
-  NN
-};
+enum arg_type { R = 1, B, T, CC, DD, QQ, SS, E, N, NN };
 
-enum reg { // Z80 index of each register in opcodes
-  rB=0,
+enum reg {  // Z80 index of each register in opcodes
+  rB = 0,
   rC,
   rD,
   rE,
   rH,
   rL,
-  _na_, // flags register is special
+  _na_,  // flags register is special
   rA,
   rF
 };
@@ -84,7 +72,7 @@ struct inst_arg {
   enum arg_type type;
   union {
     u8 byte;
-    u8 word[2]; // little endian: first byte is lower part
+    u8 word[2];  // little endian: first byte is lower part
   } value;
 };
 
@@ -109,12 +97,12 @@ struct inst {
   u8 args_count;
 };
 
-enum cond {NZ = 0, Z, NC, YC };
+enum cond { NZ = 0, Z, NC, YC };
 
-int init_inst_from_bytes(struct inst*, void *);
-int init_inst_from_asm(struct inst*, char *);
+int init_inst_from_bytes(struct inst*, void*);
+int init_inst_from_asm(struct inst*, char*);
 
 // TODO: What does this return?
-int inst_to_str(struct inst *, char *);
+int inst_to_str(struct inst*, char*);
 
 #endif

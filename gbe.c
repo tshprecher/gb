@@ -2,14 +2,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
-#include "sound.h"
+
+#include "cpu.h"
 #include "input.h"
 #include "inst.h"
-#include "cpu.h"
 #include "memory.h"
+#include "sound.h"
 
 #define CLOCK_FREQ 4194304
 #define BILLION 1000000000
@@ -32,7 +32,7 @@ struct clock {
   s64 period_start_time_ns;
 };
 
-static void init_clock(struct clock *c, int freq, int freq_slices) {
+static void init_clock(struct clock* c, int freq, int freq_slices) {
   c->freq = freq;
   c->ticks_per_period = freq / freq_slices;
   c->period_ns = BILLION / freq * c->ticks_per_period;
@@ -40,20 +40,21 @@ static void init_clock(struct clock *c, int freq, int freq_slices) {
   c->period_start_time_ns = get_time();
 }
 
-static inline void clock_tick(struct clock *c) {
+static inline void clock_tick(struct clock* c) {
   c->ticks_remaining--;
   if (!c->ticks_remaining) {
     s64 runtime_ns = get_time() - c->period_start_time_ns;
     if (c->period_ns > runtime_ns) {
       s64 wait_time_ns = c->period_ns - runtime_ns;
-      struct timespec ts = {.tv_nsec = .8*wait_time_ns};
+      struct timespec ts = {.tv_nsec = .8 * wait_time_ns};
       struct timespec rem;
       if (nanosleep(&ts, &rem)) {
-       perror("error: clock failed sleep");
-       exit(1);
+        perror("error: clock failed sleep");
+        exit(1);
       }
       s64 awake_time_ns = c->period_start_time_ns + runtime_ns + wait_time_ns;
-      while (get_time() < awake_time_ns) {} // naive polling
+      while (get_time() < awake_time_ns) {
+      }  // naive polling
     } else {
       // increase the period and ticks by 1/16
       c->period_ns += (c->period_ns >> 4);
@@ -64,27 +65,25 @@ static inline void clock_tick(struct clock *c) {
   }
 };
 
-struct gb
-{
-  struct clock *clock;
-  struct cpu *cpu;
-  struct mem_controller *memory_c;
-  struct interrupt_controller *interrupt_c;
-  struct lcd_controller *lcd_c;
-  struct timing_controller *timing_c;
-  struct input_controller *input_c;
-  struct sound_controller *sound_c;
+struct gb {
+  struct clock* clock;
+  struct cpu* cpu;
+  struct mem_controller* memory_c;
+  struct interrupt_controller* interrupt_c;
+  struct lcd_controller* lcd_c;
+  struct timing_controller* timing_c;
+  struct input_controller* input_c;
+  struct sound_controller* sound_c;
 };
 
-void gb_run(struct gb *gb)
-{
+void gb_run(struct gb* gb) {
   init_lcd();
   init_sound();
 
   while (1) {
     clock_tick(gb->clock);
     input_tick(gb->input_c);
-    cpu_tick(gb->cpu); // handles STOPPED and HALTED states internally
+    cpu_tick(gb->cpu);  // handles STOPPED and HALTED states internally
     sound_tick(gb->sound_c);
 
     if (gb->cpu->state != CPU_STATE_STOPPED) {
@@ -95,12 +94,11 @@ void gb_run(struct gb *gb)
 }
 
 // TODO: use getopt
-int main(int argc, char *argv[])
-{
+int main(int argc, char* argv[]) {
   if (argc < 2) {
     fprintf(stderr, "error: missing arguments.\n");
     return 1;
-  } else if (argc == 2) { // run game
+  } else if (argc == 2) {  // run game
     struct gamepak gpk = {0};
     init_gamepak(&gpk, argv[1]);
 
@@ -121,7 +119,7 @@ int main(int argc, char *argv[])
     input_c.interrupt_c = &interrupt_c;
 
     lcd_c.interrupt_c = &interrupt_c;
-    lcd_c.regs[rLCDC] = 0x83; // TODO: put in an init?
+    lcd_c.regs[rLCDC] = 0x83;  // TODO: put in an init?
 
     memory_c.gpk = &gpk;
     memory_c.interrupt_c = &interrupt_c;
@@ -144,7 +142,7 @@ int main(int argc, char *argv[])
     gb.sound_c = &sound_c;
 
     gb_run(&gb);
-  } else if (argc == 3) { // disassemble, TODO: handle MBCs
+  } else if (argc == 3) {  // disassemble, TODO: handle MBCs
     if (strcmp(argv[1], "-d") != 0) {
       fprintf(stderr, "error: unknown argument %s, use '-d'.\n", argv[1]);
       return 1;
@@ -158,12 +156,12 @@ int main(int argc, char *argv[])
     while (addr < 0x8000) {
       int ok = init_inst_from_bytes(&decoded, &gpk.rom[addr]);
       if (ok) {
-	inst_to_str(&decoded, buf);
-	printf("0x%02X\t%s\n", addr, buf);
-	addr+=decoded.bytelen;
+        inst_to_str(&decoded, buf);
+        printf("0x%02X\t%s\n", addr, buf);
+        addr += decoded.bytelen;
       } else {
-	printf("0x%02X\tDB 0x%02X\n", addr, gpk.rom[addr]);
-	addr++;
+        printf("0x%02X\tDB 0x%02X\n", addr, gpk.rom[addr]);
+        addr++;
       }
     }
   } else {

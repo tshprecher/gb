@@ -1,19 +1,35 @@
 #ifndef SOUND_H
 #define SOUND_H
 
-#include "types.h"
 #include "memory.h"
+#include "types.h"
 
 enum sound_reg {
-  rNR10 = 0,  rNR11,  rNR12,  rNR13,  rNR14,
-  rNR21, rNR22, rNR23, rNR24,
-  rNR30, rNR31, rNR32, rNR33, rNR34,
-  rNR41, rNR42, rNR43, rNR44,
-  rNR50, rNR51, rNR52
+  rNR10 = 0,
+  rNR11,
+  rNR12,
+  rNR13,
+  rNR14,
+  rNR21,
+  rNR22,
+  rNR23,
+  rNR24,
+  rNR30,
+  rNR31,
+  rNR32,
+  rNR33,
+  rNR34,
+  rNR41,
+  rNR42,
+  rNR43,
+  rNR44,
+  rNR50,
+  rNR51,
+  rNR52
 };
 
 struct sound {
-  u8 type; // [1,2,3,4]
+  u8 type;  // [1,2,3,4]
 
   // common fields
   int current_sample;
@@ -36,11 +52,11 @@ struct sound {
 
   // for sound 3
   u8 waveform[32];
-  u8 output_level; // [0,1,2,3]
+  u8 output_level;  // [0,1,2,3]
 
   // for sound 4
   int freq_hz;
-  int is_long_mode; // long: 15 bit shift register, short: 7 bit
+  int is_long_mode;  // long: 15 bit shift register, short: 7 bit
   int lfsr_shift_register;
 };
 
