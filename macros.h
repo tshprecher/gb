@@ -1,6 +1,9 @@
 #ifndef MACROS_H
 #define MACROS_H
 
+#define CLOCK_FREQ 4194304
+#define BILLION 1000000000
+
 #define b_is_on(i, b) ((i >> b) & 1)
 #define b_is_off(i, b) (!((i >> b) & 1))
 

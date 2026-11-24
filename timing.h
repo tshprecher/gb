@@ -17,7 +17,7 @@ struct timing_controller {
 
 void timing_tick(struct timing_controller*);
 
-u8 timing_reg_read(struct timing_controller*, enum timing_reg);
-void timing_reg_write(struct timing_controller*, enum timing_reg, u8);
+u8 timing_read_reg(struct timing_controller*, enum timing_reg);
+void timing_write_reg(struct timing_controller*, enum timing_reg, u8);
 
 #endif

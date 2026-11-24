@@ -8,6 +8,5 @@
 *dSYM
 gbe
 tests
-*DS_Store
 tmp/*
-TAGS
+compile_flags.txt

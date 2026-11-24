@@ -8,11 +8,9 @@
 #include "cpu.h"
 #include "input.h"
 #include "inst.h"
+#include "macros.h"
 #include "memory.h"
 #include "sound.h"
-
-#define CLOCK_FREQ 4194304
-#define BILLION 1000000000
 
 static s64 get_time() {
   struct timespec ts;
@@ -77,9 +75,6 @@ struct gb {
 };
 
 void gb_run(struct gb* gb) {
-  init_lcd();
-  init_sound();
-
   while (1) {
     clock_tick(gb->clock);
     input_tick(gb->input_c);
@@ -95,6 +90,9 @@ void gb_run(struct gb* gb) {
 
 // TODO: use getopt
 int main(int argc, char* argv[]) {
+  global_init_lcd();
+  global_init_sound();
+
   if (argc < 2) {
     fprintf(stderr, "error: missing arguments.\n");
     return 1;
@@ -105,16 +103,19 @@ int main(int argc, char* argv[]) {
     struct cpu cpu = {0};
     init_cpu(&cpu);
 
-    struct gb gb = {0};
     struct clock clock = {0};
+    init_clock(&clock, CLOCK_FREQ, 256);
+
     struct mem_controller memory_c = {0};
     struct input_controller input_c = {0};
     struct interrupt_controller interrupt_c = {0};
     struct lcd_controller lcd_c = {0};
     struct timing_controller timing_c = {0};
-    struct sound_controller sound_c = {0};
 
-    init_clock(&clock, CLOCK_FREQ, 256);
+    struct sound_controller sound_c = {0};
+    init_sound(&sound_c);
+
+    struct gb gb = {0};
 
     input_c.interrupt_c = &interrupt_c;
 

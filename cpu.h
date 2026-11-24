@@ -50,7 +50,6 @@ struct cpu {
 };
 
 void init_cpu(struct cpu*);
-
 void cpu_tick(struct cpu*);
 
 // execute a specific instruction, return the number of cycles run

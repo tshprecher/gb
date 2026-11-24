@@ -5,6 +5,8 @@
 #include "memory.h"
 #include "types.h"
 
+void global_init_lcd();
+
 enum lcd_reg {
   rLCDC = 0,
   rSTAT,
@@ -47,12 +49,11 @@ struct lcd_controller {
   struct interrupt_controller* interrupt_c;
 };
 
-void init_lcd();
 void lcd_tick(struct lcd_controller*);
 
-u8 lcd_vram_read(struct lcd_controller*, u16);
-void lcd_vram_write(struct lcd_controller*, u16, u8);
-u8 lcd_reg_read(struct lcd_controller*, enum lcd_reg);
-void lcd_reg_write(struct lcd_controller*, enum lcd_reg, u8);
+u8 lcd_read_vram(struct lcd_controller*, u16);
+void lcd_write_vram(struct lcd_controller*, u16, u8);
+u8 lcd_read_reg(struct lcd_controller*, enum lcd_reg);
+void lcd_write_reg(struct lcd_controller*, enum lcd_reg, u8);
 
 #endif

@@ -317,20 +317,20 @@ u8 mem_read(struct mem_controller* mc, u16 addr) {
     return gpk_read(mc->gpk, addr);
   } else if (addr < 0xA000 ||
              (addr >= 0xFE00 && addr < 0xFEA0)) {  // route to bg or oam vram
-    return lcd_vram_read(mc->lcd_c, addr);
+    return lcd_read_vram(mc->lcd_c, addr);
   } else if (addr == 0xFF00) {  // check memory mapped registers
     u8 inputs = 0;
     input_read_P1(mc->input_c, &inputs);
     return inputs;
   } else if (addr >= 0xFF04 && addr <= 0xFF07) {
     int reg_index = addr - 0xFF04;
-    return timing_reg_read(mc->timing_c, map_index_to_timing_reg[reg_index]);
+    return timing_read_reg(mc->timing_c, map_index_to_timing_reg[reg_index]);
   } else if (addr == 0xFF0F) {
     return mc->interrupt_c->IF;
   } else if (addr == 0xFFFF) {
     return mc->interrupt_c->IE;
   } else if (addr >= 0xFF40 && addr <= 0xFF4B) {
-    return lcd_reg_read(mc->lcd_c, map_index_to_lcd_reg[addr - 0xFF40]);
+    return lcd_read_reg(mc->lcd_c, map_index_to_lcd_reg[addr - 0xFF40]);
   } else if (addr >= 0xFF10 && addr <= 0xFF26 && addr != 0xFF15 &&
              addr != 0xFF1F) {
     int reg_index = addr - 0xFF10;
@@ -340,9 +340,9 @@ u8 mem_read(struct mem_controller* mc, u16 addr) {
     if (addr > 0xFF1F) {  // second gap
       reg_index--;
     }
-    return sound_reg_read(mc->sound_c, map_index_to_sound_reg[reg_index]);
+    return sound_read_reg(mc->sound_c, map_index_to_sound_reg[reg_index]);
   } else if (addr >= 0xFF30 && addr <= 0xFF3F) {
-    return sound_wram_read(mc->sound_c, addr);
+    return sound_read_wram(mc->sound_c, addr);
   }
 
   // if not in rom, vram, or memory mapped address space, go to ram
@@ -353,12 +353,12 @@ void mem_write(struct mem_controller* mc, u16 addr, u8 value) {
   if (addr < 0x8000 || (addr >= 0xA000 && addr < 0xC000)) {  // route to gamepak
     gpk_write(mc->gpk, addr, value);
   } else if (addr < 0xA000 || (addr >= 0xFE00 && addr < 0xFEA0)) {
-    lcd_vram_write(mc->lcd_c, addr, value);
+    lcd_write_vram(mc->lcd_c, addr, value);
   } else if (addr == 0xFF00) {  // check memory mapped registers
     input_write_P1(mc->input_c, value);
   } else if (addr >= 0xFF04 && addr <= 0xFF07) {
     int reg_index = addr - 0xFF04;
-    timing_reg_write(mc->timing_c, map_index_to_timing_reg[reg_index], value);
+    timing_write_reg(mc->timing_c, map_index_to_timing_reg[reg_index], value);
   } else if (addr == 0xFF0F) {
     mc->interrupt_c->IF = value;
   } else if (addr == 0xFFFF) {
@@ -367,10 +367,10 @@ void mem_write(struct mem_controller* mc, u16 addr, u8 value) {
     // TODO: handle the permissioning here so no improper writes occur
     if (addr - 0xFF40 == rDMA) {
       for (int b = 0; b <= 0x9F; b++) {
-        lcd_vram_write(mc->lcd_c, 0xFE00 + b, mem_read(mc, (value << 8) + b));
+        lcd_write_vram(mc->lcd_c, 0xFE00 + b, mem_read(mc, (value << 8) + b));
       }
     } else {
-      lcd_reg_write(mc->lcd_c, map_index_to_lcd_reg[addr - 0xFF40], value);
+      lcd_write_reg(mc->lcd_c, map_index_to_lcd_reg[addr - 0xFF40], value);
     }
   } else if (addr >= 0xFF10 && addr <= 0xFF26 && addr != 0xFF15 &&
              addr != 0xFF1F) {
@@ -381,9 +381,9 @@ void mem_write(struct mem_controller* mc, u16 addr, u8 value) {
     if (addr > 0xFF1F) {  // second gap
       reg_index--;
     }
-    sound_reg_write(mc->sound_c, map_index_to_sound_reg[reg_index], value);
+    sound_write_reg(mc->sound_c, map_index_to_sound_reg[reg_index], value);
   } else if (addr >= 0xFF30 && addr <= 0xFF3F) {
-    sound_wram_write(mc->sound_c, addr, value);
+    sound_write_wram(mc->sound_c, addr, value);
   } else {
     // if not in rom or memory mapped address space, go to ram
     mc->ram[addr - 0xC000] = value;

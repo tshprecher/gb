@@ -39,7 +39,7 @@ static int screen;
 static uint64_t colors[4] = {0x9bbc0f, 0x8bac0f, 0x306230, 0x0f380f};
 // static uint64_t colors[4] = {0xb5af42, 0x919b3a, 0x5d782e, 0x5d782e};
 
-void init_lcd() {
+void global_init_lcd() {
   if (!display) {
     display = XOpenDisplay(NULL);
     if (!display) {
@@ -366,7 +366,7 @@ void lcd_tick(struct lcd_controller* lcd_c) {
   }
 }
 
-u8 inline lcd_vram_read(struct lcd_controller* lcd_c, u16 addr) {
+u8 inline lcd_read_vram(struct lcd_controller* lcd_c, u16 addr) {
   int mode = lcd_c->regs[rSTAT] & 3;
   if (addr < 0xA000) {
     return mode < 3 ? lcd_c->vram[addr - 0x8000] : 0;
@@ -375,7 +375,7 @@ u8 inline lcd_vram_read(struct lcd_controller* lcd_c, u16 addr) {
   }
 }
 
-void inline lcd_vram_write(struct lcd_controller* lcd_c, u16 addr, u8 value) {
+void inline lcd_write_vram(struct lcd_controller* lcd_c, u16 addr, u8 value) {
   int mode = lcd_c->regs[rSTAT] & 3;
   if (addr < 0xA000 && mode < 3) {
     // bg/window tiles
@@ -386,11 +386,11 @@ void inline lcd_vram_write(struct lcd_controller* lcd_c, u16 addr, u8 value) {
   }
 }
 
-u8 inline lcd_reg_read(struct lcd_controller* lcd_c, enum lcd_reg reg) {
+u8 inline lcd_read_reg(struct lcd_controller* lcd_c, enum lcd_reg reg) {
   return lcd_c->regs[reg];
 }
 
-void lcd_reg_write(struct lcd_controller* lcd_c, enum lcd_reg reg, u8 value) {
+void lcd_write_reg(struct lcd_controller* lcd_c, enum lcd_reg reg, u8 value) {
   u8 old_val = lcd_c->regs[reg];
   switch (reg) {
     case rLYC:
