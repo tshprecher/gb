@@ -171,10 +171,16 @@ static void set_dd_or_ss(struct cpu* cpu, u8 dd_or_ss, u16 word) {
 }
 
 static int is_cond_true(struct cpu* cpu, enum cond cc) {
-  return (cc == NZ && b_is_off(cpu->F, F_Z)) ||
-         (cc == Z && b_is_on(cpu->F, F_Z)) ||
-         (cc == NC && b_is_off(cpu->F, F_CY)) ||
-         (cc == YC && b_is_on(cpu->F, F_CY));
+  switch (cc) {
+    case NZ:
+      return b_is_off(cpu->F, F_Z);
+    case Z:
+      return b_is_on(cpu->F, F_Z);
+    case NC:
+      return b_is_off(cpu->F, F_CY);
+    case YC:
+      return b_is_on(cpu->F, F_CY);
+  }
 }
 
 // imitates the Z80-based 4-bit ALU for easier tracking of half carry and carry

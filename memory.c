@@ -329,38 +329,98 @@ char* mmapped_reg_to_str(u16 addr) {
 }
 
 u8 mem_read(struct mem_controller* mc, u16 addr) {
+  // TODO: put the ram hot case first once serial port is implemented
   if (addr < 0x8000 || (addr >= 0xA000 && addr < 0xC000)) {  // route to gamepak
     return gpk_read(mc->gpk, addr);
   } else if (addr < 0xA000 ||
              (addr >= 0xFE00 && addr < 0xFEA0)) {  // route to bg or oam
                                                    // vram
     return lcd_read_vram(mc->lcd_c, addr);
-  } else if (addr == 0xFF00) {  // check memory mapped
-                                // registers
-    u8 inputs = 0;
-    input_read_P1(mc->input_c, &inputs);
-    return inputs;
-  } else if (addr >= 0xFF04 && addr <= 0xFF07) {
-    int reg_index = addr - 0xFF04;
-    return timing_read_reg(mc->timing_c, map_index_to_timing_reg[reg_index]);
-  } else if (addr == 0xFF0F) {
-    return mc->interrupt_c->IF;
-  } else if (addr == 0xFFFF) {
-    return mc->interrupt_c->IE;
-  } else if (addr >= 0xFF40 && addr <= 0xFF4B) {
-    return lcd_read_reg(mc->lcd_c, map_index_to_lcd_reg[addr - 0xFF40]);
-  } else if (addr >= 0xFF10 && addr <= 0xFF26 && addr != 0xFF15 &&
-             addr != 0xFF1F) {
-    int reg_index = addr - 0xFF10;
-    if (addr > 0xFF15) {  // first gap
-      reg_index--;
+  }
+
+  // memory mapped registers over switch for perf instead of if/else ranges
+  // (overkill?)
+  switch (addr) {
+    case 0xFF00: {
+      u8 inputs = 0;
+      input_read_P1(mc->input_c, &inputs);
+      return inputs;
     }
-    if (addr > 0xFF1F) {  // second gap
-      reg_index--;
-    }
-    return sound_read_reg(mc->sound_c, map_index_to_sound_reg[reg_index]);
-  } else if (addr >= 0xFF30 && addr <= 0xFF3F) {
-    return sound_read_wram(mc->sound_c, addr);
+    case 0xFF01:
+    case 0xFF02:
+      // TODO: handle serial port
+      printf("debug(mem_read): reading serial port\n");
+      fflush(stdout);
+      return 0;
+    case 0xFF04:
+    case 0xFF05:
+    case 0xFF06:
+    case 0xFF07:
+      return timing_read_reg(mc->timing_c,
+                             map_index_to_timing_reg[addr - 0xFF04]);
+    case 0xFF10:
+    case 0xFF11:
+    case 0xFF12:
+    case 0xFF13:
+    case 0xFF14:
+      return sound_read_reg(mc->sound_c, map_index_to_sound_reg[addr - 0xFF10]);
+      //    case 0xFF15: unused
+    case 0xFF16:
+    case 0xFF17:
+    case 0xFF18:
+    case 0xFF19:
+    case 0xFF1A:
+    case 0xFF1B:
+    case 0xFF1C:
+    case 0xFF1D:
+    case 0xFF1E:
+      return sound_read_reg(mc->sound_c,
+                            map_index_to_sound_reg[addr - 0xFF10 - 1]);
+      //    case 0xFF1F: unused
+
+    case 0xFF20:
+    case 0xFF21:
+    case 0xFF22:
+    case 0xFF23:
+    case 0xFF24:
+    case 0xFF25:
+    case 0xFF26:
+      return sound_read_reg(mc->sound_c,
+                            map_index_to_sound_reg[addr - 0xFF10 - 2]);
+    case 0xFF30:
+    case 0xFF31:
+    case 0xFF32:
+    case 0xFF33:
+    case 0xFF34:
+    case 0xFF35:
+    case 0xFF36:
+    case 0xFF37:
+    case 0xFF38:
+    case 0xFF39:
+    case 0xFF3A:
+    case 0xFF3B:
+    case 0xFF3C:
+    case 0xFF3D:
+    case 0xFF3E:
+    case 0xFF3F:
+      return sound_read_wram(mc->sound_c, addr);
+    case 0xFF0F:
+      return mc->interrupt_c->IF;
+    case 0xFFFF:
+      return mc->interrupt_c->IE;
+    case 0xFF40:
+    case 0xFF41:
+    case 0xFF42:
+    case 0xFF43:
+    case 0xFF44:
+    case 0xFF45:
+    case 0xFF46:
+    case 0xFF47:
+    case 0xFF48:
+    case 0xFF49:
+    case 0xFF4A:
+    case 0xFF4B:
+      return lcd_read_reg(mc->lcd_c, map_index_to_lcd_reg[addr - 0xFF40]);
   }
 
   // if not in rom, vram, or memory mapped address
@@ -371,45 +431,115 @@ u8 mem_read(struct mem_controller* mc, u16 addr) {
 void mem_write(struct mem_controller* mc, u16 addr, u8 value) {
   if (addr < 0x8000 || (addr >= 0xA000 && addr < 0xC000)) {  // route to gamepak
     gpk_write(mc->gpk, addr, value);
+    return;
   } else if (addr < 0xA000 || (addr >= 0xFE00 && addr < 0xFEA0)) {
     lcd_write_vram(mc->lcd_c, addr, value);
-  } else if (addr == 0xFF00) {  // check memory mapped
-                                // registers
-    input_write_P1(mc->input_c, value);
-  } else if (addr >= 0xFF04 && addr <= 0xFF07) {
-    int reg_index = addr - 0xFF04;
-    timing_write_reg(mc->timing_c, map_index_to_timing_reg[reg_index], value);
-  } else if (addr == 0xFF0F) {
-    mc->interrupt_c->IF = value;
-  } else if (addr == 0xFFFF) {
-    mc->interrupt_c->IE = value;
-  } else if (addr >= 0xFF40 && addr <= 0xFF4B) {
-    // TODO: handle the permissioning here so no
-    // improper writes occur
-    if (addr - 0xFF40 == rDMA) {
-      for (int b = 0; b <= 0x9F; b++) {
-        lcd_write_vram(mc->lcd_c, 0xFE00 + b, mem_read(mc, (value << 8) + b));
-      }
-    } else {
-      lcd_write_reg(mc->lcd_c, map_index_to_lcd_reg[addr - 0xFF40], value);
-    }
-  } else if (addr >= 0xFF10 && addr <= 0xFF26 && addr != 0xFF15 &&
-             addr != 0xFF1F) {
-    int reg_index = addr - 0xFF10;
-    if (addr > 0xFF15) {  // first gap
-      reg_index--;
-    }
-    if (addr > 0xFF1F) {  // second gap
-      reg_index--;
-    }
-    sound_write_reg(mc->sound_c, map_index_to_sound_reg[reg_index], value);
-  } else if (addr >= 0xFF30 && addr <= 0xFF3F) {
-    sound_write_wram(mc->sound_c, addr, value);
-  } else {
-    // if not in rom or memory mapped address space, go
-    // to ram
-    mc->ram[addr - 0xC000] = value;
+    return;
   }
+
+  // memory mapped registers over switch for perf instead of if/else ranges
+  // (overkill?)
+  switch (addr) {
+    case 0xFF00: {
+      input_write_P1(mc->input_c, value);
+      return;
+    }
+    case 0xFF01:
+    case 0xFF02:
+      // TODO: handle serial port
+      mc->ram[addr - 0xC000] = value;
+      return;
+    case 0xFF04:
+    case 0xFF05:
+    case 0xFF06:
+    case 0xFF07:
+      timing_write_reg(mc->timing_c, map_index_to_timing_reg[addr - 0xFF04],
+                       value);
+      return;
+    case 0xFF10:
+    case 0xFF11:
+    case 0xFF12:
+    case 0xFF13:
+    case 0xFF14:
+      sound_write_reg(mc->sound_c, map_index_to_sound_reg[addr - 0xFF10],
+                      value);
+      return;
+    //    case 0xFF15: unused
+    case 0xFF16:
+    case 0xFF17:
+    case 0xFF18:
+    case 0xFF19:
+    case 0xFF1A:
+    case 0xFF1B:
+    case 0xFF1C:
+    case 0xFF1D:
+    case 0xFF1E:
+      sound_write_reg(mc->sound_c, map_index_to_sound_reg[addr - 0xFF10 - 1],
+                      value);
+      return;
+    //    case 0xFF1F: unused
+    case 0xFF20:
+    case 0xFF21:
+    case 0xFF22:
+    case 0xFF23:
+    case 0xFF24:
+    case 0xFF25:
+    case 0xFF26:
+      sound_write_reg(mc->sound_c, map_index_to_sound_reg[addr - 0xFF10 - 2],
+                      value);
+      return;
+    case 0xFF30:
+    case 0xFF31:
+    case 0xFF32:
+    case 0xFF33:
+    case 0xFF34:
+    case 0xFF35:
+    case 0xFF36:
+    case 0xFF37:
+    case 0xFF38:
+    case 0xFF39:
+    case 0xFF3A:
+    case 0xFF3B:
+    case 0xFF3C:
+    case 0xFF3D:
+    case 0xFF3E:
+    case 0xFF3F:
+      sound_write_wram(mc->sound_c, addr, value);
+      return;
+    case 0xFF0F:
+      mc->interrupt_c->IF = value;
+      return;
+    case 0xFFFF:
+      mc->interrupt_c->IE = value;
+      return;
+    case 0xFF40:
+    case 0xFF41:
+    case 0xFF42:
+    case 0xFF43:
+    case 0xFF44:
+    case 0xFF45:
+    case 0xFF46:
+    case 0xFF47:
+    case 0xFF48:
+    case 0xFF49:
+    case 0xFF4A:
+    case 0xFF4B:
+      // TODO: handle the permissioning here so no
+      // improper writes occur
+      if (addr - 0xFF40 == rDMA) {
+        // TODO: put this in a case too
+        for (int b = 0; b <= 0x9F; b++) {
+          lcd_write_vram(mc->lcd_c, 0xFE00 + b, mem_read(mc, (value << 8) + b));
+        }
+      } else {
+        lcd_write_reg(mc->lcd_c, map_index_to_lcd_reg[addr - 0xFF40], value);
+      }
+      return;
+  }
+
+  // if not in rom or memory mapped address space, go
+  // to ram
+  mc->ram[addr - 0xC000] = value;
 }
 
 struct inst* mem_read_inst(struct mem_controller* mc, u16 addr) {

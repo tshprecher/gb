@@ -49,11 +49,14 @@ static inline void input_poll(struct input_controller* ic) {
             break;
         }
 
-        if (event.type == KeyPress) {
-          b_set_on(ic->btns_pressed, btn);
-          interrupt(ic->interrupt_c, PORT);
-        } else if (event.type == KeyRelease) {
-          b_set_off(ic->btns_pressed, btn);
+        switch (event.type) {
+          case KeyPress:
+            b_set_on(ic->btns_pressed, btn);
+            interrupt(ic->interrupt_c, PORT);
+            break;
+          case KeyRelease:
+            b_set_off(ic->btns_pressed, btn);
+            break;
         }
         break;
       default:
@@ -97,8 +100,7 @@ void input_write_P1(struct input_controller* ic, u8 value) {
 }
 
 int input_read_P1(struct input_controller* ic, u8* result) {
-  if (ic->status == 0x30) return 0;
-  if (ic->t_cycles_to_read) return 0;
+  if (ic->status == 0x30 || ic->t_cycles_to_read) return 0;
 
   if (ic->status == 0x10) {
     *result = (~ic->btns_pressed >> 4) & 0x0F;

@@ -38,7 +38,8 @@ u8 gpk_read(struct gamepak*, u16);
 void gpk_write(struct gamepak*, u16, u8);  // used by MBCs
 
 struct mem_controller {
-  u8 ram[0x4000];
+  u8 ram[0x4000];  // with holes in the space mapped for unused and control
+                   // registers
   struct gamepak* gpk;
 
   // memory mapped registers, vram ops routed to controllers
