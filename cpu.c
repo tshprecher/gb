@@ -218,7 +218,10 @@ static u8 alu_sub(struct cpu* cpu, u8 op1, u8 op2) {
   return result;
 }
 
-void init_cpu(struct cpu* cpu) {
+void init_cpu(struct cpu* cpu, struct interrupt_controller* int_c,
+              struct mem_controller* mc) {
+  cpu->interrupt_c = int_c;
+  cpu->memory_c = mc;
   cpu->PC = 0x100;
   cpu->SP = 0xFFFE;
 }

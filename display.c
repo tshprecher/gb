@@ -310,6 +310,12 @@ static void scan_line(struct lcd_controller* lcd_c) {
   }
 }
 
+void init_lcd_controller(struct lcd_controller* lc,
+                         struct interrupt_controller* int_c) {
+  lc->interrupt_c = int_c;
+  lc->regs[rLCDC] = 0x83;
+}
+
 /**
    DEBUG: dev notes
      - cpu clock is 4.1943MHz

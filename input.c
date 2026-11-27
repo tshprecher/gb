@@ -62,6 +62,11 @@ static inline void input_poll(struct input_controller* ic) {
   }
 }
 
+void init_input_controller(struct input_controller* ic,
+                           struct interrupt_controller* int_c) {
+  ic->interrupt_c = int_c;
+}
+
 void input_tick(struct input_controller* ic) {
   ic->ticks_since_last_poll++;
   if (ic->t_cycles_to_read)  // TODO: handle this logic properly

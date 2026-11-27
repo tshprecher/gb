@@ -66,13 +66,23 @@ static inline void clock_tick(struct clock* c) {
 struct gb {
   struct clock* clock;
   struct cpu* cpu;
-  struct mem_controller* memory_c;
-  struct interrupt_controller* interrupt_c;
-  struct lcd_controller* lcd_c;
-  struct timing_controller* timing_c;
   struct input_controller* input_c;
+  struct lcd_controller* lcd_c;
+  struct mem_controller* memory_c;
   struct sound_controller* sound_c;
+  struct timing_controller* timing_c;
 };
+
+void init_gb(struct gb* gb, struct clock* clk, struct cpu* cpu,
+             struct input_controller* inp_c, struct lcd_controller* lc,
+             struct sound_controller* sc, struct timing_controller* tc) {
+  gb->clock = clk;
+  gb->cpu = cpu;
+  gb->lcd_c = lc;
+  gb->timing_c = tc;
+  gb->input_c = inp_c;
+  gb->sound_c = sc;
+}
 
 void gb_run(struct gb* gb) {
   while (1) {
@@ -100,47 +110,31 @@ int main(int argc, char* argv[]) {
     struct gamepak gpk = {0};
     init_gamepak(&gpk, argv[1]);
 
-    struct cpu cpu = {0};
-    init_cpu(&cpu);
-
     struct clock clock = {0};
     init_clock(&clock, CLOCK_FREQ, 256);
 
-    struct mem_controller memory_c = {0};
-    struct input_controller input_c = {0};
     struct interrupt_controller interrupt_c = {0};
-    struct lcd_controller lcd_c = {0};
+    struct input_controller input_c = {0};
+    init_input_controller(&input_c, &interrupt_c);
+
     struct timing_controller timing_c = {0};
+    init_timing_controller(&timing_c, &interrupt_c);
+
+    struct lcd_controller lcd_c = {0};
+    init_lcd_controller(&lcd_c, &interrupt_c);
 
     struct sound_controller sound_c = {0};
     init_sound(&sound_c);
 
+    struct mem_controller memory_c = {0};
+    init_mem_controller(&memory_c, &gpk, &input_c, &interrupt_c, &lcd_c,
+                        &sound_c, &timing_c);
+
+    struct cpu cpu = {0};
+    init_cpu(&cpu, &interrupt_c, &memory_c);
+
     struct gb gb = {0};
-
-    input_c.interrupt_c = &interrupt_c;
-
-    lcd_c.interrupt_c = &interrupt_c;
-    lcd_c.regs[rLCDC] = 0x83;  // TODO: put in an init?
-
-    memory_c.gpk = &gpk;
-    memory_c.interrupt_c = &interrupt_c;
-    memory_c.lcd_c = &lcd_c;
-    memory_c.timing_c = &timing_c;
-    memory_c.input_c = &input_c;
-    memory_c.sound_c = &sound_c;
-
-    cpu.memory_c = &memory_c;
-    cpu.interrupt_c = &interrupt_c;
-
-    timing_c.interrupt_c = &interrupt_c;
-
-    gb.clock = &clock;
-    gb.cpu = &cpu;
-    gb.memory_c = &memory_c;
-    gb.lcd_c = &lcd_c;
-    gb.timing_c = &timing_c;
-    gb.input_c = &input_c;
-    gb.sound_c = &sound_c;
+    init_gb(&gb, &clock, &cpu, &input_c, &lcd_c, &sound_c, &timing_c);
 
     gb_run(&gb);
   } else if (argc == 3) {  // disassemble, TODO: handle MBCs

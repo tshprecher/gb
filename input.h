@@ -24,6 +24,9 @@ struct input_controller {
   struct interrupt_controller* interrupt_c;
 };
 
+void init_input_controller(struct input_controller*,
+                           struct interrupt_controller*);
+
 void input_tick(struct input_controller*);
 void input_write_P1(struct input_controller*, u8);
 int input_read_P1(struct input_controller*, u8*);

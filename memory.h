@@ -53,6 +53,10 @@ struct mem_controller {
   struct inst _inst_in_ram;
 };
 
+void init_mem_controller(struct mem_controller*, struct gamepak*,
+                         struct input_controller*, struct interrupt_controller*,
+                         struct lcd_controller*, struct sound_controller*,
+                         struct timing_controller*);
 u8 mem_read(struct mem_controller*, u16);
 void mem_write(struct mem_controller*, u16, u8);
 struct inst* mem_read_inst(struct mem_controller*, u16);

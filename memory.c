@@ -216,6 +216,19 @@ void gpk_write(struct gamepak* gpk, u16 addr, u8 value) {
  * MEMORY CONTROLLER
  */
 
+void init_mem_controller(struct mem_controller* mc, struct gamepak* gpk,
+                         struct input_controller* inp_c,
+                         struct interrupt_controller* int_c,
+                         struct lcd_controller* lc, struct sound_controller* sc,
+                         struct timing_controller* tc) {
+  mc->gpk = gpk;
+  mc->input_c = inp_c;
+  mc->interrupt_c = int_c;
+  mc->lcd_c = lc;
+  mc->sound_c = sc;
+  mc->timing_c = tc;
+}
+
 static enum sound_reg map_index_to_sound_reg[] = {
     rNR10, rNR11, rNR12, rNR13, rNR14, rNR21, rNR22, rNR23, rNR24, rNR30, rNR31,
     rNR32, rNR33, rNR34, rNR41, rNR42, rNR43, rNR44, rNR50, rNR51, rNR52};
@@ -225,7 +238,8 @@ static enum lcd_reg map_index_to_lcd_reg[] = {
 
 static enum timing_reg map_index_to_timing_reg[] = {rDIV, rTIMA, rTMA, rTAC};
 
-// DO NOT CHANGE ORDER WITHOUT CHANGING mem_read() AND mem_write()
+// DO NOT CHANGE ORDER WITHOUT CHANGING mem_read() AND
+// mem_write()
 static char* mmapped_registers[] = {
     // 0xFE00
     "$OAM",
@@ -266,7 +280,8 @@ static char* mmapped_registers[] = {
     "$NR12",
     "$NR13",
     "$NR14",
-    "_err_NR15",  // does not exist, 0xFF15 isn't allocated
+    "_err_NR15",  // does not exist, 0xFF15 isn't
+                  // allocated
 
     "$NR21",
     "$NR22",
@@ -278,7 +293,8 @@ static char* mmapped_registers[] = {
     "$NR32",
     "$NR33",
     "$NR34",
-    "_err_NR35",  // does not exist, 0xFF1F isn't allocated, TODO: find out why
+    "_err_NR35",  // does not exist, 0xFF1F isn't
+                  // allocated, TODO: find out why
                   // it's used
 
     "$NR41",
@@ -316,9 +332,11 @@ u8 mem_read(struct mem_controller* mc, u16 addr) {
   if (addr < 0x8000 || (addr >= 0xA000 && addr < 0xC000)) {  // route to gamepak
     return gpk_read(mc->gpk, addr);
   } else if (addr < 0xA000 ||
-             (addr >= 0xFE00 && addr < 0xFEA0)) {  // route to bg or oam vram
+             (addr >= 0xFE00 && addr < 0xFEA0)) {  // route to bg or oam
+                                                   // vram
     return lcd_read_vram(mc->lcd_c, addr);
-  } else if (addr == 0xFF00) {  // check memory mapped registers
+  } else if (addr == 0xFF00) {  // check memory mapped
+                                // registers
     u8 inputs = 0;
     input_read_P1(mc->input_c, &inputs);
     return inputs;
@@ -345,7 +363,8 @@ u8 mem_read(struct mem_controller* mc, u16 addr) {
     return sound_read_wram(mc->sound_c, addr);
   }
 
-  // if not in rom, vram, or memory mapped address space, go to ram
+  // if not in rom, vram, or memory mapped address
+  // space, go to ram
   return mc->ram[addr - 0xC000];
 }
 
@@ -354,7 +373,8 @@ void mem_write(struct mem_controller* mc, u16 addr, u8 value) {
     gpk_write(mc->gpk, addr, value);
   } else if (addr < 0xA000 || (addr >= 0xFE00 && addr < 0xFEA0)) {
     lcd_write_vram(mc->lcd_c, addr, value);
-  } else if (addr == 0xFF00) {  // check memory mapped registers
+  } else if (addr == 0xFF00) {  // check memory mapped
+                                // registers
     input_write_P1(mc->input_c, value);
   } else if (addr >= 0xFF04 && addr <= 0xFF07) {
     int reg_index = addr - 0xFF04;
@@ -364,7 +384,8 @@ void mem_write(struct mem_controller* mc, u16 addr, u8 value) {
   } else if (addr == 0xFFFF) {
     mc->interrupt_c->IE = value;
   } else if (addr >= 0xFF40 && addr <= 0xFF4B) {
-    // TODO: handle the permissioning here so no improper writes occur
+    // TODO: handle the permissioning here so no
+    // improper writes occur
     if (addr - 0xFF40 == rDMA) {
       for (int b = 0; b <= 0x9F; b++) {
         lcd_write_vram(mc->lcd_c, 0xFE00 + b, mem_read(mc, (value << 8) + b));
@@ -385,17 +406,20 @@ void mem_write(struct mem_controller* mc, u16 addr, u8 value) {
   } else if (addr >= 0xFF30 && addr <= 0xFF3F) {
     sound_write_wram(mc->sound_c, addr, value);
   } else {
-    // if not in rom or memory mapped address space, go to ram
+    // if not in rom or memory mapped address space, go
+    // to ram
     mc->ram[addr - 0xC000] = value;
   }
 }
 
 struct inst* mem_read_inst(struct mem_controller* mc, u16 addr) {
-  // TODO: this doesn't technically allow for instructions read in vram
+  // TODO: this doesn't technically allow for
+  // instructions read in vram
   if (addr < 0x8000 || (addr >= 0xA000 && addr < 0xC000)) {  // route to gamepak
     return gpk_read_inst(mc->gpk, addr);
   } else {
-    // TODO: why does this branch exist again? Explain here
+    // TODO: why does this branch exist again? Explain
+    // here
     init_inst_from_bytes(&mc->_inst_in_ram, &mc->ram[addr - 0xC000]);
     return &mc->_inst_in_ram;
   }

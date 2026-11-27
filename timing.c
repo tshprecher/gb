@@ -15,6 +15,11 @@ static inline u8 DIV(struct timing_controller* tc) {
   return (u8)((tc->t_cycles >> 8) & 0xFF);
 }
 
+void init_timing_controller(struct timing_controller* tc,
+                            struct interrupt_controller* int_c) {
+  tc->interrupt_c = int_c;
+}
+
 void timing_tick(struct timing_controller* tc) {
   tc->t_cycles++;
 

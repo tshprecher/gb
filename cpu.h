@@ -35,8 +35,8 @@ struct cpu {
   u8 enable_interrupt_after_next_inst;
 
   // controllers to interface with other hardware
-  struct mem_controller* memory_c;
   struct interrupt_controller* interrupt_c;
+  struct mem_controller* memory_c;
 
   // the number of t_cycles since last instruction execution
   s16 t_cycles_since_last_inst;
@@ -49,7 +49,8 @@ struct cpu {
   s8 interrupt_t_cycles;
 };
 
-void init_cpu(struct cpu*);
+void init_cpu(struct cpu*, struct interrupt_controller*,
+              struct mem_controller*);
 void cpu_tick(struct cpu*);
 
 // execute a specific instruction, return the number of cycles run

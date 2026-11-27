@@ -49,8 +49,9 @@ struct lcd_controller {
   struct interrupt_controller* interrupt_c;
 };
 
-void lcd_tick(struct lcd_controller*);
+void init_lcd_controller(struct lcd_controller*, struct interrupt_controller*);
 
+void lcd_tick(struct lcd_controller*);
 u8 lcd_read_vram(struct lcd_controller*, u16);
 void lcd_write_vram(struct lcd_controller*, u16, u8);
 u8 lcd_read_reg(struct lcd_controller*, enum lcd_reg);
