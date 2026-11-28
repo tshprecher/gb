@@ -48,7 +48,7 @@ static struct inst_prototype instructions[] = {
 
     {CALL, 0, 3, 6, "11001101 {nn}", "CALL {nn}"},
     {CALL, 1, 3, 3, "110{cc}100 {nn}",
-     "CALL {cc}, {nn}"},  // TODO: handle the 6-cycle variant
+     "CALL {cc}, {nn}"},  // 6-cycle variant handled during execution
 
     {CCF, 0, 1, 1, "00111111", "CCF"},
 
@@ -73,12 +73,12 @@ static struct inst_prototype instructions[] = {
 
     {JP, 0, 3, 4, "11000011 {nn}", "JP {nn}"},
     {JP, 1, 3, 3, "110{cc}010 {nn}",
-     "JP {cc}, {nn}"},  // TODO: handle the 4-cycle variant
+     "JP {cc}, {nn}"},  // 4-cycle variant handled during execution
     {JP, 2, 1, 1, "11101001", "JP HL"},
 
     {JR, 0, 2, 3, "00011000 {e}", "JR {e}"},
     {JR, 1, 2, 2, "001{cc}000 {e}",
-     "JR {cc}, {e}"},  // TODO: handle the 3-cycle variant
+     "JR {cc}, {e}"},  // 3-cycle variant handled during execution
 
     {LD, 0, 1, 1, "01{r}{r}", "LD {r}, {r}"},
     {LD, 1, 1, 2, "00000010", "LD (BC), A"},
@@ -118,12 +118,13 @@ static struct inst_prototype instructions[] = {
 
     {RET, 0, 1, 4, "11001001", "RET"},
     {RET, 1, 1, 2, "110{cc}000",
-     "RET {cc}"},  // TODO: handle the 5-cycle variant
+     "RET {cc}"},  // 5-cycle variant handled during execution
 
     {RETI, 0, 1, 4, "11011001", "RETI"},
 
     {RL, 0, 2, 2, "11001011 00010{r}", "RL {r}"},
-    {RL, 1, 2, 4, "11001011 00010110", "RL (HL)"},  // NOTE: wrong in the manual
+    {RL, 1, 2, 4, "11001011 00010110",
+     "RL (HL)"},  // NOTE: wrong in the official Nintendo manual
 
     {RLA, 0, 1, 1, "00010111", "RLA"},
 
@@ -133,7 +134,8 @@ static struct inst_prototype instructions[] = {
     {RLCA, 0, 1, 1, "00000111", "RLCA"},
 
     {RR, 0, 2, 2, "11001011 00011{r}", "RR {r}"},
-    {RR, 1, 2, 4, "11001011 00011110", "RR (HL)"},  // NOTE: wrong in the manual
+    {RR, 1, 2, 4, "11001011 00011110",
+     "RR (HL)"},  // NOTE: wrong in the official Nintendomanual
 
     {RRA, 0, 1, 1, "00011111", "RRA"},
 
@@ -336,8 +338,7 @@ static int match_txt_pattern(struct inst* inst, char* asmline, char* pattern) {
     while (pattern[p] == ' ' && pattern[p + 1] == ' ') p++;
 
     if (pattern[p] == '{') {
-      struct inst_arg arg = {
-          0};  // TODO: go back to single line assignments below?
+      struct inst_arg arg = {0};
       int found_flag = 0;
       // attempt match for each type.
       // TODO: there's some copy-paste cleanup that we can do here
