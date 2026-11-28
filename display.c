@@ -344,14 +344,14 @@ void lcd_tick(struct lcd_controller* lcd_c) {
     update_LYC_condition(lcd_c);
     if (b_is_on(lcd_c->regs[rSTAT], 6) &&
         lcd_c->regs[rLY] == lcd_c->regs[rLYC]) {
-      interrupt(lcd_c->interrupt_c, LCDC_STAT);
+      interrupt(lcd_c->interrupt_c, INT_LCDC_STAT);
     }
     if (lcd_c->regs[rLY] == 144) {
       paint(lcd_c);
       set_mode(lcd_c, MODE_VBLANK);
       //      if (b_is_on(lcd_c->regs[rSTAT], 4))
       //      	interrupt(lcd_c->interrupt_c, LCDC_STAT);
-      interrupt(lcd_c->interrupt_c, VBLANK);
+      interrupt(lcd_c->interrupt_c, INT_VBLANK);
     }
   }
 
@@ -359,7 +359,7 @@ void lcd_tick(struct lcd_controller* lcd_c) {
     if (lcd_c->t_cycles_since_last_line_refresh == 0) {
       set_mode(lcd_c, MODE_OAM_IN_USE);
       if (b_is_on(lcd_c->regs[rSTAT], 5))
-        interrupt(lcd_c->interrupt_c, LCDC_STAT);
+        interrupt(lcd_c->interrupt_c, INT_LCDC_STAT);
       //      load_oam(lcd_c);
     } else if (lcd_c->t_cycles_since_last_line_refresh == 80) {
       set_mode(lcd_c, MODE_OAM_AND_VRAM_IN_USE);
@@ -367,7 +367,7 @@ void lcd_tick(struct lcd_controller* lcd_c) {
     } else if (lcd_c->t_cycles_since_last_line_refresh == 252) {
       set_mode(lcd_c, MODE_HBLANK);
       if (b_is_on(lcd_c->regs[rSTAT], 3))
-        interrupt(lcd_c->interrupt_c, LCDC_STAT);
+        interrupt(lcd_c->interrupt_c, INT_LCDC_STAT);
     }
   }
 }

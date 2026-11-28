@@ -32,7 +32,7 @@ void timing_tick(struct timing_controller* tc) {
     if (tc->regs[rTIMA] == 0x00) {  // overflow
       tc->regs[rTIMA] = tc->regs[rTMA];
       tc->t_cycles = 0;
-      interrupt(tc->interrupt_c, TIMER_OVERFLOW);
+      interrupt(tc->interrupt_c, INT_TIMER_OVERFLOW);
     }
   }
 }

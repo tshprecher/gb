@@ -52,7 +52,7 @@ static inline void input_poll(struct input_controller* ic) {
         switch (event.type) {
           case KeyPress:
             b_set_on(ic->btns_pressed, btn);
-            interrupt(ic->interrupt_c, PORT);
+            interrupt(ic->interrupt_c, INT_PORT);
             break;
           case KeyRelease:
             b_set_off(ic->btns_pressed, btn);

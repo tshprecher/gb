@@ -11,18 +11,24 @@
 #define FLAG_H 5
 #define FLAG_CY 4
 
-enum Interrupt { VBLANK = 0, LCDC_STAT, TIMER_OVERFLOW, SERIAL_IO, PORT };
+enum interrupt {
+  INT_VBLANK = 0,
+  INT_LCDC_STAT,
+  INT_TIMER_OVERFLOW,
+  INT_SERIAL_IO,
+  INT_PORT
+};
 
 struct interrupt_controller {
   u8 IF, IE;
 };
 
-enum CpuState { CPU_STATE_RUNNING, CPU_STATE_HALTED, CPU_STATE_STOPPED };
+enum cpu_state { CPU_STATE_RUNNING, CPU_STATE_HALTED, CPU_STATE_STOPPED };
 
-void interrupt(struct interrupt_controller*, enum Interrupt);
+void interrupt(struct interrupt_controller*, enum interrupt);
 
 struct cpu {
-  enum CpuState state;
+  enum cpu_state state;
 
   // 8 bit registers
   u8 A, B, C, D, E, F /*flags register*/, H, L;

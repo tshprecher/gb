@@ -6,7 +6,6 @@
 #include "inst.h"
 #include "macros.h"
 #include "memory.h"
-#include "timing.h"
 #include "types.h"
 
 // flags
@@ -31,7 +30,7 @@ static inline u16 nn_to_word(struct inst* i, int a) {
 static u16 interrupt_handlers[] = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060};
 
 // TODO: should all enums be capital?
-void interrupt(struct interrupt_controller* ic, enum Interrupt interrupt) {
+void interrupt(struct interrupt_controller* ic, enum interrupt interrupt) {
   b_set_on(ic->IF, interrupt);
 }
 
@@ -244,7 +243,7 @@ void cpu_tick(struct cpu* cpu) {
 
   if (cpu->state == CPU_STATE_STOPPED) {
     //    printf("(debug): checking if to unstop)
-    if (cpu->interrupt_c->IF & (1 << PORT)) {
+    if (cpu->interrupt_c->IF & (1 << INT_PORT)) {
       cpu->state = CPU_STATE_RUNNING;
       cpu->t_cycles_since_last_inst = -217;  // unstopping takes 217 cycles
     }
