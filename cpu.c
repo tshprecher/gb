@@ -29,7 +29,6 @@ static inline u16 nn_to_word(struct inst* i, int a) {
 // hard coded interrupt handler addresses by interrupt priority
 static u16 interrupt_handlers[] = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060};
 
-// TODO: should all enums be capital?
 void interrupt(struct interrupt_controller* ic, enum interrupt interrupt) {
   b_set_on(ic->IF, interrupt);
 }
@@ -414,7 +413,6 @@ int cpu_exec_instruction(struct cpu* cpu, struct inst* inst) {
       }
       break;
     case SCF:
-      // TODO: test
       b_set_off(cpu->F, F_N);
       b_set_off(cpu->F, F_H);
       b_set_on(cpu->F, F_CY);
@@ -818,7 +816,6 @@ int cpu_exec_instruction(struct cpu* cpu, struct inst* inst) {
       }
       break;
     case CCF:
-      // TODO: test
       b_set_off(cpu->F, F_N);
       b_set_off(cpu->F, F_H);
       b_set(cpu->F, F_CY, b_is_off(cpu->F, F_CY));
